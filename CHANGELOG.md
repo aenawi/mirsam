@@ -31,8 +31,46 @@ Working towards byte-preserving `repair` for PPTX. See
   neighbouring attributes keep their exact quoting; inserted children are
   placed by DrawingML schema rank. `NormalizePresentationForms` is refused with
   an explicit message pending NFKC support in `mirsam-core`.
+- **`mirsam repair <in> <out>`** — writes a repaired copy and audits it,
+  reporting the audit of the input beside the audit of the file actually
+  written. `--lang` chooses the language tag, `--font` the complex-script
+  typeface, `--convert-bullets` opts into replacing typed bullets with native
+  lists, `--force` replaces an existing output. Refuses to overwrite its
+  input under any flag, refuses an existing output without `--force`, and
+  refuses an output whose extension differs from the input's. The exit code
+  follows the after-audit, with `--strict` promoting warnings, so CI can run
+  `repair` where it ran `audit`. `--format json` carries the options, every
+  repair applied, every repair the adapter could not express, and both
+  audits.
+- **`DocumentWriter` for PPTX.** `PptxDocument::apply` groups repairs by part
+  and paragraph, rewrites each part once and stages nothing unless every part
+  succeeds; `write` copies every unedited entry raw. The port gained a default
+  `supports` method, so a fix an adapter cannot express yet is reported as
+  not applied instead of failing the whole run.
+- **`RepairOptions`** and `Engine::with_options` — the authoring decisions a
+  repair needs (language tag, complex-script typeface, whether to convert
+  bullets), configured on the rules that propose the fixes rather than in the
+  CLI. `complex-font-missing` becomes fixable only once a typeface is chosen.
+- `Fix` and `Alignment` implement `Display`; `Repair` and `RepairOptions`
+  serialise.
 
 ### Fixed
+
+- **`Fix` did not serialise.** It was declared internally tagged, which
+  serde cannot do for a newtype variant carrying a string or a list:
+  `SetDirection(Rtl)` came out as `{"kind":"set_direction","rtl":null}` and
+  `RemoveControls` failed outright. Nothing emitted it before `repair`. It is
+  adjacently tagged now, `{"kind": …, "value": …}`, matching `Resolved<T>`.
+- A direction-relative alignment repair was lowered against the paragraph's
+  own `rtl` attribute alone. A left-aligned paragraph inheriting its
+  direction from its body therefore had `Start` lowered to the *left* edge —
+  the defect being repaired. The writer now passes the scanner's resolved
+  inheritance into the rewriter.
+- The rewriter applied text repairs in the order the plan listed them, so a
+  bullet conversion ahead of a control removal shifted the control's offset
+  and the removal missed. Controls are now always removed first.
+- `language-missing` accepted any tag beginning with `ar`, including `arn`
+  (Mapudungun). The primary subtag itself must now be `ar`.
 
 - **Text written as character or entity references was invisible.** quick-xml
   reports `&#1585;` as an event of its own, and the PPTX scanner read only

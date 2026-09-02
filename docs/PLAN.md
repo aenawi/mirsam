@@ -96,12 +96,56 @@ dropped. Such paragraphs produced no unit and therefore no finding, in a tool
 whose entire purpose is to reason about that text. Both the scanner and the
 rewriter now read `Event::GeneralRef` as content.
 
-### 1.3 `repair` command `[ ]`
+### 1.3 `repair` command `[x]`
 `mirsam repair <in> <out>` with `--lang`, `--font`, `--convert-bullets`,
 `--force`; refuses `in == out`; re-audits the output and reports both.
 
-*Acceptance:* repairing the M0 fixture clears every fixable finding, and a
-second repair run is a no-op.
+*Acceptance:* met. `crates/mirsam-cli/tests/cli.rs` repairs the M0 fixture
+through the binary with `--convert-bullets` and asserts that the after-audit
+is empty, that `audit --strict` on the written file exits `0`, and that a
+second `repair` of that output stages nothing and reproduces it byte for byte.
+`crates/mirsam-ooxml/tests/writer.rs` proves the same fixed point at the port
+level on the torture deck, and that a repair naming one paragraph leaves every
+other entry's compressed bytes untouched.
+
+*Shape.* `PptxDocument` implements `DocumentWriter`. `apply` groups repairs by
+part and then by paragraph, rewrites each part once, and stages nothing unless
+every part succeeds; `write` hands the staged parts to `Package::rewrite`,
+which copies everything else raw. The port grew one default method,
+`supports`, so a fix the adapter cannot express yet
+(`NormalizePresentationForms`, pending 1.2's ADR) is reported as *not applied*
+while the rest of the deck is still repaired — one pre-shaped paragraph must
+not stop the other forty from being fixed, and must not be reported as fixed
+either.
+
+*The options belong to the engine, not the CLI.* `--lang`, `--font` and
+`--convert-bullets` populate `RepairOptions`, which configures the rules that
+propose those fixes; `Engine::with_default_rules` now delegates to
+`Engine::with_options`. `--font` is the only way `complex-font-missing`
+becomes fixable, because choosing a typeface is an authoring decision.
+`--convert-bullets` is opt-in because it is the one fix that edits text
+rather than the properties around it. `--lang` is validated by the same
+predicate the rule checks with, so `repair` can never write a tag its own
+re-audit reports. `--force` replaces an existing output and never extends to
+the input.
+
+*Exit code* follows the after-audit, exactly as `audit` would judge the
+written file: `0` clean, `1` blocking, `--strict` promoting warnings. Every
+refusal is `2`.
+
+*Trap, found on the way.* `Fix` was declared internally tagged for serde,
+which cannot carry a newtype variant whose payload is a string or a list:
+`SetDirection(Rtl)` serialised as `{"kind":"set_direction","rtl":null}` and
+`RemoveControls` failed outright. Nothing emitted it until
+`repair --format json` did. It is adjacently tagged now, like `Resolved<T>`.
+
+*Second trap.* Lowering `SetAlignment(Start)` consulted only the paragraph's
+own `rtl`, so a left-aligned paragraph inheriting its direction from the body
+lowered `Start` to the left edge and reproduced the defect it was repairing.
+The writer now passes what the scanner resolved as inherited into the
+rewriter. While there: `RemoveControls` is applied before
+`ConvertLiteralBullet` whatever order the plan gives them, since stripping the
+marker shifts every offset the controls were found at.
 
 ### 1.4 Golden corpus `[~]`
 Real decks under `tests/fixtures/`, each with a committed expected report.
