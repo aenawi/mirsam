@@ -34,8 +34,8 @@ fn passthrough_is_byte_identical_on_every_part_of_the_torture_deck() {
                 .iter()
                 .zip(after.as_bytes())
                 .position(|(a, b)| a != b),
-            &before.get(..200),
-            &after.get(..200),
+            before.get(..200),
+            after.get(..200),
         );
     }
 }
