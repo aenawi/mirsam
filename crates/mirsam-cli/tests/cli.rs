@@ -63,6 +63,34 @@ impl Scratch {
         std::fs::write(&path, contents).unwrap();
         path.to_string_lossy().into_owned()
     }
+    /// A path inside the directory, not yet created.
+    fn path(&self, name: &str) -> String {
+        self.0.join(name).to_string_lossy().into_owned()
+    }
+    /// A private copy of a fixture, for tests that must not touch the original.
+    fn copy_of(&self, fixture_name: &str) -> String {
+        let path = self.0.join(fixture_name);
+        std::fs::copy(fixture(fixture_name), &path).unwrap();
+        path.to_string_lossy().into_owned()
+    }
+}
+
+fn parse_json(out: &Output) -> serde_json::Value {
+    serde_json::from_str(&out.stdout).unwrap_or_else(|e| {
+        panic!(
+            "--format json emitted invalid JSON: {e}\nstdout:\n{}\nstderr:\n{}",
+            out.stdout, out.stderr
+        )
+    })
+}
+
+fn rule_ids(diagnostics: &serde_json::Value) -> Vec<String> {
+    diagnostics
+        .as_array()
+        .expect("a diagnostics array")
+        .iter()
+        .map(|d| d["rule"].as_str().unwrap().to_string())
+        .collect()
 }
 
 impl Drop for Scratch {
@@ -236,4 +264,317 @@ fn nothing_is_written_to_stdout_on_failure() {
         "stdout was not empty:\n{}",
         out.stdout
     );
+}
+
+// ------------------------------------------------------------------- repair
+
+#[test]
+fn repairing_the_m0_fixture_clears_every_fixable_finding_and_is_then_a_no_op() {
+    // PLAN M1 1.3 acceptance, through the binary.
+    let scratch = Scratch::new("repair");
+    let once = scratch.path("once.pptx");
+
+    let out = run(&[
+        "repair",
+        &fixture("broken-arabic.pptx"),
+        &once,
+        "--convert-bullets",
+        "--format",
+        "json",
+    ]);
+    assert_eq!(
+        out.code,
+        exit::OK,
+        "stdout:\n{}\nstderr:\n{}",
+        out.stdout,
+        out.stderr
+    );
+    let value = parse_json(&out);
+    assert_eq!(value["format"], "pptx");
+    assert_eq!(value["blocking"], false);
+    assert!(
+        value["before"]["summary"]["errors"].as_u64().unwrap() > 0,
+        "the fixture must start with errors: {}",
+        value["before"]
+    );
+    assert!(
+        !value["repairs"]["applied"].as_array().unwrap().is_empty(),
+        "nothing was applied"
+    );
+    assert!(
+        value["repairs"]["skipped"].as_array().unwrap().is_empty(),
+        "the adapter skipped repairs it should express: {}",
+        value["repairs"]["skipped"]
+    );
+
+    let after = value["after"]["diagnostics"].as_array().unwrap();
+    let fixable_left: Vec<_> = after.iter().filter(|d| d["fixable"] == true).collect();
+    assert!(
+        fixable_left.is_empty(),
+        "fixable findings survived the repair: {fixable_left:#?}"
+    );
+    assert!(after.is_empty(), "findings remain: {after:#?}");
+
+    // The written file audits clean on its own, through the ordinary path.
+    assert_eq!(run(&["audit", &once, "--strict"]).code, exit::OK);
+
+    // Repairing the repaired deck finds nothing to do and reproduces it byte
+    // for byte.
+    let twice = scratch.path("twice.pptx");
+    let again = run(&[
+        "repair",
+        &once,
+        &twice,
+        "--convert-bullets",
+        "--format",
+        "json",
+    ]);
+    assert_eq!(again.code, exit::OK, "stderr:\n{}", again.stderr);
+    let value = parse_json(&again);
+    assert!(
+        value["repairs"]["applied"].as_array().unwrap().is_empty(),
+        "a second repair still had work: {}",
+        value["repairs"]
+    );
+    assert!(
+        std::fs::read(&once).unwrap() == std::fs::read(&twice).unwrap(),
+        "a second repair changed the bytes"
+    );
+}
+
+#[test]
+fn repair_never_modifies_its_input() {
+    let scratch = Scratch::new("input");
+    let input = scratch.copy_of("broken-arabic.pptx");
+    let before = std::fs::read(&input).unwrap();
+
+    let out = run(&[
+        "repair",
+        &input,
+        &scratch.path("out.pptx"),
+        "--convert-bullets",
+    ]);
+    assert_eq!(out.code, exit::OK, "stderr:\n{}", out.stderr);
+    assert_eq!(std::fs::read(&input).unwrap(), before, "the input changed");
+}
+
+#[test]
+fn repair_leaves_a_typed_bullet_alone_unless_asked() {
+    // Converting a bullet edits the text itself, so it is opt-in. Without the
+    // flag the finding must remain — reported, not silently dropped.
+    let scratch = Scratch::new("bullet");
+    let out = run(&[
+        "repair",
+        &fixture("broken-arabic.pptx"),
+        &scratch.path("out.pptx"),
+        "--format",
+        "json",
+    ]);
+    assert_eq!(out.code, exit::OK, "stderr:\n{}", out.stderr);
+    let value = parse_json(&out);
+
+    assert_eq!(rule_ids(&value["after"]["diagnostics"]), ["literal-bullet"]);
+    assert!(
+        !value["repairs"]["applied"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r["fix"]["kind"] == "convert_literal_bullet"),
+        "{}",
+        value["repairs"]
+    );
+    assert_eq!(value["options"]["convert_bullets"], false);
+}
+
+#[test]
+fn repair_writes_the_requested_language_tag() {
+    let scratch = Scratch::new("lang");
+    let out = run(&[
+        "repair",
+        &fixture("broken-arabic.pptx"),
+        &scratch.path("out.pptx"),
+        "--lang",
+        "ar-AE",
+        "--format",
+        "json",
+    ]);
+    assert_eq!(out.code, exit::OK, "stderr:\n{}", out.stderr);
+    let value = parse_json(&out);
+
+    let languages: Vec<_> = value["repairs"]["applied"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|r| r["fix"]["kind"] == "set_language")
+        .map(|r| r["fix"]["value"].clone())
+        .collect();
+    assert!(!languages.is_empty(), "{}", value["repairs"]);
+    assert!(languages.iter().all(|l| l == "ar-AE"), "{languages:?}");
+    assert!(
+        !rule_ids(&value["after"]["diagnostics"]).contains(&"language-missing".to_string()),
+        "{}",
+        value["after"]
+    );
+}
+
+#[test]
+fn repair_rejects_a_language_tag_the_rule_would_still_report() {
+    // Writing `en-US` and then reporting it as missing would make the second
+    // pass not a no-op, and the first pass a lie. The caller's mistake: 2.
+    let scratch = Scratch::new("badlang");
+    let output = scratch.path("out.pptx");
+    let out = run(&[
+        "repair",
+        &fixture("broken-arabic.pptx"),
+        &output,
+        "--lang",
+        "en-US",
+    ]);
+    assert_eq!(out.code, exit::USAGE, "stderr:\n{}", out.stderr);
+    assert!(out.stderr.contains("en-US"), "{}", out.stderr);
+    assert!(
+        !Path::new(&output).exists(),
+        "a refused repair wrote output"
+    );
+}
+
+#[test]
+fn repair_refuses_to_overwrite_its_source_even_when_forced() {
+    let scratch = Scratch::new("source");
+    let deck = scratch.copy_of("broken-arabic.pptx");
+    let before = std::fs::read(&deck).unwrap();
+
+    for args in [
+        vec!["repair", &deck, &deck],
+        vec!["repair", &deck, &deck, "--force"],
+    ] {
+        let out = run(&args);
+        assert_eq!(out.code, exit::USAGE, "{args:?}\nstderr:\n{}", out.stderr);
+        assert!(
+            out.stderr.contains("overwrite the source"),
+            "{args:?}: the error should say why:\n{}",
+            out.stderr
+        );
+        assert_eq!(
+            std::fs::read(&deck).unwrap(),
+            before,
+            "{args:?}: the source changed"
+        );
+    }
+}
+
+#[test]
+fn repair_refuses_an_existing_output_unless_forced() {
+    let scratch = Scratch::new("exists");
+    let output = scratch.file("out.pptx", b"precious");
+
+    let out = run(&["repair", &fixture("broken-arabic.pptx"), &output]);
+    assert_eq!(out.code, exit::USAGE, "stderr:\n{}", out.stderr);
+    assert!(out.stderr.contains("--force"), "{}", out.stderr);
+    assert_eq!(
+        std::fs::read(&output).unwrap(),
+        b"precious",
+        "the existing file was replaced without --force"
+    );
+
+    let out = run(&["repair", &fixture("broken-arabic.pptx"), &output, "--force"]);
+    assert_eq!(out.code, exit::OK, "stderr:\n{}", out.stderr);
+    assert_eq!(run(&["audit", &output]).code, exit::OK);
+}
+
+#[test]
+fn repair_refuses_an_output_of_a_different_extension() {
+    // The repaired document is the same format as its input; a `.docx` name
+    // on a PPTX package would mislead the next reader — including this tool.
+    let scratch = Scratch::new("ext");
+    let output = scratch.path("out.docx");
+    let out = run(&["repair", &fixture("broken-arabic.pptx"), &output]);
+    assert_eq!(out.code, exit::USAGE, "stderr:\n{}", out.stderr);
+    assert!(!Path::new(&output).exists());
+}
+
+#[test]
+fn repair_follows_the_audit_exit_codes_for_what_remains() {
+    // Without --convert-bullets the torture deck keeps one warning after
+    // repair: not blocking by default, blocking under --strict.
+    let scratch = Scratch::new("codes");
+    let lenient = scratch.path("lenient.pptx");
+    let out = run(&["repair", &fixture("torture.pptx"), &lenient]);
+    assert_eq!(
+        out.code,
+        exit::OK,
+        "stdout:\n{}\nstderr:\n{}",
+        out.stdout,
+        out.stderr
+    );
+
+    let strict = scratch.path("strict.pptx");
+    let out = run(&["repair", &fixture("torture.pptx"), &strict, "--strict"]);
+    assert_eq!(out.code, exit::FINDINGS, "stdout:\n{}", out.stdout);
+    assert!(out.stdout.contains("literal-bullet"), "{}", out.stdout);
+    assert!(
+        Path::new(&strict).exists(),
+        "a blocking after-audit is a verdict on the output, not a reason to withhold it"
+    );
+}
+
+#[test]
+fn repair_usage_and_unreadable_errors_match_audit() {
+    let scratch = Scratch::new("errors");
+
+    let output = scratch.path("out.md");
+    let out = run(&[
+        "repair",
+        &scratch.file("notes.md", b"# not a deck"),
+        &output,
+    ]);
+    assert_eq!(out.code, exit::USAGE, "stderr:\n{}", out.stderr);
+    assert!(!Path::new(&output).exists());
+
+    let output = scratch.path("out.pptx");
+    let out = run(&["repair", "/nonexistent/deck.pptx", &output]);
+    assert_eq!(out.code, exit::UNREADABLE, "stderr:\n{}", out.stderr);
+    assert!(out.stderr.contains("no such file"), "{}", out.stderr);
+    assert!(!Path::new(&output).exists());
+    assert!(
+        out.stdout.is_empty(),
+        "stdout was not empty:\n{}",
+        out.stdout
+    );
+
+    assert_eq!(
+        run(&["repair", &fixture("broken-arabic.pptx")]).code,
+        exit::USAGE
+    );
+}
+
+#[test]
+fn repair_text_output_reports_both_audits_and_what_changed() {
+    let scratch = Scratch::new("text");
+    let out = run(&[
+        "repair",
+        &fixture("broken-arabic.pptx"),
+        &scratch.path("out.pptx"),
+        "--convert-bullets",
+    ]);
+    assert_eq!(out.code, exit::OK, "stderr:\n{}", out.stderr);
+    for needle in [
+        "mirsam repair",
+        "applied 6 repair(s)",
+        "ppt/slides/slide1.xml:paragraph-2:Title 1",
+        "remove 1 explicit bidi control(s)",
+        "set direction rtl",
+        "set language ar-SA",
+        "convert typed '•' to a native bullet",
+        "before  errors=1 warnings=5",
+        "after   errors=0 warnings=0",
+        "PASS",
+    ] {
+        assert!(
+            out.stdout.contains(needle),
+            "missing {needle:?} in:\n{}",
+            out.stdout
+        );
+    }
+    assert!(!out.stdout.contains("not applied"), "{}", out.stdout);
 }
