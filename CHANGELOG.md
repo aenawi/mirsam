@@ -53,6 +53,22 @@ Working towards byte-preserving `repair` for PPTX. See
   CLI. `complex-font-missing` becomes fixable only once a typeface is chosen.
 - `Fix` and `Alignment` implement `Display`; `Repair` and `RepairOptions`
   serialise.
+- **The golden corpus** (`crates/mirsam-cli/tests/golden.rs`). Every deck
+  under `tests/fixtures/` has a committed `<deck>.expected.json` recording
+  the audit, the repair under `--convert-bullets --font Dubai`, a tag-level
+  diff of every package entry the repair changed, and the exit codes. The
+  suite regenerates each report and fails on any difference, showing it as a
+  diff; a deck without a report fails, and so does a report without a deck.
+  `make golden` regenerates the reports and refuses to under `CI`, so a
+  change in behaviour can only land inside the commit that explains it.
+- `tests/fixtures/quarterly-report.pptx`, the first corpus deck shaped like
+  a real one — six slides on PowerPoint's default template, with every
+  defect the rule set knows spread across placeholders, a text box, a
+  grouped text box, a table and speaker notes, and one paragraph whose
+  repair the adapter cannot express yet — and
+  `quarterly-report-correct.pptx`, the same deck authored correctly, which
+  the tool leaves completely alone. Generated deterministically by
+  `scripts/make-corpus.py` (`make corpus`).
 
 ### Fixed
 

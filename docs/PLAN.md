@@ -147,11 +147,55 @@ rewriter. While there: `RemoveControls` is applied before
 `ConvertLiteralBullet` whatever order the plan gives them, since stripping the
 marker shifts every offset the controls were found at.
 
-### 1.4 Golden corpus `[~]`
+### 1.4 Golden corpus `[x]`
 Real decks under `tests/fixtures/`, each with a committed expected report.
 
-*Acceptance:* CI fails on any unexplained diff. Include at least one deck the
-tool should leave completely alone.
+*Acceptance:* met. `crates/mirsam-cli/tests/golden.rs` treats every `.pptx`
+under `tests/fixtures/` as a corpus deck and compares, byte for byte, its
+committed `<deck>.expected.json` against what the binary does to it now: the
+`audit --format json` report; the `repair --format json` report under
+`--convert-bullets --font Dubai`, so every fix the adapter can express is
+exercised and the one it cannot is recorded as skipped; a tag-level diff of
+every package entry the repair changed; and the exit codes of `audit`,
+`repair`, and both under `--strict`. A deck without a report fails, and so
+does a report without a deck. Reports are regenerated with
+`MIRSAM_UPDATE_GOLDEN=1 cargo test -p mirsam-cli --test golden` (`make
+golden`), which refuses to run under `CI` — so the only way a diff reaches
+`main` is inside the commit that explains it. The suite also asserts, against
+the binary rather than the file names, that at least one deck is left
+completely alone and that at least one carries `mc:AlternateContent`, the
+structure the roadmap says the corpus must include.
+
+Five decks. `clean.pptx` and `quarterly-report-correct.pptx` are left
+completely alone: no finding at any severity, nothing applied, nothing
+skipped, no entry changed. `broken-arabic.pptx` and `torture.pptx` are the M0
+and 1.1 fixtures, enrolled. `quarterly-report.pptx` is the first deck shaped
+like a real one: six slides on python-pptx's default template — a genuine
+PowerPoint theme with a master, eleven layouts and their English prompt text —
+carrying every defect the rule set knows across placeholders, a text box, a
+grouped text box, a table and speaker notes, beside a correct slide and an
+English one. It reports 3 errors and 17 warnings; repair applies 19 fixes and
+skips 1, the presentation-forms paragraph 1.2 is blocked on, which is exactly
+what the report should say. `quarterly-report-correct.pptx` is the same deck
+authored properly. Both come from `scripts/make-corpus.py` (`make corpus`),
+which is deterministic: re-running it reproduces the committed bytes.
+
+*What "real" means here, stated honestly.* No deck in the corpus was captured
+from the wild. The two generated ones are built on PowerPoint's own template
+with the attribute habits PowerPoint has, but their slide content came from
+python-pptx and this script. The harness enrols any `.pptx` dropped into the
+directory, so a deck from a real author is one file and one `make golden`
+away. The script can also re-save the deck through LibreOffice Impress
+(`--impress`) for a second application's dialect; that needs Impress
+installed, which was not available where this landed, so it is not part of
+the committed corpus.
+
+*Observation, for M2.* The scanner audits every `ppt/**/*.xml` part, so the
+template's layouts and master contribute a hundred units of prompt text
+("Click to edit Master title style") to a six-slide deck — 125 units scanned,
+23 of them Arabic. They are English and report nothing, but a template with
+Arabic prompts would be reported at the layout, not the slide. 2.1's
+relationship graph is what will know a layout from a slide.
 
 ---
 

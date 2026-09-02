@@ -141,6 +141,9 @@ crates/
     pptx.rs        DrawingML vocabulary: paragraphs, properties, bullets;
                    DocumentReader and DocumentWriter
   mirsam-cli/      driving adapter — argument parsing and rendering only
+    tests/golden.rs  the golden corpus: every deck under tests/fixtures/
+                   against its committed report of what the binary finds,
+                   repairs and writes
 ```
 
 `mirsam-core` has three dependencies and no I/O. That constraint is the

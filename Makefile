@@ -68,6 +68,18 @@ audit-deps: ## Report known vulnerabilities in dependencies
 	}
 	@cargo audit
 
+golden: ## Regenerate the golden corpus reports; review the diff before committing
+	@MIRSAM_UPDATE_GOLDEN=1 cargo test -p mirsam-cli --test golden --quiet
+	@git --no-pager diff --stat -- tests/fixtures
+
+corpus: ## Regenerate the generated corpus decks (needs uv), then their reports
+	@command -v uv >/dev/null 2>&1 || { \
+		echo "uv not installed; alternatively: pip install python-pptx && python3 scripts/make-corpus.py"; \
+		exit 1; \
+	}
+	@uv run --quiet --with python-pptx scripts/make-corpus.py
+	@$(MAKE) --no-print-directory golden
+
 verify: check-version fmt-check lint test doc build ## Full pre-PR check (mirrors CI)
 
 pre-push: verify ## What the git pre-push hook runs
@@ -80,4 +92,5 @@ install: ## Install mirsam into ~/.cargo/bin
 	@cargo install --path crates/mirsam-cli
 
 .PHONY: help build test fmt fmt-check lint doc clean version check-version \
-        codename release-name msrv audit-deps verify pre-push hooks-install install
+        codename release-name msrv audit-deps golden corpus verify pre-push \
+        hooks-install install

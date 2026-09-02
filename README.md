@@ -130,6 +130,11 @@ Hexagonal: a pure domain that knows Unicode and knows nothing about files,
 surrounded by format adapters that lower documents into a shared text model.
 Read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
+Every change is checked against a golden corpus: decks under
+[`tests/fixtures/`](tests/fixtures/), each with a committed report of what
+`mirsam` finds in it, repairs in it and writes to it. CI fails on any
+difference, so a change in behaviour is always visible against a document.
+
 ## Credits
 
 Inspired by the **Arabic Presentations** skill by

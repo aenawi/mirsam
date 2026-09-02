@@ -78,6 +78,14 @@ not a CLI flag with logic behind it.
 **Adding a format** — new crate implementing `DocumentReader`; add
 `DocumentWriter` only if the format can be faithfully edited in place.
 
+**Any change to what is reported or written** shows up in the golden corpus:
+`cargo test` compares every deck under `tests/fixtures/` with its committed
+`<deck>.expected.json` and fails on any difference. When the difference is
+intended, run `make golden`, read the diff, and commit the regenerated
+reports with the change that explains them. Never regenerate to make a
+failure you do not understand go away. A new deck is one file dropped into
+that directory plus `make golden`.
+
 ### Non-negotiable invariants
 
 1. **`mirsam-core` performs no I/O.** If it needs to open a file, the design

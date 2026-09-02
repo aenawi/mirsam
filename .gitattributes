@@ -1,0 +1,4 @@
+# The golden corpus is compared byte for byte, so its reports must check out
+# with the line endings they were written with, whatever core.autocrlf says.
+tests/fixtures/*.expected.json text eol=lf
+*.pptx binary
