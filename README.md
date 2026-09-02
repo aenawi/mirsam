@@ -1,9 +1,10 @@
 # mirsam · مرسم
 
 **Arabic text correctness for documents.** A single dependency-free binary that
-finds and fixes right-to-left, bidirectional and typography defects in PPTX,
-DOCX, XLSX, HTML and PDF — and *proves* each finding by resolving what the text
-will actually look like when rendered.
+finds right-to-left, bidirectional and typography defects in PowerPoint files —
+and *proves* each one by resolving what the text will actually look like when
+rendered. Repair, and the DOCX, XLSX, HTML and PDF adapters, are scheduled; see
+[Roadmap](docs/ROADMAP.md).
 
 > **mirsam** (مَرْسَم) — an atelier; the room where things are properly drawn.
 > From the root ر-س-م: to draw, to inscribe, to render.
@@ -43,13 +44,19 @@ will render with the acronym on the wrong side, here is the proof."*
 
 ## Install
 
+Not published yet. Build from source — a Rust toolchain is the only thing
+needed, and what comes out is one binary with no runtime, no interpreter and no
+package manager:
+
 ```bash
-cargo install mirsam-cli          # from crates.io
+git clone https://github.com/aenawi/mirsam.git
+cd mirsam
+cargo install --path crates/mirsam-cli
 ```
 
-Or download a static binary for your platform from
-[Releases](https://github.com/aenawi/mirsam/releases). No runtime, no
-interpreter, no package manager.
+Requires Rust 1.85 or later. `cargo install mirsam-cli` from crates.io, and
+prebuilt binaries for Linux, macOS and Windows, are milestone M7 — see
+[`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Use
 
@@ -100,9 +107,9 @@ MIT. See [`LICENSE`](LICENSE).
 # مرسم
 
 **أداة لضبط صحّة النصوص العربية في المستندات.** ملف تنفيذي واحد بلا اعتماديات،
-يكتشف ويصلح مشاكل الاتجاه من اليمين إلى اليسار والنص ثنائي الاتجاه والطباعة في
-ملفات PPTX وDOCX وXLSX وHTML وPDF — ويُثبت كل ملاحظة عبر حساب الترتيب البصري
-الفعلي للنص وفق خوارزمية يونيكود ثنائية الاتجاه.
+يكتشف مشاكل الاتجاه من اليمين إلى اليسار والنص ثنائي الاتجاه والطباعة في ملفات
+PowerPoint — ويُثبت كل ملاحظة عبر حساب الترتيب البصري الفعلي للنص وفق خوارزمية
+يونيكود ثنائية الاتجاه.
 
 **مرسم**: المكان الذي يُرسم فيه الشيء على وجهه الصحيح، من الجذر ر-س-م.
 
