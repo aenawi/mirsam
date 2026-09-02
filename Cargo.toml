@@ -5,7 +5,7 @@ members = ["crates/mirsam-core", "crates/mirsam-ooxml", "crates/mirsam-cli"]
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 license = "MIT"
 authors = ["Hashem Aldhaheri <ict@opentech.ae>"]
 repository = "https://github.com/aenawi/mirsam"

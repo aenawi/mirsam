@@ -4,6 +4,7 @@
 VERSION      := $(shell cat VERSION)
 RELEASE_NAME := $(shell cat RELEASE_NAME)
 THEME        := arabian_birds
+MSRV         := $(shell grep -m1 '^rust-version' Cargo.toml | cut -d'"' -f2)
 
 .DEFAULT_GOAL := help
 
@@ -27,8 +28,8 @@ fmt-check: ## Fail if rustfmt would change files
 lint: ## Clippy, warnings as errors
 	@cargo clippy --all-targets --all-features -- -D warnings
 
-doc: ## Build API docs
-	@cargo doc --no-deps --workspace
+doc: ## Build API docs, warnings fatal (as CI does)
+	@RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --workspace
 
 clean: ## Remove build artifacts
 	@cargo clean
@@ -55,6 +56,11 @@ release-name: ## Write RELEASE_NAME from tagtastic (slug form)
 		| tr '[:upper:]' '[:lower:]' | tr -s ' ' '-' > RELEASE_NAME
 	@echo "RELEASE_NAME=$$(cat RELEASE_NAME)"
 
+msrv: ## Check the declared minimum supported Rust version still builds
+	@RUSTUP_TOOLCHAIN=$(MSRV) cargo check --all \
+		|| { echo "install it first: rustup toolchain install $(MSRV)"; exit 1; }
+	@echo "msrv ok: $(MSRV)"
+
 audit-deps: ## Report known vulnerabilities in dependencies
 	@command -v cargo-audit >/dev/null 2>&1 || { \
 		echo "cargo-audit not installed. Run: cargo install cargo-audit"; \
@@ -62,7 +68,7 @@ audit-deps: ## Report known vulnerabilities in dependencies
 	}
 	@cargo audit
 
-verify: check-version fmt-check lint test build ## Full pre-PR check
+verify: check-version fmt-check lint test doc build ## Full pre-PR check (mirrors CI)
 
 pre-push: verify ## What the git pre-push hook runs
 
@@ -74,4 +80,4 @@ install: ## Install mirsam into ~/.cargo/bin
 	@cargo install --path crates/mirsam-cli
 
 .PHONY: help build test fmt fmt-check lint doc clean version check-version \
-        codename release-name audit-deps verify pre-push hooks-install install
+        codename release-name msrv audit-deps verify pre-push hooks-install install

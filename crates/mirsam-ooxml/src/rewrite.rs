@@ -13,13 +13,13 @@
 //! element from its parsed attributes would normalise quoting and whitespace on
 //! attributes the repair never mentioned — `algn='l'` silently becoming
 //! `algn="l"` is exactly the kind of unintended diff this milestone exists to
-//! prevent. [`set_attribute`] splices a value in place, or appends one, and
+//! prevent. `set_attribute` splices a value in place, or appends one, and
 //! leaves the rest of the tag alone.
 //!
 //! **Inserted children are placed by schema rank.** DrawingML child order is
 //! significant: `CT_TextParagraphProperties` and `CT_TextCharacterProperties`
 //! are `xsd:sequence`, so a correct element in the wrong position produces a
-//! file PowerPoint refuses to open. [`PPR_ORDER`] and [`RPR_ORDER`] encode
+//! file PowerPoint refuses to open. `PPR_ORDER` and `RPR_ORDER` encode
 //! those sequences, and insertion is by rank against them rather than by
 //! appending and hoping.
 
