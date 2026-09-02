@@ -9,6 +9,8 @@ mod direction;
 mod typography;
 mod unicode;
 
+pub use typography::{DEFAULT_LOCALE, is_arabic_tag};
+
 use crate::diagnostic::{Diagnostic, Report, RuleId};
 use crate::fix::{Fix, Repair};
 use crate::script;
@@ -32,14 +34,52 @@ pub trait Rule: Send + Sync {
     }
 }
 
+/// The authoring decisions a repair needs from the caller.
+///
+/// The engine can prove that a language tag is missing; it cannot know which
+/// one the author meant. Each field here is a choice of that kind, with a
+/// default only where a safe one exists.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+pub struct RepairOptions {
+    /// BCP-47 tag written where Arabic text carries no Arabic tag.
+    pub language: String,
+    /// Complex-script typeface written where a Latin font is set and the
+    /// Arabic slot is empty. `None` leaves those findings unrepaired.
+    pub complex_font: Option<String>,
+    /// Replace typed bullet glyphs with the format's native list. Off by
+    /// default because it edits the text itself, not only its properties.
+    pub convert_bullets: bool,
+}
+
+impl Default for RepairOptions {
+    fn default() -> Self {
+        Self {
+            language: DEFAULT_LOCALE.to_string(),
+            complex_font: None,
+            convert_bullets: false,
+        }
+    }
+}
+
 /// Runs a set of rules over a set of units.
 pub struct Engine {
     rules: Vec<Box<dyn Rule>>,
 }
 
 impl Engine {
-    /// The rules enabled by default.
+    /// The rules enabled by default, proposing their default repairs.
     pub fn with_default_rules() -> Self {
+        Self::with_options(&RepairOptions::default())
+    }
+
+    /// The rules enabled by default, with the repairs they propose shaped by
+    /// `options`.
+    ///
+    /// What is *reported* does not depend on the options: the same defects
+    /// come back whatever the caller intends to do about them. Only the
+    /// proposed fixes vary, and with them `Diagnostic::fixable`.
+    pub fn with_options(options: &RepairOptions) -> Self {
         Self {
             rules: vec![
                 Box::new(unicode::BidiControls),
@@ -47,9 +87,15 @@ impl Engine {
                 Box::new(direction::DirectionMismatch),
                 Box::new(direction::DirectionUnset),
                 Box::new(direction::AlignmentIncoherent),
-                Box::new(typography::LanguageMissing),
-                Box::new(typography::ComplexFontMissing),
-                Box::new(typography::LiteralBullet),
+                Box::new(typography::LanguageMissing {
+                    locale: options.language.clone(),
+                }),
+                Box::new(typography::ComplexFontMissing {
+                    typeface: options.complex_font.clone(),
+                }),
+                Box::new(typography::LiteralBullet {
+                    convert: options.convert_bullets,
+                }),
             ],
         }
     }
@@ -84,6 +130,9 @@ impl Engine {
     }
 
     /// Repairs for every unit that a rule can mechanically fix.
+    ///
+    /// Document order, then rule order within a unit, so an adapter receives
+    /// a unit's repairs together and in a stable sequence.
     pub fn plan(&self, units: &[TextUnit]) -> Vec<Repair> {
         let mut repairs = Vec::new();
         for unit in units {
