@@ -9,6 +9,11 @@ pub enum Error {
     #[error("unsupported or malformed document: {0}")]
     Format(String),
 
+    /// The path does not exist. Carries no path of its own: the caller adds it
+    /// as context, and repeating it reads as a stutter.
+    #[error("no such file")]
+    NotFound,
+
     #[error("{0}")]
     Io(#[from] std::io::Error),
 

@@ -156,8 +156,58 @@ impl Rule for AlignmentIncoherent {
     }
 
     fn fix(&self, _unit: &TextUnit) -> Option<Fix> {
-        // `End` rather than `Right`: direction-relative alignment stays correct
-        // if the paragraph is ever re-used in a left-to-right context.
-        Some(Fix::SetAlignment(Alignment::End))
+        // Direction-relative rather than a hard `Right`, so the paragraph stays
+        // correct if it is ever re-used in a left-to-right context.
+        //
+        // `Start`, not `End`: the start edge is the side reading begins on —
+        // the right in RTL, the left in LTR. `End` in an RTL paragraph is the
+        // left edge, which is the defect this rule reports, so proposing it
+        // would hand back the very alignment being flagged.
+        Some(Fix::SetAlignment(Alignment::Start))
+    }
+}
+
+#[cfg(test)]
+mod alignment_fix_tests {
+    use super::*;
+    use crate::text::Properties;
+
+    fn rtl_unit_aligned_left() -> TextUnit {
+        TextUnit::new("u1", "ارتفع الأداء بنسبة 25%").with_props(Properties {
+            alignment: Resolved::Explicit(Alignment::Left),
+            ..Default::default()
+        })
+    }
+
+    #[test]
+    fn left_aligned_rtl_text_is_reported() {
+        let found = AlignmentIncoherent.check(&rtl_unit_aligned_left());
+        assert_eq!(found.len(), 1, "{found:#?}");
+    }
+
+    #[test]
+    fn the_proposed_alignment_would_not_be_reported_again() {
+        // The property that matters: applying the fix must clear the finding.
+        // `End` satisfied `is_rtl_coherent` while still resolving to the left
+        // edge in an RTL paragraph, so this asserts the reading direction, not
+        // merely that some non-Left value was chosen.
+        let Some(Fix::SetAlignment(proposed)) = AlignmentIncoherent.fix(&rtl_unit_aligned_left())
+        else {
+            panic!("expected an alignment fix");
+        };
+        assert_eq!(
+            proposed,
+            Alignment::Start,
+            "the fix must align to the side RTL reading begins on — the right"
+        );
+
+        let repaired = TextUnit::new("u1", "ارتفع الأداء بنسبة 25%").with_props(Properties {
+            alignment: Resolved::Explicit(proposed),
+            ..Default::default()
+        });
+        assert!(
+            AlignmentIncoherent.check(&repaired).is_empty(),
+            "the repaired paragraph is still reported"
+        );
     }
 }

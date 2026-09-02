@@ -136,6 +136,8 @@ crates/
     ports.rs       DocumentReader / DocumentWriter
     rules/         the rule set
   mirsam-ooxml/    adapter — PPTX today; DOCX and XLSX share the package layer
+    package.rs     ZIP access and the byte-preserving rewrite (raw entry copy)
+    pptx.rs        DrawingML vocabulary: paragraphs, properties, bullets
   mirsam-cli/      driving adapter — argument parsing and rendering only
 ```
 
