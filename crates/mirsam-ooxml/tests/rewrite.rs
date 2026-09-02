@@ -7,7 +7,7 @@
 
 use mirsam_core::Fix;
 use mirsam_core::text::{Alignment, Direction};
-use mirsam_ooxml::rewrite::{PartFixes, apply};
+use mirsam_ooxml::rewrite::{Inherited, PartFixes, apply, apply_with};
 
 fn rewrite(xml: &str, fixes: Vec<Fix>) -> String {
     let mut part = PartFixes::new();
@@ -78,6 +78,43 @@ fn start_and_end_are_opposite_edges() {
     let rtl = r#"<a:p><a:pPr rtl="1"/><a:r><a:t>مرحبا</a:t></a:r></a:p>"#;
     assert!(rewrite(rtl, vec![Fix::SetAlignment(Alignment::Start)]).contains(r#"algn="r""#));
     assert!(rewrite(rtl, vec![Fix::SetAlignment(Alignment::End)]).contains(r#"algn="l""#));
+}
+
+#[test]
+fn set_alignment_lowers_against_an_inherited_direction() {
+    // The paragraph declares no direction; its body is right-to-left, which
+    // the scanner reports as inherited. Lowering `Start` against the paragraph
+    // alone would pick the left edge and reproduce the defect being repaired.
+    let xml = r#"<a:p><a:pPr algn="l"/><a:r><a:t>مرحبا</a:t></a:r></a:p>"#;
+    let mut part = PartFixes::new();
+    part.insert(1, vec![Fix::SetAlignment(Alignment::Start)]);
+    let mut inherited = Inherited::new();
+    inherited.insert(1, Direction::Rtl);
+
+    assert_eq!(
+        apply_with("s.xml", xml, &part, &inherited).unwrap(),
+        r#"<a:p><a:pPr algn="r"/><a:r><a:t>مرحبا</a:t></a:r></a:p>"#,
+    );
+    // And without the hint, the rewriter has nothing to go on but the
+    // paragraph: this is the case the adapter exists to prevent.
+    assert_eq!(
+        apply("s.xml", xml, &part).unwrap(),
+        r#"<a:p><a:pPr algn="l"/><a:r><a:t>مرحبا</a:t></a:r></a:p>"#,
+    );
+}
+
+#[test]
+fn the_paragraphs_own_direction_outranks_an_inherited_one() {
+    let xml = r#"<a:p><a:pPr rtl="0" algn="r"/><a:r><a:t>hi</a:t></a:r></a:p>"#;
+    let mut part = PartFixes::new();
+    part.insert(1, vec![Fix::SetAlignment(Alignment::Start)]);
+    let mut inherited = Inherited::new();
+    inherited.insert(1, Direction::Rtl);
+
+    assert_eq!(
+        apply_with("s.xml", xml, &part, &inherited).unwrap(),
+        r#"<a:p><a:pPr rtl="0" algn="l"/><a:r><a:t>hi</a:t></a:r></a:p>"#,
+    );
 }
 
 // ------------------------------------------------------------------- language
@@ -176,6 +213,24 @@ fn a_run_with_no_repair_keeps_its_character_references_verbatim() {
         // "رسم" is 6 bytes, "بند" another 6, so the control sits at 12.
         vec![Fix::RemoveControls(vec![12])],
         r#"<a:p><a:r><a:t>&#1585;&#1587;&#1605;</a:t></a:r><a:r><a:t>بند</a:t></a:r></a:p>"#,
+    );
+}
+
+#[test]
+fn controls_are_removed_before_the_marker_is_stripped_whatever_the_order_given() {
+    // The offsets in `RemoveControls` index the text as scanned. Stripping
+    // "• " first would shift the mark four bytes left of where the offset
+    // says it is, and the removal would miss. The rewriter must not depend on
+    // the order the planner happened to emit.
+    //
+    // "• " is 4 bytes, "بند أول" 13, so the mark sits at 17.
+    assert_rewrite(
+        "<a:p><a:r><a:t>• بند أول\u{200F}</a:t></a:r></a:p>",
+        vec![
+            Fix::ConvertLiteralBullet { marker: '•' },
+            Fix::RemoveControls(vec![17]),
+        ],
+        r#"<a:p><a:pPr marR="342900" indent="-342900"><a:buChar char="•"/></a:pPr><a:r><a:t>بند أول</a:t></a:r></a:p>"#,
     );
 }
 

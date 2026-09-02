@@ -23,6 +23,7 @@
 //! those sequences, and insertion is by rank against them rather than by
 //! appending and hoping.
 
+use crate::pptx::is_true;
 use mirsam_core::Fix;
 use mirsam_core::error::{Error, Result};
 use mirsam_core::text::{Alignment, Direction};
@@ -36,6 +37,29 @@ use std::collections::BTreeMap;
 /// counts them — including paragraphs that produced no text unit, so the two
 /// numberings cannot drift.
 pub type PartFixes = BTreeMap<usize, Vec<Fix>>;
+
+/// The direction each paragraph inherits from its container, by index, for
+/// paragraphs that declare none of their own.
+///
+/// A paragraph's own `a:pPr/@rtl` is visible from inside the paragraph; an
+/// `a:bodyPr/@rtlCol` two levels up, or a layout's list style in another part
+/// entirely, is not. The adapter resolves those exactly as its scanner does
+/// and passes the result here, so a direction-relative repair is lowered
+/// against the direction the rule actually reasoned about rather than
+/// defaulting to left-to-right and reproducing the defect it was sent to fix.
+pub type Inherited = BTreeMap<usize, Direction>;
+
+/// Why `NormalizePresentationForms` is refused, stated once.
+const NFKC_UNAVAILABLE: &str = "normalising presentation forms needs NFKC, which mirsam-core \
+                                does not yet provide; see docs/PLAN.md M1 1.2";
+
+/// Whether this rewriter can express `fix`.
+///
+/// [`apply`] refuses a fix this returns `false` for, rather than dropping it;
+/// a caller that asks first can report the repair as not made.
+pub fn supports(fix: &Fix) -> bool {
+    !matches!(fix, Fix::NormalizePresentationForms)
+}
 
 // ---------------------------------------------------------------- schema order
 
@@ -573,21 +597,31 @@ fn for_each_run_property(
 }
 
 /// Apply every repair for one paragraph.
-fn apply_to_paragraph(para: &mut Vec<Event<'static>>, fixes: &[Fix]) -> Result<()> {
+///
+/// `inherited` is the direction the paragraph takes from its container when
+/// it declares none itself; see [`Inherited`].
+fn apply_to_paragraph(
+    para: &mut Vec<Event<'static>>,
+    fixes: &[Fix],
+    inherited: Option<Direction>,
+) -> Result<()> {
+    if fixes.iter().any(|fix| !supports(fix)) {
+        return Err(Error::Format(NFKC_UNAVAILABLE.into()));
+    }
+
     // Text first: these replace text events in place, so they neither move nor
-    // are moved by the structural edits that follow.
+    // are moved by the structural edits that follow. Controls before the
+    // bullet, whatever order the fixes arrived in: `RemoveControls` carries
+    // byte offsets into the text as it was scanned, and stripping a marker
+    // from the front would shift every one of them.
     for fix in fixes {
-        match fix {
-            Fix::RemoveControls(offsets) => remove_controls(para, offsets),
-            Fix::ConvertLiteralBullet { marker } => strip_leading_marker(para, *marker),
-            Fix::NormalizePresentationForms => {
-                return Err(Error::Format(
-                    "normalising presentation forms needs NFKC, which mirsam-core does not \
-                     yet provide; see docs/PLAN.md M1 1.2"
-                        .into(),
-                ));
-            }
-            _ => {}
+        if let Fix::RemoveControls(offsets) = fix {
+            remove_controls(para, offsets);
+        }
+    }
+    for fix in fixes {
+        if let Fix::ConvertLiteralBullet { marker } = fix {
+            strip_leading_marker(para, *marker);
         }
     }
 
@@ -612,11 +646,16 @@ fn apply_to_paragraph(para: &mut Vec<Event<'static>>, fixes: &[Fix]) -> Result<(
 
             Fix::SetAlignment(alignment) => {
                 let ppr = ensure_ppr(para);
+                // The direction being repaired to, else the paragraph's own,
+                // else what it inherits. Only then left-to-right.
                 let rtl = declared_rtl.unwrap_or_else(|| {
-                    let (Event::Start(tag) | Event::Empty(tag)) = &para[ppr] else {
-                        return false;
+                    let own = match &para[ppr] {
+                        Event::Start(tag) | Event::Empty(tag) => {
+                            get_attribute(tag, "rtl").map(|v| is_true(&v))
+                        }
+                        _ => None,
                     };
-                    get_attribute(tag, "rtl").is_some_and(|v| matches!(v.as_str(), "1" | "true"))
+                    own.unwrap_or(inherited == Some(Direction::Rtl))
                 });
                 let value = drawingml_alignment(*alignment, rtl);
                 edit_tag(para, ppr, |tag| set_attribute(tag, "algn", value));
@@ -671,7 +710,20 @@ fn paragraph_ranges(events: &[Event<'static>]) -> Vec<(usize, std::ops::Range<us
 }
 
 /// Apply repairs to a part, leaving every token they do not address untouched.
+///
+/// Every paragraph is taken to declare its own direction or to be
+/// left-to-right; use [`apply_with`] when the adapter knows better.
 pub fn apply(part: &str, xml: &str, fixes: &PartFixes) -> Result<String> {
+    apply_with(part, xml, fixes, &Inherited::new())
+}
+
+/// [`apply`], with the direction each paragraph inherits from its container.
+pub fn apply_with(
+    part: &str,
+    xml: &str,
+    fixes: &PartFixes,
+    inherited: &Inherited,
+) -> Result<String> {
     if fixes.is_empty() {
         return passthrough(part, xml);
     }
@@ -693,7 +745,7 @@ pub fn apply(part: &str, xml: &str, fixes: &PartFixes) -> Result<String> {
             continue;
         };
         let mut para: Vec<Event<'static>> = events[range.clone()].to_vec();
-        apply_to_paragraph(&mut para, list)?;
+        apply_to_paragraph(&mut para, list, inherited.get(&index).copied())?;
         events.splice(range, para);
     }
 
