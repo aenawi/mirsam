@@ -54,7 +54,7 @@ cd mirsam
 cargo install --path crates/mirsam-cli
 ```
 
-Requires Rust 1.85 or later. `cargo install mirsam-cli` from crates.io, and
+Requires Rust 1.88 or later. `cargo install mirsam-cli` from crates.io, and
 prebuilt binaries for Linux, macOS and Windows, are milestone M7 — see
 [`docs/ROADMAP.md`](docs/ROADMAP.md).
 

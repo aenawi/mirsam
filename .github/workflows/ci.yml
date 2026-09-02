@@ -38,9 +38,16 @@ jobs:
 
   msrv:
     runs-on: ubuntu-latest
+    # rust-toolchain.toml pins `stable` for day-to-day work, and rustup honours
+    # that file over whatever toolchain this job installs — which quietly made
+    # this job re-test stable instead of the MSRV, and let the declared floor
+    # drift two releases below what the dependencies actually need.
+    # RUSTUP_TOOLCHAIN outranks the file.
+    env:
+      RUSTUP_TOOLCHAIN: 1.88.0
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.85.0
+      - uses: dtolnay/rust-toolchain@1.88.0
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --all
 
