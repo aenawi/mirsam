@@ -3,5 +3,7 @@
 *.pdb
 /dist
 .DS_Store
+/.vscode/
+/.idea/
 *.tmp
 /tests/fixtures/*.out.*
