@@ -44,5 +44,5 @@ pub use diagnostic::{Diagnostic, Evidence, Report, RuleId, Severity};
 pub use error::{Error, Result};
 pub use fix::{Fix, Repair};
 pub use ports::{DocumentReader, DocumentWriter};
-pub use rules::{Engine, Rule};
+pub use rules::{Engine, RepairOptions, Rule};
 pub use text::{Alignment, Bullet, Direction, Location, Properties, Resolved, TextUnit, UnitId};

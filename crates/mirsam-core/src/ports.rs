@@ -6,7 +6,7 @@
 //! work rather than decoration — the domain genuinely has read-only formats.
 
 use crate::error::Result;
-use crate::fix::Repair;
+use crate::fix::{Fix, Repair};
 use crate::text::TextUnit;
 use std::path::Path;
 
@@ -23,8 +23,25 @@ pub trait DocumentReader {
 ///
 /// Implemented only by formats where a faithful in-place edit is possible.
 pub trait DocumentWriter: DocumentReader {
-    /// Stage repairs. Implementations must be byte-preserving for every part
-    /// of the document not addressed by a repair.
+    /// Whether this adapter can express `fix` in its own vocabulary.
+    ///
+    /// Every writer is expected to lower every variant eventually. Until one
+    /// does, saying so here lets a caller report the repair as *not made*
+    /// instead of discovering it as a failure part-way through [`apply`],
+    /// which must reject a fix it cannot express rather than drop it.
+    ///
+    /// [`apply`]: DocumentWriter::apply
+    fn supports(&self, fix: &Fix) -> bool {
+        let _ = fix;
+        true
+    }
+
+    /// Stage repairs, returning how many were staged.
+    ///
+    /// Implementations must be byte-preserving for every part of the document
+    /// not addressed by a repair, and must fail — staging nothing from the
+    /// call — on a repair they cannot express, so that the count returned is
+    /// never smaller than the caller believes.
     fn apply(&mut self, repairs: &[Repair]) -> Result<usize>;
 
     /// Write the repaired document to `dest`.
