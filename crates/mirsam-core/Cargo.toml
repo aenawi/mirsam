@@ -1,0 +1,20 @@
+[package]
+name = "mirsam-core"
+description = "Format-agnostic Arabic script, bidi and typography correctness engine. Pure domain: no I/O."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+unicode-bidi.workspace = true
+serde = { workspace = true, optional = true }
+thiserror.workspace = true
+
+[features]
+default = ["serde"]
+serde = ["dep:serde"]

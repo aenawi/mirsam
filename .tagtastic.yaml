@@ -1,0 +1,13 @@
+# TAGtastic config for mirsam release codenames.
+# Docs: https://github.com/aenawi/tagtastic
+#
+# SemVer keys must match the VERSION file (no leading v).
+default_theme: arabian_birds
+default_format: text
+used_codenames:
+  0.1.0: steppe-eagle
+api:
+  enabled: false
+  endpoint: ""
+  cache_dir: ""
+  cache_ttl: ""

@@ -1,0 +1,2 @@
+# Keep the domain crate honest: no silent precision loss in offset math.
+avoid-breaking-exported-api = false

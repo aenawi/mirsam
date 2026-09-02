@@ -1,0 +1,5 @@
+#!/bin/sh
+# Blocks a push that would not survive CI.
+set -eu
+echo "pre-push: running make verify"
+make verify
