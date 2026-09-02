@@ -1,0 +1,434 @@
+{
+  "audit": {
+    "blocking": true,
+    "diagnostics": [
+      {
+        "evidence": {
+          "logical": "• بند أول‏",
+          "offenders": [
+            "RIGHT-TO-LEFT MARK"
+          ],
+          "visual_declared": null,
+          "visual_expected": null
+        },
+        "fixable": true,
+        "location": {
+          "container": "Body 3",
+          "paragraph": 3,
+          "part": "ppt/slides/slide1.xml"
+        },
+        "message": "1 explicit bidi control(s) embedded in text; set container direction instead",
+        "rule": "bidi-control",
+        "severity": "error",
+        "unit": "ppt/slides/slide1.xml#p3"
+      },
+      {
+        "evidence": {
+          "logical": "ارتفع الأداء بنسبة 25% في Q4 2026.",
+          "offenders": [],
+          "visual_declared": "يف %25 ةبسنب ءادألا عفترا Q4 2026.",
+          "visual_expected": ".Q4 2026 يف %25 ةبسنب ءادألا عفترا"
+        },
+        "fixable": true,
+        "location": {
+          "container": "Title 1",
+          "paragraph": 1,
+          "part": "ppt/slides/slide1.xml"
+        },
+        "message": "renders as ltr but reads as rtl; visual order differs from the logical text",
+        "rule": "direction-mismatch",
+        "severity": "error",
+        "unit": "ppt/slides/slide1.xml#p1"
+      },
+      {
+        "evidence": {
+          "logical": null,
+          "offenders": [],
+          "visual_declared": null,
+          "visual_expected": null
+        },
+        "fixable": true,
+        "location": {
+          "container": "Title 1",
+          "paragraph": 1,
+          "part": "ppt/slides/slide1.xml"
+        },
+        "message": "right-to-left text is explicitly aligned left",
+        "rule": "alignment-incoherent",
+        "severity": "warning",
+        "unit": "ppt/slides/slide1.xml#p1"
+      },
+      {
+        "evidence": {
+          "logical": null,
+          "offenders": [],
+          "visual_declared": null,
+          "visual_expected": null
+        },
+        "fixable": true,
+        "location": {
+          "container": "Chart Fallback",
+          "paragraph": 2,
+          "part": "ppt/slides/slide1.xml"
+        },
+        "message": "no base direction declared; correct today only by auto-detection",
+        "rule": "direction-unset",
+        "severity": "warning",
+        "unit": "ppt/slides/slide1.xml#p2"
+      },
+      {
+        "evidence": {
+          "logical": null,
+          "offenders": [],
+          "visual_declared": null,
+          "visual_expected": null
+        },
+        "fixable": true,
+        "location": {
+          "container": "Title 1",
+          "paragraph": 1,
+          "part": "ppt/slides/slide1.xml"
+        },
+        "message": "Arabic text tagged as en-US; expected an ar-* language tag",
+        "rule": "language-missing",
+        "severity": "warning",
+        "unit": "ppt/slides/slide1.xml#p1"
+      },
+      {
+        "evidence": {
+          "logical": null,
+          "offenders": [],
+          "visual_declared": null,
+          "visual_expected": null
+        },
+        "fixable": true,
+        "location": {
+          "container": "Chart Fallback",
+          "paragraph": 2,
+          "part": "ppt/slides/slide1.xml"
+        },
+        "message": "Arabic text tagged as none; expected an ar-* language tag",
+        "rule": "language-missing",
+        "severity": "warning",
+        "unit": "ppt/slides/slide1.xml#p2"
+      },
+      {
+        "evidence": {
+          "logical": null,
+          "offenders": [],
+          "visual_declared": null,
+          "visual_expected": null
+        },
+        "fixable": true,
+        "location": {
+          "container": "Body 3",
+          "paragraph": 3,
+          "part": "ppt/slides/slide1.xml"
+        },
+        "message": "Arabic text tagged as en-US; expected an ar-* language tag",
+        "rule": "language-missing",
+        "severity": "warning",
+        "unit": "ppt/slides/slide1.xml#p3"
+      },
+      {
+        "evidence": {
+          "logical": null,
+          "offenders": [],
+          "visual_declared": null,
+          "visual_expected": null
+        },
+        "fixable": true,
+        "location": {
+          "container": "Body 3",
+          "paragraph": 3,
+          "part": "ppt/slides/slide1.xml"
+        },
+        "message": "paragraph begins with a typed '•'; use a native list instead",
+        "rule": "literal-bullet",
+        "severity": "warning",
+        "unit": "ppt/slides/slide1.xml#p3"
+      }
+    ],
+    "file": "torture.pptx",
+    "format": "pptx",
+    "strict": false,
+    "summary": {
+      "arabic_units": 5,
+      "errors": 2,
+      "mixed_units": 1,
+      "notes": 0,
+      "units_scanned": 5,
+      "warnings": 6
+    }
+  },
+  "changed_parts": {
+    "ppt/slides/slide1.xml": [
+      "-<a:pPr rtl=\"0\" algn='l'/>",
+      "+<a:pPr rtl=\"1\" algn='r'/>",
+      "-<a:rPr lang=\"en-US\" dirty=\"0\"/>",
+      "+<a:rPr lang=\"ar-SA\" dirty=\"0\"/>",
+      "+<a:pPr rtl=\"1\"/>",
+      "+<a:rPr lang=\"ar-SA\"/>",
+      "+<a:pPr marR=\"342900\" indent=\"-342900\">",
+      "+<a:buChar char=\"•\"/>",
+      "+</a:pPr>",
+      "-<a:rPr lang=\"en-US\"/>",
+      "-<a:t>• بند أول‏",
+      "+<a:rPr lang=\"ar-SA\"/>",
+      "+<a:t>بند أول"
+    ]
+  },
+  "deck": "torture.pptx",
+  "exit_codes": {
+    "audit": 1,
+    "audit --strict": 1,
+    "repair": 0,
+    "repair --strict": 0
+  },
+  "repair": {
+    "after": {
+      "diagnostics": [],
+      "summary": {
+        "arabic_units": 5,
+        "errors": 0,
+        "mixed_units": 1,
+        "notes": 0,
+        "units_scanned": 5,
+        "warnings": 0
+      }
+    },
+    "before": {
+      "diagnostics": [
+        {
+          "evidence": {
+            "logical": "• بند أول‏",
+            "offenders": [
+              "RIGHT-TO-LEFT MARK"
+            ],
+            "visual_declared": null,
+            "visual_expected": null
+          },
+          "fixable": true,
+          "location": {
+            "container": "Body 3",
+            "paragraph": 3,
+            "part": "ppt/slides/slide1.xml"
+          },
+          "message": "1 explicit bidi control(s) embedded in text; set container direction instead",
+          "rule": "bidi-control",
+          "severity": "error",
+          "unit": "ppt/slides/slide1.xml#p3"
+        },
+        {
+          "evidence": {
+            "logical": "ارتفع الأداء بنسبة 25% في Q4 2026.",
+            "offenders": [],
+            "visual_declared": "يف %25 ةبسنب ءادألا عفترا Q4 2026.",
+            "visual_expected": ".Q4 2026 يف %25 ةبسنب ءادألا عفترا"
+          },
+          "fixable": true,
+          "location": {
+            "container": "Title 1",
+            "paragraph": 1,
+            "part": "ppt/slides/slide1.xml"
+          },
+          "message": "renders as ltr but reads as rtl; visual order differs from the logical text",
+          "rule": "direction-mismatch",
+          "severity": "error",
+          "unit": "ppt/slides/slide1.xml#p1"
+        },
+        {
+          "evidence": {
+            "logical": null,
+            "offenders": [],
+            "visual_declared": null,
+            "visual_expected": null
+          },
+          "fixable": true,
+          "location": {
+            "container": "Title 1",
+            "paragraph": 1,
+            "part": "ppt/slides/slide1.xml"
+          },
+          "message": "right-to-left text is explicitly aligned left",
+          "rule": "alignment-incoherent",
+          "severity": "warning",
+          "unit": "ppt/slides/slide1.xml#p1"
+        },
+        {
+          "evidence": {
+            "logical": null,
+            "offenders": [],
+            "visual_declared": null,
+            "visual_expected": null
+          },
+          "fixable": true,
+          "location": {
+            "container": "Chart Fallback",
+            "paragraph": 2,
+            "part": "ppt/slides/slide1.xml"
+          },
+          "message": "no base direction declared; correct today only by auto-detection",
+          "rule": "direction-unset",
+          "severity": "warning",
+          "unit": "ppt/slides/slide1.xml#p2"
+        },
+        {
+          "evidence": {
+            "logical": null,
+            "offenders": [],
+            "visual_declared": null,
+            "visual_expected": null
+          },
+          "fixable": true,
+          "location": {
+            "container": "Title 1",
+            "paragraph": 1,
+            "part": "ppt/slides/slide1.xml"
+          },
+          "message": "Arabic text tagged as en-US; expected an ar-* language tag",
+          "rule": "language-missing",
+          "severity": "warning",
+          "unit": "ppt/slides/slide1.xml#p1"
+        },
+        {
+          "evidence": {
+            "logical": null,
+            "offenders": [],
+            "visual_declared": null,
+            "visual_expected": null
+          },
+          "fixable": true,
+          "location": {
+            "container": "Chart Fallback",
+            "paragraph": 2,
+            "part": "ppt/slides/slide1.xml"
+          },
+          "message": "Arabic text tagged as none; expected an ar-* language tag",
+          "rule": "language-missing",
+          "severity": "warning",
+          "unit": "ppt/slides/slide1.xml#p2"
+        },
+        {
+          "evidence": {
+            "logical": null,
+            "offenders": [],
+            "visual_declared": null,
+            "visual_expected": null
+          },
+          "fixable": true,
+          "location": {
+            "container": "Body 3",
+            "paragraph": 3,
+            "part": "ppt/slides/slide1.xml"
+          },
+          "message": "Arabic text tagged as en-US; expected an ar-* language tag",
+          "rule": "language-missing",
+          "severity": "warning",
+          "unit": "ppt/slides/slide1.xml#p3"
+        },
+        {
+          "evidence": {
+            "logical": null,
+            "offenders": [],
+            "visual_declared": null,
+            "visual_expected": null
+          },
+          "fixable": true,
+          "location": {
+            "container": "Body 3",
+            "paragraph": 3,
+            "part": "ppt/slides/slide1.xml"
+          },
+          "message": "paragraph begins with a typed '•'; use a native list instead",
+          "rule": "literal-bullet",
+          "severity": "warning",
+          "unit": "ppt/slides/slide1.xml#p3"
+        }
+      ],
+      "summary": {
+        "arabic_units": 5,
+        "errors": 2,
+        "mixed_units": 1,
+        "notes": 0,
+        "units_scanned": 5,
+        "warnings": 6
+      }
+    },
+    "blocking": false,
+    "file": "torture.pptx",
+    "format": "pptx",
+    "options": {
+      "complex_font": "Dubai",
+      "convert_bullets": true,
+      "language": "ar-SA"
+    },
+    "output": "torture.repaired.pptx",
+    "repairs": {
+      "applied": [
+        {
+          "fix": {
+            "kind": "set_direction",
+            "value": "rtl"
+          },
+          "unit": "ppt/slides/slide1.xml#p1"
+        },
+        {
+          "fix": {
+            "kind": "set_alignment",
+            "value": "start"
+          },
+          "unit": "ppt/slides/slide1.xml#p1"
+        },
+        {
+          "fix": {
+            "kind": "set_language",
+            "value": "ar-SA"
+          },
+          "unit": "ppt/slides/slide1.xml#p1"
+        },
+        {
+          "fix": {
+            "kind": "set_direction",
+            "value": "rtl"
+          },
+          "unit": "ppt/slides/slide1.xml#p2"
+        },
+        {
+          "fix": {
+            "kind": "set_language",
+            "value": "ar-SA"
+          },
+          "unit": "ppt/slides/slide1.xml#p2"
+        },
+        {
+          "fix": {
+            "kind": "remove_controls",
+            "value": [
+              17
+            ]
+          },
+          "unit": "ppt/slides/slide1.xml#p3"
+        },
+        {
+          "fix": {
+            "kind": "set_language",
+            "value": "ar-SA"
+          },
+          "unit": "ppt/slides/slide1.xml#p3"
+        },
+        {
+          "fix": {
+            "kind": "convert_literal_bullet",
+            "value": {
+              "marker": "•"
+            }
+          },
+          "unit": "ppt/slides/slide1.xml#p3"
+        }
+      ],
+      "skipped": []
+    },
+    "strict": false
+  }
+}

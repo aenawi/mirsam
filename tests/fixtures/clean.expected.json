@@ -1,0 +1,63 @@
+{
+  "audit": {
+    "blocking": false,
+    "diagnostics": [],
+    "file": "clean.pptx",
+    "format": "pptx",
+    "strict": false,
+    "summary": {
+      "arabic_units": 2,
+      "errors": 0,
+      "mixed_units": 1,
+      "notes": 0,
+      "units_scanned": 2,
+      "warnings": 0
+    }
+  },
+  "changed_parts": {},
+  "deck": "clean.pptx",
+  "exit_codes": {
+    "audit": 0,
+    "audit --strict": 0,
+    "repair": 0,
+    "repair --strict": 0
+  },
+  "repair": {
+    "after": {
+      "diagnostics": [],
+      "summary": {
+        "arabic_units": 2,
+        "errors": 0,
+        "mixed_units": 1,
+        "notes": 0,
+        "units_scanned": 2,
+        "warnings": 0
+      }
+    },
+    "before": {
+      "diagnostics": [],
+      "summary": {
+        "arabic_units": 2,
+        "errors": 0,
+        "mixed_units": 1,
+        "notes": 0,
+        "units_scanned": 2,
+        "warnings": 0
+      }
+    },
+    "blocking": false,
+    "file": "clean.pptx",
+    "format": "pptx",
+    "options": {
+      "complex_font": "Dubai",
+      "convert_bullets": true,
+      "language": "ar-SA"
+    },
+    "output": "clean.repaired.pptx",
+    "repairs": {
+      "applied": [],
+      "skipped": []
+    },
+    "strict": false
+  }
+}
