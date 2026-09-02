@@ -1,9 +1,10 @@
 # mirsam · مرسم
 
 **Arabic text correctness for documents.** A single dependency-free binary that
-finds right-to-left, bidirectional and typography defects in PowerPoint files —
-and *proves* each one by resolving what the text will actually look like when
-rendered. Repair, and the DOCX, XLSX, HTML and PDF adapters, are scheduled; see
+finds right-to-left, bidirectional and typography defects in PowerPoint files,
+*proves* each one by resolving what the text will actually look like when
+rendered, and repairs them without touching a byte it was not asked to. The
+DOCX, XLSX, HTML and PDF adapters are scheduled; see
 [Roadmap](docs/ROADMAP.md).
 
 > **mirsam** (مَرْسَم) — an atelier; the room where things are properly drawn.
@@ -64,12 +65,50 @@ prebuilt binaries for Linux, macOS and Windows, are milestone M7 — see
 mirsam audit deck.pptx                  # inspect; exit 1 if blocking
 mirsam audit deck.pptx --strict         # warnings block too
 mirsam audit deck.pptx --format json    # for agents and CI
+mirsam repair deck.pptx fixed.pptx      # write a repaired copy, then audit it
 mirsam explain "<text>"                 # reproduce a defect without a document
 mirsam rules                            # every check, with its id
 ```
 
 Exit codes are stable: `0` clean, `1` findings, `2` bad invocation,
-`3` unreadable document.
+`3` unreadable document (or, for `repair`, unwritable output).
+
+### Repair
+
+`repair` never modifies its input and never overwrites it, whatever flags are
+given. It writes a copy in which only the attributes a finding named have
+changed — every other byte of every other part is copied across
+already-compressed — then re-reads that copy and audits it, so the report
+describes the file on disk rather than the intention:
+
+```console
+$ mirsam repair deck.pptx fixed.pptx --convert-bullets
+mirsam repair  deck.pptx -> fixed.pptx  [pptx]
+units 2 | arabic 2 | mixed 1
+language ar-SA | font (none) | convert-bullets yes
+
+applied 6 repair(s)
+  ppt/slides/slide1.xml:paragraph-1:Title 1
+    set direction rtl
+    set language ar-SA
+  ppt/slides/slide1.xml:paragraph-2:Title 1
+    remove 1 explicit bidi control(s)
+    set direction rtl
+    set language ar-SA
+    convert typed '•' to a native bullet
+
+before  errors=1 warnings=5 notes=0
+after   errors=0 warnings=0 notes=0
+
+PASS: errors=0 warnings=0 notes=0 strict=no
+```
+
+Two repairs are decisions the text cannot make for you, so they are flags:
+`--font <TYPEFACE>` fills the empty complex-script slot (without it the
+finding is reported, not repaired), and `--convert-bullets` replaces a typed
+`•` with a native list (opt-in, because it edits the text itself). `--lang`
+changes the tag written from `ar-SA`; `--force` replaces an existing output.
+Repairing a repaired file is a no-op that reproduces it byte for byte.
 
 ### With an AI agent
 
@@ -79,8 +118,9 @@ so an agent can act on it without opening PowerPoint. See [`AGENTS.md`](AGENTS.m
 
 ## Status
 
-**v0.1 “Steppe Eagle” — audit only, PPTX only.** `repair` and the DOCX, XLSX,
-HTML and PDF adapters are specified and scheduled; see
+**v0.1 “Steppe Eagle” — audit only, PPTX only.** Byte-preserving `repair` for
+PPTX has landed on `main` and ships as v0.2; the DOCX, XLSX, HTML and PDF
+adapters are specified and scheduled; see
 [`docs/ROADMAP.md`](docs/ROADMAP.md). The tool reports what it can actually
 verify and nothing more — a discipline inherited from its prior art.
 
@@ -113,8 +153,9 @@ PowerPoint — ويُثبت كل ملاحظة عبر حساب الترتيب ا�
 
 **مرسم**: المكان الذي يُرسم فيه الشيء على وجهه الصحيح، من الجذر ر-س-م.
 
-الحالة: الإصدار 0.1 يدعم الفحص فقط، ولملفات PowerPoint فقط. بقية الصيغ وأمر
-الإصلاح مجدولة في [خارطة الطريق](docs/ROADMAP.md).
+الحالة: الإصدار 0.1 يدعم الفحص فقط، ولملفات PowerPoint فقط. أمر الإصلاح لملفات
+PowerPoint جاهز في الفرع الرئيسي وسيصدر في الإصدار 0.2، وبقية الصيغ مجدولة في
+[خارطة الطريق](docs/ROADMAP.md).
 
 الرخصة: MIT.
 

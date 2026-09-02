@@ -18,12 +18,14 @@ shared code. See [`CREDITS.md`](CREDITS.md).
 ```bash
 mirsam audit deck.pptx --format json     # full diagnostic model
 mirsam audit deck.pptx --strict          # warnings block too
+mirsam repair deck.pptx fixed.pptx --format json   # repaired copy, both audits
 mirsam explain "<text>"                  # reproduce a defect with no document
 mirsam rules --format json               # every check and its id
 ```
 
 Exit codes: `0` clean · `1` blocking findings · `2` bad invocation ·
-`3` document unreadable. Branch on these; do not parse the human output.
+`3` document unreadable (or output unwritable). Branch on these; do not parse
+the human output.
 
 ### Reading a diagnostic
 
@@ -35,6 +37,23 @@ already-reordered text and show something misleading. Compare them
 programmatically, or render the escaped form as `mirsam explain` does.
 
 `fixable: true` means a mechanical repair exists.
+
+### Repairing
+
+`repair <in> <out>` never modifies `<in>` and refuses `<out> == <in>` under
+every flag. It changes only what a finding named and copies every other part
+across as its original compressed bytes. Its exit code is the audit of
+`<out>`, re-read from disk.
+
+The JSON report carries `options`, `repairs.applied`, `repairs.skipped` (a
+fix the adapter cannot express yet — listed, never claimed), and `before` and
+`after`, each an audit in the same shape `audit --format json` emits.
+
+Two repairs need a decision the text cannot supply, so they are off until
+asked: `--font <TYPEFACE>` for `complex-font-missing`, and `--convert-bullets`
+for `literal-bullet`. A `literal-bullet` finding in `after` with
+`convert_bullets: false` in `options` is not a failed repair; it is one you
+did not request.
 
 ## Reporting honestly
 
@@ -52,7 +71,9 @@ Read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) first, then
 [`docs/PLAN.md`](docs/PLAN.md) for the ordered work items.
 
 **Adding a rule** — implement `Rule` in `crates/mirsam-core/src/rules/`,
-register it in `Engine::with_default_rules`. Nothing else changes.
+register it in `Engine::with_options`. Nothing else changes. If its repair
+needs a choice the text cannot make, the choice is a `RepairOptions` field,
+not a CLI flag with logic behind it.
 
 **Adding a format** — new crate implementing `DocumentReader`; add
 `DocumentWriter` only if the format can be faithfully edited in place.
