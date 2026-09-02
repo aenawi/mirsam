@@ -15,6 +15,9 @@
 //! So the adapter streams tokens and passes through everything it is not
 //! explicitly asked to change.
 
+pub mod package;
 pub mod pptx;
+pub mod rewrite;
 
+pub use package::Package;
 pub use pptx::PptxDocument;

@@ -1,14 +1,12 @@
 //! PowerPoint (PPTX) adapter.
 
+use crate::package::Package;
 use mirsam_core::error::{Error, Result};
 use mirsam_core::ports::DocumentReader;
 use mirsam_core::text::{Alignment, Bullet, Direction, Location, Properties, Resolved, TextUnit};
 use quick_xml::events::Event;
 use quick_xml::{Reader, XmlVersion};
-use std::fs::File;
-use std::io::{Cursor, Read};
 use std::path::{Path, PathBuf};
-use zip::ZipArchive;
 
 /// Alignment values DrawingML understands.
 fn parse_alignment(value: &str) -> Option<Alignment> {
@@ -47,17 +45,38 @@ impl ParagraphBuilder {
 }
 
 /// A PowerPoint package opened for auditing.
+///
+/// Reading and repair share one [`Package`], deliberately: two ZIP code paths
+/// would be two places for the byte-preservation guarantee to be broken, and
+/// only one of them is covered by the round-trip test.
 pub struct PptxDocument {
-    path: PathBuf,
+    package: Package,
 }
 
 impl PptxDocument {
     pub fn open(path: impl Into<PathBuf>) -> Result<Self> {
-        let path = path.into();
-        if !path.exists() {
-            return Err(Error::Format(format!("no such file: {}", path.display())));
-        }
-        Ok(Self { path })
+        Ok(Self {
+            package: Package::open(path)?,
+        })
+    }
+
+    /// The path this document was opened from.
+    pub fn path(&self) -> &Path {
+        self.package.path()
+    }
+
+    /// The package underneath, for callers that need part-level access.
+    pub fn package(&self) -> &Package {
+        &self.package
+    }
+
+    /// Parts this adapter reads: PowerPoint's own XML, excluding relationships.
+    fn text_parts(&self) -> Result<Vec<String>> {
+        let mut parts = self
+            .package
+            .parts_where(|n| n.starts_with("ppt/") && n.ends_with(".xml"))?;
+        parts.sort();
+        Ok(parts)
     }
 
     /// Parse one `ppt/**/*.xml` part into text units.
@@ -203,6 +222,26 @@ impl PptxDocument {
                     }
                 }
 
+                // A character or entity reference is a separate event from the
+                // text around it. Office routinely writes Arabic this way, so
+                // ignoring these silently empties the run — and an empty run is
+                // dropped, which turns a defective paragraph into no finding at
+                // all. This tool exists to reason about the text; it has to see
+                // all of it.
+                Ok(Event::GeneralRef(e)) if in_text => {
+                    if let Some(b) = current.as_mut() {
+                        let reference = e.as_ref();
+                        match quick_xml::escape::unescape(&format!("&{reference};")) {
+                            Ok(text) => b.text.push_str(text.as_ref()),
+                            Err(_) => {
+                                b.text.push('&');
+                                b.text.push_str(reference);
+                                b.text.push(';');
+                            }
+                        }
+                    }
+                }
+
                 Ok(Event::End(e)) => match e.name().as_ref() {
                     "a:t" => in_text = false,
                     "a:p" => {
@@ -230,31 +269,10 @@ impl DocumentReader for PptxDocument {
     }
 
     fn scan(&mut self) -> Result<Vec<TextUnit>> {
-        let file = File::open(&self.path)?;
-        let mut archive = ZipArchive::new(file)
-            .map_err(|e| Error::Format(format!("not a readable OOXML package: {e}")))?;
-
-        let names: Vec<String> = archive.file_names().map(str::to_string).collect();
-        if !names.iter().any(|n| n == "[Content_Types].xml") {
-            return Err(Error::Format(
-                "not an OOXML package: [Content_Types].xml is missing".into(),
-            ));
-        }
-
-        let mut parts: Vec<String> = names
-            .into_iter()
-            .filter(|n| n.starts_with("ppt/") && n.ends_with(".xml"))
-            .collect();
-        parts.sort();
-
         let mut units = Vec::new();
-        for part in parts {
-            let mut buf = String::new();
-            archive
-                .by_name(&part)
-                .map_err(|e| Error::Format(format!("{part}: {e}")))?
-                .read_to_string(&mut buf)?;
-            units.extend(Self::scan_part(&part, &buf)?);
+        for part in self.text_parts()? {
+            let xml = self.package.read_text(&part)?;
+            units.extend(Self::scan_part(&part, &xml)?);
         }
         Ok(units)
     }
@@ -264,21 +282,4 @@ impl DocumentReader for PptxDocument {
 /// hold the XML.
 pub fn scan_xml(part: &str, xml: &str) -> Result<Vec<TextUnit>> {
     PptxDocument::scan_part(part, xml)
-}
-
-/// Reads a part out of a package without going through the filesystem twice.
-pub fn read_part(bytes: &[u8], part: &str) -> Result<String> {
-    let mut archive = ZipArchive::new(Cursor::new(bytes))
-        .map_err(|e| Error::Format(format!("not a readable OOXML package: {e}")))?;
-    let mut buf = String::new();
-    archive
-        .by_name(part)
-        .map_err(|e| Error::Format(format!("{part}: {e}")))?
-        .read_to_string(&mut buf)?;
-    Ok(buf)
-}
-
-/// The path a document was opened from.
-pub fn source_path(doc: &PptxDocument) -> &Path {
-    &doc.path
 }

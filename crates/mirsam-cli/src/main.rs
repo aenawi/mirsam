@@ -9,6 +9,7 @@ mod render;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
+use mirsam_core::error::Error as CoreError;
 use mirsam_core::{DocumentReader, Engine};
 use mirsam_ooxml::PptxDocument;
 use std::path::{Path, PathBuf};
@@ -80,10 +81,29 @@ fn open(path: &Path) -> Result<Box<dyn DocumentReader>> {
         .to_ascii_lowercase();
 
     match extension.as_str() {
-        "pptx" => Ok(Box::new(PptxDocument::open(path)?)),
-        other => anyhow::bail!(
-            "no adapter for .{other} yet; mirsam 0.1 reads .pptx (see docs/ROADMAP.md)"
+        "pptx" => Ok(Box::new(
+            PptxDocument::open(path).with_context(|| format!("opening {}", path.display()))?,
+        )),
+        other => Err(CoreError::UnknownFormat(other.to_string()).into()),
+    }
+}
+
+/// Map a failure onto its documented exit code, and any hint worth adding.
+///
+/// Classified by the error's *type*, never by searching its rendered message.
+/// Exit codes are a stable contract that CI branches on; deciding one by
+/// substring match makes it hostage to wording, and to whatever text happens to
+/// appear in a user's document.
+fn classify(error: &anyhow::Error) -> (u8, Option<String>) {
+    match error.downcast_ref::<CoreError>() {
+        Some(CoreError::UnknownFormat(_)) => (
+            exit::USAGE,
+            Some(format!(
+                "mirsam {} reads .pptx; the other formats are scheduled in docs/ROADMAP.md",
+                env!("CARGO_PKG_VERSION")
+            )),
         ),
+        _ => (exit::UNREADABLE, None),
     }
 }
 
@@ -104,8 +124,7 @@ fn run() -> Result<u8> {
             strict,
             format,
         } => {
-            let mut document =
-                open(&file).with_context(|| format!("opening {}", file.display()))?;
+            let mut document = open(&file)?;
             let units = document
                 .scan()
                 .with_context(|| format!("reading {}", file.display()))?;
@@ -129,14 +148,13 @@ fn main() -> ExitCode {
     match run() {
         Ok(code) => ExitCode::from(code),
         Err(error) => {
-            eprintln!("error: {error:#}");
             // Distinguish "could not read the document" from "found problems",
             // so a pipeline can retry the former and fail the latter.
-            let code = if error.to_string().contains("no adapter") {
-                exit::USAGE
-            } else {
-                exit::UNREADABLE
-            };
+            let (code, hint) = classify(&error);
+            eprintln!("error: {error:#}");
+            if let Some(hint) = hint {
+                eprintln!("  {hint}");
+            }
             ExitCode::from(code)
         }
     }
