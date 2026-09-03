@@ -248,7 +248,7 @@ fn rules_json_lists_every_rule_with_an_id() {
     assert_eq!(out.code, exit::OK);
     let value: serde_json::Value = serde_json::from_str(&out.stdout).expect("valid JSON");
     let rules = value.as_array().expect("an array of rules");
-    assert_eq!(rules.len(), 8, "expected the eight documented rules");
+    assert_eq!(rules.len(), 9, "expected the nine documented rules");
     for rule in rules {
         assert!(rule.get("id").is_some(), "a rule with no id: {rule}");
     }
@@ -279,6 +279,7 @@ fn repairing_the_m0_fixture_clears_every_fixable_finding_and_is_then_a_no_op() {
         &fixture("broken-arabic.pptx"),
         &once,
         "--convert-bullets",
+        "--align",
         "--format",
         "json",
     ]);
@@ -326,6 +327,7 @@ fn repairing_the_m0_fixture_clears_every_fixable_finding_and_is_then_a_no_op() {
         &once,
         &twice,
         "--convert-bullets",
+        "--align",
         "--format",
         "json",
     ]);
@@ -339,6 +341,86 @@ fn repairing_the_m0_fixture_clears_every_fixable_finding_and_is_then_a_no_op() {
     assert!(
         std::fs::read(&once).unwrap() == std::fs::read(&twice).unwrap(),
         "a second repair changed the bytes"
+    );
+}
+
+#[test]
+fn repair_align_writes_the_start_edge_only_when_asked() {
+    // The M0 fixture's Arabic paragraphs carry no alignment of their own.
+    // Without the flag that is a note — reported, never blocking, never
+    // written. With it, the start edge is written and the note is gone.
+    let scratch = Scratch::new("align");
+
+    let out = run(&[
+        "repair",
+        &fixture("broken-arabic.pptx"),
+        &scratch.path("plain.pptx"),
+        "--convert-bullets",
+        "--format",
+        "json",
+    ]);
+    assert_eq!(out.code, exit::OK, "stderr:\n{}", out.stderr);
+    let value = parse_json(&out);
+    assert_eq!(value["options"]["align"], false);
+    let notes: Vec<_> = value["after"]["diagnostics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|d| d["rule"] == "alignment-unset")
+        .collect();
+    assert!(
+        !notes.is_empty(),
+        "the fixture must carry paragraphs with no alignment of their own"
+    );
+    assert!(
+        notes
+            .iter()
+            .all(|d| d["severity"] == "note" && d["fixable"] == false),
+        "{notes:#?}"
+    );
+    assert!(
+        !value["repairs"]["applied"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r["fix"]["kind"] == "set_alignment"),
+        "an alignment was written without --align"
+    );
+    // A note never blocks, strict or not.
+    assert_eq!(
+        run(&["audit", &scratch.path("plain.pptx"), "--strict"]).code,
+        exit::OK
+    );
+
+    let out = run(&[
+        "repair",
+        &fixture("broken-arabic.pptx"),
+        &scratch.path("aligned.pptx"),
+        "--convert-bullets",
+        "--align",
+        "--format",
+        "json",
+    ]);
+    assert_eq!(out.code, exit::OK, "stderr:\n{}", out.stderr);
+    let value = parse_json(&out);
+    assert_eq!(value["options"]["align"], true);
+    assert!(
+        value["repairs"]["applied"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r["fix"]["kind"] == "set_alignment"),
+        "{}",
+        value["repairs"]
+    );
+    assert!(
+        value["after"]["diagnostics"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|d| d["rule"] != "alignment-unset"),
+        "{}",
+        value["after"]
     );
 }
 
@@ -361,12 +443,15 @@ fn repair_never_modifies_its_input() {
 #[test]
 fn repair_leaves_a_typed_bullet_alone_unless_asked() {
     // Converting a bullet edits the text itself, so it is opt-in. Without the
-    // flag the finding must remain — reported, not silently dropped.
+    // flag the finding must remain — reported, not silently dropped. `--align`
+    // is given so the alignment notes on the same paragraphs do not crowd
+    // the assertion; that flag has its own test.
     let scratch = Scratch::new("bullet");
     let out = run(&[
         "repair",
         &fixture("broken-arabic.pptx"),
         &scratch.path("out.pptx"),
+        "--align",
         "--format",
         "json",
     ]);

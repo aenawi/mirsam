@@ -82,33 +82,39 @@ already-compressed — then re-reads that copy and audits it, so the report
 describes the file on disk rather than the intention:
 
 ```console
-$ mirsam repair deck.pptx fixed.pptx --convert-bullets
+$ mirsam repair deck.pptx fixed.pptx --convert-bullets --align
 mirsam repair  deck.pptx -> fixed.pptx  [pptx]
 units 2 | arabic 2 | mixed 1
-language ar-SA | font (none) | convert-bullets yes
+language ar-SA | font (none) | convert-bullets yes | align yes
 
-applied 6 repair(s)
+applied 8 repair(s)
   ppt/slides/slide1.xml:paragraph-1:Title 1
     set direction rtl
+    set alignment start
     set language ar-SA
   ppt/slides/slide1.xml:paragraph-2:Title 1
     remove 1 explicit bidi control(s)
     set direction rtl
+    set alignment start
     set language ar-SA
     convert typed '•' to a native bullet
 
-before  errors=1 warnings=5 notes=0
+before  errors=1 warnings=5 notes=2
 after   errors=0 warnings=0 notes=0
 
 PASS: errors=0 warnings=0 notes=0 strict=no
 ```
 
-Two repairs are decisions the text cannot make for you, so they are flags:
+Three repairs are decisions the text cannot make for you, so they are flags:
 `--font <TYPEFACE>` fills the empty complex-script slot (without it the
-finding is reported, not repaired), and `--convert-bullets` replaces a typed
-`•` with a native list (opt-in, because it edits the text itself). `--lang`
-changes the tag written from `ar-SA`; `--force` replaces an existing output.
-Repairing a repaired file is a no-op that reproduces it byte for byte.
+finding is reported, not repaired); `--convert-bullets` replaces a typed
+`•` with a native list (opt-in, because it edits the text itself); and
+`--align` writes a start-edge alignment onto right-to-left paragraphs that
+have none of their own (opt-in, because what they inherit may be a layout's
+design, such as a centred title — without the flag that is reported as a
+note, which never blocks). `--lang` changes the tag written from `ar-SA`;
+`--force` replaces an existing output. Repairing a repaired file is a no-op
+that reproduces it byte for byte.
 
 ### With an AI agent
 

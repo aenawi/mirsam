@@ -50,6 +50,11 @@ pub struct RepairOptions {
     /// Replace typed bullet glyphs with the format's native list. Off by
     /// default because it edits the text itself, not only its properties.
     pub convert_bullets: bool,
+    /// Write an explicit start-edge alignment on right-to-left paragraphs
+    /// that have none of their own. Off by default: the alignment such a
+    /// paragraph inherits may be a layout's design — a centred title — and
+    /// until M2 the tool cannot read the layout to tell.
+    pub align: bool,
 }
 
 impl Default for RepairOptions {
@@ -58,6 +63,7 @@ impl Default for RepairOptions {
             language: DEFAULT_LOCALE.to_string(),
             complex_font: None,
             convert_bullets: false,
+            align: false,
         }
     }
 }
@@ -87,6 +93,9 @@ impl Engine {
                 Box::new(direction::DirectionMismatch),
                 Box::new(direction::DirectionUnset),
                 Box::new(direction::AlignmentIncoherent),
+                Box::new(direction::AlignmentUnset {
+                    align: options.align,
+                }),
                 Box::new(typography::LanguageMissing {
                     locale: options.language.clone(),
                 }),

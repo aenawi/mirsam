@@ -38,9 +38,12 @@ prompt; `torture.pptx` prompts *before* any repair, so the check is
 inconclusive there and continues in
 [#9](https://github.com/aenawi/mirsam/issues/9). The same session saw that
 the repaired deck's Arabic paragraphs keep the template's left alignment,
-which the audit does not report —
+which the audit did not report —
 [#8](https://github.com/aenawi/mirsam/issues/8), the first visual evidence
-for what M2 has to resolve.
+for what M2 has to resolve. Answered from the text alone by
+`alignment-unset` and `repair --align`
+([ADR 0006](adr/0006-judge-from-the-text-not-the-template.md)); the
+layout-aware answer is 2.2.
 
 ### 1.1 Round-trip harness `[x]`
 `mirsam-ooxml::package` opens a package once and rewrites it entry by entry,
@@ -243,7 +246,11 @@ populating `Resolved::Inherited` instead of `Unset`.
 
 *Acceptance:* a deck with direction set only on the master reports zero
 `direction-unset` warnings — and the same deck reports them today, so the test
-is written first and starts red.
+is written first and starts red. And, from #8: a right-to-left paragraph a
+layout centres reports no `alignment-unset` note, while one an English
+layout leaves on the left edge reports it as a finding rather than a note.
+What to conclude from a master whose own body style says `rtl="0"` is this
+item's ADR to write.
 
 ### 2.3 List levels and theme fonts `[~]`
 `lvl1pPr`…`lvl9pPr` by `a:pPr/@lvl`; `a:fontScheme` for the `cs` slot.

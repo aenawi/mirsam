@@ -49,11 +49,13 @@ The JSON report carries `options`, `repairs.applied`, `repairs.skipped` (a
 fix the adapter cannot express yet — listed, never claimed), and `before` and
 `after`, each an audit in the same shape `audit --format json` emits.
 
-Two repairs need a decision the text cannot supply, so they are off until
-asked: `--font <TYPEFACE>` for `complex-font-missing`, and `--convert-bullets`
-for `literal-bullet`. A `literal-bullet` finding in `after` with
-`convert_bullets: false` in `options` is not a failed repair; it is one you
-did not request.
+Three repairs need a decision the text cannot supply, so they are off until
+asked: `--font <TYPEFACE>` for `complex-font-missing`, `--convert-bullets`
+for `literal-bullet`, and `--align` for `alignment-unset`. A `literal-bullet`
+finding in `after` with `convert_bullets: false` in `options` is not a
+failed repair; it is one you did not request. The same goes for an
+`alignment-unset` note with `align: false` — and a note never blocks, so it
+never changes the exit code.
 
 ## Reporting honestly
 
