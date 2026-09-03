@@ -146,6 +146,15 @@ Working towards byte-preserving `repair` for PPTX. See
 - A malformed package is now rejected when it is opened rather than when it is
   scanned. The exit code is unchanged (`3`).
 
+### Notes
+
+- **Application check, run by a person on 2026-09-03 (#6).** PowerPoint
+  opened the repaired `quarterly-report.pptx` without a repair prompt.
+  `torture.pptx` prompts before any repair, so that half is inconclusive
+  (#9). The repaired deck's Arabic paragraphs keep the template's left
+  alignment, which the audit does not yet report (#8). The tests prove
+  structural correctness; this is the record of what was actually seen.
+
 ## [0.1.0] — 2026-09-02 · "Steppe Eagle"
 
 Foundation release. Audit only, PowerPoint only — the architecture proven
