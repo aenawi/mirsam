@@ -7,7 +7,7 @@
 
 use mirsam_core::Fix;
 use mirsam_core::text::{Alignment, Direction};
-use mirsam_ooxml::rewrite::{Inherited, PartFixes, apply, apply_with};
+use mirsam_ooxml::rewrite::{Inherited, PartFixes, PartPlan, apply, apply_plan, apply_with};
 
 fn rewrite(xml: &str, fixes: Vec<Fix>) -> String {
     let mut part = PartFixes::new();
@@ -292,6 +292,117 @@ fn controls_are_removed_before_forms_are_normalised_whatever_the_order_given() {
         ],
         r#"<a:p><a:r><a:t>مرحبا</a:t></a:r></a:p>"#,
     );
+}
+
+// --------------------------------------------------------------------- tables
+
+fn rewrite_table(xml: &str, table: usize, fixes: Vec<Fix>) -> String {
+    let mut plan = PartPlan::default();
+    plan.tables.insert(table, fixes);
+    apply_plan("s.xml", xml, &plan, &Inherited::new()).expect("rewrite failed")
+}
+
+const CELL: &str =
+    r#"<a:tr><a:tc><a:txBody><a:p><a:r><a:t>المؤشر</a:t></a:r></a:p></a:txBody></a:tc></a:tr>"#;
+
+#[test]
+fn set_direction_on_a_table_creates_tblpr_as_its_first_child() {
+    // CT_Table is a sequence: tblPr, tblGrid, tr. A tblPr after the grid is
+    // a file PowerPoint repairs.
+    assert_eq!(
+        rewrite_table(
+            &format!("<a:tbl><a:tblGrid/>{CELL}</a:tbl>"),
+            1,
+            vec![Fix::SetDirection(Direction::Rtl)],
+        ),
+        format!(r#"<a:tbl><a:tblPr rtl="1"/><a:tblGrid/>{CELL}</a:tbl>"#),
+    );
+}
+
+#[test]
+fn set_direction_on_a_table_edits_an_existing_tblpr_in_place() {
+    assert_eq!(
+        rewrite_table(
+            &format!(
+                r#"<a:tbl><a:tblPr firstRow="1" bandRow='1'><a:tableStyleId>x</a:tableStyleId></a:tblPr><a:tblGrid/>{CELL}</a:tbl>"#
+            ),
+            1,
+            vec![Fix::SetDirection(Direction::Rtl)],
+        ),
+        format!(
+            r#"<a:tbl><a:tblPr firstRow="1" bandRow='1' rtl="1"><a:tableStyleId>x</a:tableStyleId></a:tblPr><a:tblGrid/>{CELL}</a:tbl>"#
+        ),
+    );
+    assert_eq!(
+        rewrite_table(
+            &format!(r#"<a:tbl><a:tblPr rtl="0"/><a:tblGrid/>{CELL}</a:tbl>"#),
+            1,
+            vec![Fix::SetDirection(Direction::Rtl)],
+        ),
+        format!(r#"<a:tbl><a:tblPr rtl="1"/><a:tblGrid/>{CELL}</a:tbl>"#),
+    );
+}
+
+#[test]
+fn tables_are_numbered_in_document_order_and_the_others_are_untouched() {
+    let two = format!("<a:tbl><a:tblGrid/>{CELL}</a:tbl><a:tbl><a:tblGrid/>{CELL}</a:tbl>");
+    assert_eq!(
+        rewrite_table(&two, 2, vec![Fix::SetDirection(Direction::Rtl)]),
+        format!(
+            r#"<a:tbl><a:tblGrid/>{CELL}</a:tbl><a:tbl><a:tblPr rtl="1"/><a:tblGrid/>{CELL}</a:tbl>"#
+        ),
+    );
+}
+
+#[test]
+fn a_cell_paragraph_and_its_table_are_repaired_together() {
+    // The paragraph is the first a:p in the part; the table's tblPr is
+    // created after the paragraph edit and must not disturb it.
+    let mut plan = PartPlan::default();
+    plan.paragraphs
+        .insert(1, vec![Fix::SetDirection(Direction::Rtl)]);
+    plan.tables
+        .insert(1, vec![Fix::SetDirection(Direction::Rtl)]);
+    assert_eq!(
+        apply_plan(
+            "s.xml",
+            &format!("<a:tbl><a:tblGrid/>{CELL}</a:tbl>"),
+            &plan,
+            &Inherited::new()
+        )
+        .unwrap(),
+        r#"<a:tbl><a:tblPr rtl="1"/><a:tblGrid/><a:tr><a:tc><a:txBody><a:p><a:pPr rtl="1"/><a:r><a:t>المؤشر</a:t></a:r></a:p></a:txBody></a:tc></a:tr></a:tbl>"#,
+    );
+}
+
+#[test]
+fn only_direction_can_be_set_on_a_table() {
+    let mut plan = PartPlan::default();
+    plan.tables
+        .insert(1, vec![Fix::SetLanguage("ar-SA".into())]);
+    let err = apply_plan(
+        "s.xml",
+        &format!("<a:tbl><a:tblGrid/>{CELL}</a:tbl>"),
+        &plan,
+        &Inherited::new(),
+    )
+    .unwrap_err();
+    assert!(format!("{err}").contains("table"), "{err}");
+}
+
+#[test]
+fn a_plan_naming_a_table_that_is_not_there_is_an_error() {
+    let mut plan = PartPlan::default();
+    plan.tables
+        .insert(2, vec![Fix::SetDirection(Direction::Rtl)]);
+    let err = apply_plan(
+        "s.xml",
+        &format!("<a:tbl><a:tblGrid/>{CELL}</a:tbl>"),
+        &plan,
+        &Inherited::new(),
+    )
+    .unwrap_err();
+    assert!(format!("{err}").contains("no table 2"), "{err}");
 }
 
 // ------------------------------------------------------------------ the rest

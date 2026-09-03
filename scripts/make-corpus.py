@@ -311,8 +311,11 @@ def build(correct: bool) -> Presentation:
         if spec.table:
             rows, cols = len(spec.table), len(spec.table[0])
             frame = slide.shapes.add_table(rows, cols, Inches(1), Inches(2), Inches(8), Inches(3))
-            # A right-to-left table, as an Arabic PowerPoint writes one.
-            frame.table._tbl.tblPr.set("rtl", "1")
+            # The correct deck's table is right-to-left, as an Arabic PowerPoint
+            # writes one. The broken deck's declares no direction, so its first
+            # column sits on the left — the defect `table-direction` reports.
+            if correct:
+                frame.table._tbl.tblPr.set("rtl", "1")
             for r, row in enumerate(spec.table):
                 for c, cell in enumerate(row):
                     fill_frame(frame.table.cell(r, c).text_frame, [fix(cell)])

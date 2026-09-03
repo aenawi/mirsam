@@ -395,6 +395,24 @@
       },
       {
         "evidence": {
+          "logical": "المؤشر\nالربع الثالث\nالربع الرابع\nالإيرادات (مليون درهم)\n120\n142\nعدد العملاء\n1,850\n2,300\nرضا العملاء NPS\n41\n48",
+          "offenders": [],
+          "visual_declared": null,
+          "visual_expected": null
+        },
+        "fixable": true,
+        "location": {
+          "container": "Table 2",
+          "paragraph": null,
+          "part": "ppt/slides/slide3.xml"
+        },
+        "message": "table declares no direction; its cells read rtl, so the columns run the wrong way",
+        "rule": "table-direction",
+        "severity": "warning",
+        "unit": "ppt/slides/slide3.xml#tbl1"
+      },
+      {
+        "evidence": {
           "logical": "ملاحظات المتحدث: ركّز على نمو الإيرادات قبل الانتقال إلى التكاليف.",
           "offenders": [],
           "visual_declared": null,
@@ -704,12 +722,12 @@
     "format": "pptx",
     "strict": false,
     "summary": {
-      "arabic_units": 23,
+      "arabic_units": 24,
       "errors": 3,
-      "mixed_units": 8,
+      "mixed_units": 9,
       "notes": 17,
-      "units_scanned": 125,
-      "warnings": 18
+      "units_scanned": 126,
+      "warnings": 19
     }
   },
   "changed_parts": {
@@ -752,6 +770,8 @@
     "ppt/slides/slide3.xml": [
       "-<a:pPr rtl=\"1\"/>",
       "+<a:pPr rtl=\"1\" algn=\"r\"/>",
+      "-<a:tblPr firstRow=\"1\" bandRow=\"1\">",
+      "+<a:tblPr firstRow=\"1\" bandRow=\"1\" rtl=\"1\">",
       "-<a:pPr rtl=\"1\"/>",
       "+<a:pPr rtl=\"1\" algn=\"r\"/>",
       "-<a:pPr rtl=\"1\"/>",
@@ -793,11 +813,11 @@
     "after": {
       "diagnostics": [],
       "summary": {
-        "arabic_units": 23,
+        "arabic_units": 24,
         "errors": 0,
-        "mixed_units": 8,
+        "mixed_units": 9,
         "notes": 0,
-        "units_scanned": 125,
+        "units_scanned": 126,
         "warnings": 0
       }
     },
@@ -1196,6 +1216,24 @@
         },
         {
           "evidence": {
+            "logical": "المؤشر\nالربع الثالث\nالربع الرابع\nالإيرادات (مليون درهم)\n120\n142\nعدد العملاء\n1,850\n2,300\nرضا العملاء NPS\n41\n48",
+            "offenders": [],
+            "visual_declared": null,
+            "visual_expected": null
+          },
+          "fixable": true,
+          "location": {
+            "container": "Table 2",
+            "paragraph": null,
+            "part": "ppt/slides/slide3.xml"
+          },
+          "message": "table declares no direction; its cells read rtl, so the columns run the wrong way",
+          "rule": "table-direction",
+          "severity": "warning",
+          "unit": "ppt/slides/slide3.xml#tbl1"
+        },
+        {
+          "evidence": {
             "logical": "ملاحظات المتحدث: ركّز على نمو الإيرادات قبل الانتقال إلى التكاليف.",
             "offenders": [],
             "visual_declared": null,
@@ -1502,12 +1540,12 @@
         }
       ],
       "summary": {
-        "arabic_units": 23,
+        "arabic_units": 24,
         "errors": 3,
-        "mixed_units": 8,
+        "mixed_units": 9,
         "notes": 17,
-        "units_scanned": 125,
-        "warnings": 18
+        "units_scanned": 126,
+        "warnings": 19
       }
     },
     "blocking": false,
@@ -1735,6 +1773,13 @@
             "value": "start"
           },
           "unit": "ppt/slides/slide3.xml#p11"
+        },
+        {
+          "fix": {
+            "kind": "set_direction",
+            "value": "rtl"
+          },
+          "unit": "ppt/slides/slide3.xml#tbl1"
         },
         {
           "fix": {

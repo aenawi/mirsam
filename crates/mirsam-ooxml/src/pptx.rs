@@ -1,12 +1,12 @@
 //! PowerPoint (PPTX) adapter.
 
 use crate::package::{Edits, Package};
-use crate::rewrite::{self, Inherited, PartFixes};
+use crate::rewrite::{self, Inherited, PartPlan};
 use mirsam_core::error::{Error, Result};
 use mirsam_core::fix::Repair;
 use mirsam_core::ports::{DocumentReader, DocumentWriter};
 use mirsam_core::text::{
-    Alignment, Bullet, Direction, Location, Properties, Resolved, TextUnit, UnitId,
+    Alignment, Bullet, Direction, Location, Properties, Resolved, TextUnit, UnitId, UnitKind,
 };
 use quick_xml::events::Event;
 use quick_xml::{Reader, XmlVersion};
@@ -31,19 +31,47 @@ pub(crate) fn is_true(value: &str) -> bool {
     matches!(value, "1" | "true" | "on")
 }
 
-/// The unit id this adapter issues: the part name and the paragraph's 1-based
-/// ordinal, which is exactly what the rewriter needs to find it again.
+/// The unit id this adapter issues for a paragraph: the part name and the
+/// paragraph's 1-based ordinal, which is exactly what the rewriter needs to
+/// find it again.
 fn unit_id(part: &str, index: usize) -> String {
     format!("{part}#p{index}")
 }
 
-/// Recover the part and paragraph ordinal from an id this adapter issued.
+/// The unit id for a table: the part name and the table's 1-based ordinal.
+fn table_id(part: &str, index: usize) -> String {
+    format!("{part}#tbl{index}")
+}
+
+/// What a unit id this adapter issued points at.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Target {
+    Paragraph(usize),
+    Table(usize),
+}
+
+/// Recover the part and target from an id this adapter issued.
 ///
-/// `#` cannot occur in an OPC part name, so the last `#p` is unambiguous.
-fn parse_unit_id(id: &UnitId) -> Option<(&str, usize)> {
-    let (part, index) = id.0.rsplit_once("#p")?;
+/// `#` cannot occur in an OPC part name, so the last `#` is unambiguous.
+fn parse_unit_id(id: &UnitId) -> Option<(&str, Target)> {
+    let (part, rest) = id.0.rsplit_once('#')?;
+    let (target, index) = if let Some(n) = rest.strip_prefix("tbl") {
+        (Target::Table as fn(usize) -> Target, n)
+    } else if let Some(n) = rest.strip_prefix('p') {
+        (Target::Paragraph as fn(usize) -> Target, n)
+    } else {
+        return None;
+    };
     let index: usize = index.parse().ok()?;
-    (!part.is_empty() && index > 0).then_some((part, index))
+    (!part.is_empty() && index > 0).then_some((part, target(index)))
+}
+
+/// Accumulates a table while its rows are being parsed.
+struct TableBuilder {
+    /// Every cell's text, one paragraph per line.
+    text: String,
+    direction: Resolved<Direction>,
+    shape: Option<String>,
 }
 
 /// Accumulates the properties of the paragraph currently being parsed.
@@ -120,6 +148,8 @@ impl PptxDocument {
         let mut body_rtl: Option<bool> = None;
         let mut in_text = false;
         let mut paragraph_index = 0usize;
+        let mut table: Option<TableBuilder> = None;
+        let mut table_index = 0usize;
 
         loop {
             match reader.read_event() {
@@ -147,6 +177,29 @@ impl PptxDocument {
                                 .find(|a| a.key.as_ref() == "rtlCol")
                                 .and_then(|a| a.normalized_value(XmlVersion::Implicit1_0).ok())
                                 .map(|v| is_true(&v));
+                        }
+                        "a:tbl" => {
+                            table_index += 1;
+                            table = Some(TableBuilder {
+                                text: String::new(),
+                                direction: Resolved::Unset,
+                                shape: shape.clone(),
+                            });
+                        }
+                        "a:tblPr" => {
+                            if let Some(t) = table.as_mut()
+                                && let Some(value) = e
+                                    .attributes()
+                                    .flatten()
+                                    .find(|a| a.key.as_ref() == "rtl")
+                                    .and_then(|a| a.normalized_value(XmlVersion::Implicit1_0).ok())
+                            {
+                                t.direction = Resolved::Explicit(if is_true(&value) {
+                                    Direction::Rtl
+                                } else {
+                                    Direction::Ltr
+                                });
+                            }
                         }
                         "a:p" => {
                             paragraph_index += 1;
@@ -274,7 +327,34 @@ impl PptxDocument {
                         if let Some(b) = current.take()
                             && !b.text.trim().is_empty()
                         {
+                            // A cell's paragraph is the table's text too: the
+                            // table is judged from what its cells say.
+                            if let Some(t) = table.as_mut() {
+                                if !t.text.is_empty() {
+                                    t.text.push('\n');
+                                }
+                                t.text.push_str(&b.text);
+                            }
                             units.push(b.finish(part, paragraph_index));
+                        }
+                    }
+                    "a:tbl" => {
+                        if let Some(t) = table.take()
+                            && !t.text.trim().is_empty()
+                        {
+                            units.push(
+                                TextUnit::new(table_id(part, table_index), t.text)
+                                    .with_kind(UnitKind::Table)
+                                    .with_props(Properties {
+                                        direction: t.direction,
+                                        ..Default::default()
+                                    })
+                                    .with_location(Location {
+                                        part: part.to_string(),
+                                        paragraph: None,
+                                        container: t.shape,
+                                    }),
+                            );
                         }
                     }
                     "p:sp" | "p:graphicFrame" | "p:pic" | "p:cxnSp" => shape = None,
@@ -312,25 +392,25 @@ impl DocumentWriter for PptxDocument {
     /// staged unless every part succeeds: a failure half-way through must not
     /// leave a document that is partly repaired and reports otherwise.
     fn apply(&mut self, repairs: &[Repair]) -> Result<usize> {
-        let mut by_part: BTreeMap<&str, PartFixes> = BTreeMap::new();
+        let mut by_part: BTreeMap<&str, PartPlan> = BTreeMap::new();
         for repair in repairs {
-            let Some((part, index)) = parse_unit_id(&repair.unit) else {
+            let Some((part, target)) = parse_unit_id(&repair.unit) else {
                 return Err(Error::Format(format!(
                     "{}: not a unit this adapter produced",
                     repair.unit
                 )));
             };
-            by_part
-                .entry(part)
-                .or_default()
-                .entry(index)
-                .or_default()
-                .push(repair.fix.clone());
+            let plan = by_part.entry(part).or_default();
+            match target {
+                Target::Paragraph(index) => plan.paragraphs.entry(index).or_default(),
+                Target::Table(index) => plan.tables.entry(index).or_default(),
+            }
+            .push(repair.fix.clone());
         }
 
         let mut staged = Edits::new();
         let mut applied = 0usize;
-        for (part, fixes) in by_part {
+        for (part, plan) in by_part {
             // A part edited by an earlier call is edited again from its staged
             // bytes, so repairs applied in two rounds compose rather than the
             // second round discarding the first.
@@ -349,12 +429,15 @@ impl DocumentWriter for PptxDocument {
                     let Resolved::Inherited(direction) = unit.props.direction else {
                         return None;
                     };
-                    parse_unit_id(&unit.id).map(|(_, index)| (index, direction))
+                    match parse_unit_id(&unit.id) {
+                        Some((_, Target::Paragraph(index))) => Some((index, direction)),
+                        _ => None,
+                    }
                 })
                 .collect();
 
-            let rewritten = rewrite::apply_with(part, &xml, &fixes, &inherited)?;
-            applied += fixes.values().map(Vec::len).sum::<usize>();
+            let rewritten = rewrite::apply_plan(part, &xml, &plan, &inherited)?;
+            applied += plan.len();
             staged.insert(part.to_string(), rewritten.into_bytes());
         }
 
@@ -381,7 +464,15 @@ mod unit_id_tests {
     #[test]
     fn a_unit_id_round_trips_through_its_own_parser() {
         let id = UnitId(unit_id("ppt/slides/slide1.xml", 3));
-        assert_eq!(parse_unit_id(&id), Some(("ppt/slides/slide1.xml", 3)));
+        assert_eq!(
+            parse_unit_id(&id),
+            Some(("ppt/slides/slide1.xml", Target::Paragraph(3)))
+        );
+        let id = UnitId(table_id("ppt/slides/slide1.xml", 2));
+        assert_eq!(
+            parse_unit_id(&id),
+            Some(("ppt/slides/slide1.xml", Target::Table(2)))
+        );
     }
 
     #[test]
@@ -393,6 +484,9 @@ mod unit_id_tests {
             "ppt/slides/slide1.xml#p0",
             "x#px",
             "x#p-1",
+            "x#tbl0",
+            "x#tblx",
+            "x#t1",
         ] {
             assert_eq!(parse_unit_id(&UnitId(foreign.into())), None, "{foreign:?}");
         }

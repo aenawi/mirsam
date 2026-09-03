@@ -1,7 +1,7 @@
 //! Adapter conformance: does lowering PPTX into text units preserve the facts
 //! the engine needs to reason correctly?
 
-use mirsam_core::{Bullet, Direction, Engine, Resolved, Severity};
+use mirsam_core::{Bullet, Direction, Engine, Resolved, Severity, UnitKind};
 use mirsam_ooxml::pptx::scan_xml;
 
 const NS: &str = r#"xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main""#;
@@ -119,4 +119,48 @@ fn inherited_alignment_is_not_a_finding() {
             .any(|d| d.rule.0 == "alignment-incoherent"),
         "unset alignment must not be reported"
     );
+}
+
+// --------------------------------------------------------------------- tables
+
+fn slide_with_table(tblpr: &str) -> String {
+    format!(
+        r#"<p:sld {NS}><p:cSld><p:spTree><p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="4" name="Table 4"/></p:nvGraphicFramePr><a:graphic><a:graphicData><a:tbl>{tblpr}<a:tblGrid/><a:tr><a:tc><a:txBody><a:bodyPr/><a:p><a:r><a:t>المؤشر</a:t></a:r></a:p></a:txBody></a:tc><a:tc><a:txBody><a:bodyPr/><a:p><a:r><a:t>الربع الثالث</a:t></a:r></a:p></a:txBody></a:tc></a:tr></a:tbl></a:graphicData></a:graphic></p:graphicFrame></p:spTree></p:cSld></p:sld>"#
+    )
+}
+
+#[test]
+fn a_table_is_a_unit_of_its_own_kind_beside_its_cells() {
+    let units = scan_xml("s.xml", &slide_with_table("")).unwrap();
+    assert_eq!(units.len(), 3, "{units:#?}");
+    // The cells first, as paragraphs, then the table that closes after them.
+    assert!(units[..2].iter().all(|u| u.kind == UnitKind::Paragraph));
+    let table = &units[2];
+    assert_eq!(table.kind, UnitKind::Table);
+    assert_eq!(table.id.0, "s.xml#tbl1");
+    assert_eq!(table.text, "المؤشر\nالربع الثالث");
+    assert_eq!(table.props.direction, Resolved::Unset);
+    assert_eq!(table.location.container.as_deref(), Some("Table 4"));
+    assert_eq!(table.location.paragraph, None);
+}
+
+#[test]
+fn a_tables_own_direction_is_explicit() {
+    let units = scan_xml("s.xml", &slide_with_table(r#"<a:tblPr rtl="1"/>"#)).unwrap();
+    assert_eq!(units[2].props.direction, Resolved::Explicit(Direction::Rtl));
+    let units = scan_xml("s.xml", &slide_with_table(r#"<a:tblPr firstRow="1"/>"#)).unwrap();
+    assert_eq!(units[2].props.direction, Resolved::Unset);
+}
+
+#[test]
+fn an_arabic_table_with_no_direction_is_reported_and_its_cells_are_not_blamed() {
+    let units = scan_xml("s.xml", &slide_with_table("")).unwrap();
+    let report = Engine::with_default_rules().audit(&units);
+    let on_table: Vec<_> = report
+        .diagnostics
+        .iter()
+        .filter(|d| d.unit.0 == "s.xml#tbl1")
+        .map(|d| d.rule.0)
+        .collect();
+    assert_eq!(on_table, ["table-direction"], "{report:#?}");
 }

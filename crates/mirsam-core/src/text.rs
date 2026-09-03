@@ -175,10 +175,27 @@ impl fmt::Display for Location {
     }
 }
 
+/// What a unit is, so a rule can say which kind it judges.
+///
+/// A paragraph is the unit the rules were written for. A table is a
+/// container whose *direction* is its own — it decides which side the first
+/// column sits on — while its cells' paragraphs keep their own direction and
+/// alignment and are units in their own right. Its text is every cell's
+/// text, so the same "mostly Arabic" judgement applies (ADR 0006).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "lowercase"))]
+pub enum UnitKind {
+    #[default]
+    Paragraph,
+    Table,
+}
+
 /// One directional run of text plus the properties governing how it renders.
 #[derive(Debug, Clone)]
 pub struct TextUnit {
     pub id: UnitId,
+    pub kind: UnitKind,
     /// Logical-order Unicode. Never visually reordered, never pre-shaped.
     pub text: String,
     pub props: Properties,
@@ -189,10 +206,16 @@ impl TextUnit {
     pub fn new(id: impl Into<String>, text: impl Into<String>) -> Self {
         Self {
             id: UnitId(id.into()),
+            kind: UnitKind::Paragraph,
             text: text.into(),
             props: Properties::default(),
             location: Location::default(),
         }
+    }
+
+    pub fn with_kind(mut self, kind: UnitKind) -> Self {
+        self.kind = kind;
+        self
     }
 
     pub fn with_props(mut self, props: Properties) -> Self {

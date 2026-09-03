@@ -5,7 +5,7 @@ use crate::bidi;
 use crate::diagnostic::{Diagnostic, Evidence, RuleId, Severity};
 use crate::fix::Fix;
 use crate::script;
-use crate::text::{Alignment, Direction, Resolved, TextUnit};
+use crate::text::{Alignment, Direction, Resolved, TextUnit, UnitKind};
 
 /// What the renderer will actually use: the declared direction if any,
 /// otherwise UAX#9's first-strong auto-detection.
@@ -252,6 +252,155 @@ impl Rule for AlignmentUnset {
         // edge in RTL, and still correct if the paragraph is ever re-used
         // left-to-right.
         self.align.then_some(Fix::SetAlignment(Alignment::Start))
+    }
+}
+
+/// A table whose columns run against the direction its cells read.
+///
+/// The table is a unit of its own kind: its text is every cell's text, and
+/// its direction is the table's own — `a:tblPr/@rtl` in DrawingML — which
+/// decides whether the first column sits on the right or the left. Judged
+/// from the cells' letters, like a paragraph (ADR 0006). The cells' own
+/// paragraph direction and alignment stay the paragraph rules' business:
+/// DrawingML does not make a cell's text inherit them from the table, so
+/// both have to be right, and both are reported separately.
+pub struct TableDirection;
+
+impl Rule for TableDirection {
+    fn id(&self) -> RuleId {
+        RuleId("table-direction")
+    }
+
+    fn description(&self) -> &'static str {
+        "A table's columns run against the direction its cells read"
+    }
+
+    fn applies_to(&self, kind: UnitKind) -> bool {
+        kind == UnitKind::Table
+    }
+
+    fn check(&self, unit: &TextUnit) -> Vec<Diagnostic> {
+        if !script::has_arabic(&unit.text) {
+            return Vec::new();
+        }
+        let expected = bidi::dominant_direction(&unit.text);
+        let message = match unit.props.direction {
+            // The container's design, never a finding.
+            Resolved::Inherited(_) => return Vec::new(),
+            Resolved::Explicit(declared) if declared == expected => return Vec::new(),
+            // Left-to-right is what an undeclared table gets, and is right.
+            Resolved::Unset if expected == Direction::Ltr => return Vec::new(),
+            Resolved::Explicit(declared) => format!(
+                "table declared {declared} but its cells read {expected}; the columns run the wrong way"
+            ),
+            Resolved::Unset => format!(
+                "table declares no direction; its cells read {expected}, so the columns run the wrong way"
+            ),
+        };
+        vec![
+            Diagnostic::new(
+                self.id(),
+                Severity::Warning,
+                &unit.id,
+                &unit.location,
+                message,
+            )
+            .with_evidence(Evidence {
+                logical: Some(unit.text.clone()),
+                ..Default::default()
+            })
+            .fixable(),
+        ]
+    }
+
+    fn fix(&self, unit: &TextUnit) -> Option<Fix> {
+        Some(Fix::SetDirection(bidi::dominant_direction(&unit.text)))
+    }
+}
+
+#[cfg(test)]
+mod table_direction_tests {
+    use super::*;
+    use crate::rules::Engine;
+    use crate::text::Properties;
+
+    fn table(text: &str, direction: Resolved<Direction>) -> TextUnit {
+        TextUnit::new("s#tbl1", text)
+            .with_kind(UnitKind::Table)
+            .with_props(Properties {
+                direction,
+                ..Default::default()
+            })
+    }
+
+    const ARABIC: &str = "المؤشر\nالربع الثالث\nالربع الرابع\n2,100\n2,300";
+
+    #[test]
+    fn an_arabic_table_with_no_direction_is_a_warning_with_a_fix() {
+        let u = table(ARABIC, Resolved::Unset);
+        let found = TableDirection.check(&u);
+        assert_eq!(found.len(), 1, "{found:#?}");
+        assert_eq!(found[0].severity, Severity::Warning);
+        assert!(found[0].fixable);
+        assert_eq!(
+            TableDirection.fix(&u),
+            Some(Fix::SetDirection(Direction::Rtl))
+        );
+    }
+
+    #[test]
+    fn a_declared_direction_contrary_to_the_cells_is_a_warning_either_way() {
+        assert_eq!(
+            TableDirection
+                .check(&table(ARABIC, Resolved::Explicit(Direction::Ltr)))
+                .len(),
+            1
+        );
+        // An English table forced right-to-left has its columns reversed too.
+        let english = table(
+            "Metric\nThird quarter\nFourth quarter\nRevenue (قطاع الطاقة)",
+            Resolved::Explicit(Direction::Rtl),
+        );
+        assert_eq!(TableDirection.check(&english).len(), 1);
+        assert_eq!(
+            TableDirection.fix(&english),
+            Some(Fix::SetDirection(Direction::Ltr))
+        );
+    }
+
+    #[test]
+    fn a_correct_inherited_or_english_table_is_silent() {
+        for u in [
+            table(ARABIC, Resolved::Explicit(Direction::Rtl)),
+            table(ARABIC, Resolved::Inherited(Direction::Ltr)),
+            table("Metric\nQ3\nQ4", Resolved::Unset),
+            table(
+                "Metric\nThird quarter (قطاع الطاقة)\nFourth quarter",
+                Resolved::Unset,
+            ),
+        ] {
+            assert!(TableDirection.check(&u).is_empty(), "{u:#?}");
+        }
+    }
+
+    #[test]
+    fn the_engine_hands_each_kind_only_the_rules_that_judge_it() {
+        // A table unit carries no language, font or alignment of its own; the
+        // paragraph rules must not report those as missing on it. And a
+        // paragraph is never a table.
+        let engine = Engine::with_default_rules();
+        let report = engine.audit(&[table(ARABIC, Resolved::Unset)]);
+        let rules: Vec<_> = report.diagnostics.iter().map(|d| d.rule.0).collect();
+        assert_eq!(rules, ["table-direction"], "{report:#?}");
+
+        let paragraph = TextUnit::new("s#p1", "المؤشر");
+        assert!(
+            engine
+                .audit(&[paragraph])
+                .diagnostics
+                .iter()
+                .all(|d| d.rule.0 != "table-direction")
+        );
     }
 }
 

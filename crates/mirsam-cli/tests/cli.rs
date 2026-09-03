@@ -248,7 +248,7 @@ fn rules_json_lists_every_rule_with_an_id() {
     assert_eq!(out.code, exit::OK);
     let value: serde_json::Value = serde_json::from_str(&out.stdout).expect("valid JSON");
     let rules = value.as_array().expect("an array of rules");
-    assert_eq!(rules.len(), 9, "expected the nine documented rules");
+    assert_eq!(rules.len(), 10, "expected the ten documented rules");
     for rule in rules {
         assert!(rule.get("id").is_some(), "a rule with no id: {rule}");
     }
