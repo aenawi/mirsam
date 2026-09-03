@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Bisect what still makes PowerPoint offer to repair `torture.pptx` (#9).
 
-A diagnostic, not part of the corpus. Delete it when #9 closes.
+A diagnostic, not part of the corpus. Delete it, and `tests/bisect/`, when #9
+closes.
 
 PowerPoint 2016 on Windows 10 opens `clean.pptx` and `broken-arabic.pptx`
 without a prompt and still offers to repair `torture.pptx`, so the cause is
 among the things the torture deck adds to that skeleton. This writes one deck
-per addition — the skeleton plus exactly one hazard — into `target/bisect/`,
-so a single pass through them names every culprit rather than just the first.
+per addition — the skeleton plus exactly one hazard — so a single pass through
+them names every culprit rather than just the first.
 
 Every variant is schema-valid before it is written; a prompt on an invalid
 variant would say nothing. Open them in order and note which prompt:
@@ -16,8 +17,15 @@ variant would say nothing. Open them in order and note which prompt:
     ...
     11-torture    the whole deck                expect: prompt (today)
 
-Usage:  python3 scripts/bisect-fixture.py [output-directory]
-        uv run --with lxml scripts/validate-ooxml.py target/bisect/*.pptx
+The decks are written to `tests/bisect/` and committed, because the question
+they answer is asked by a person in front of an application, and the
+applications worth asking are on other machines. They are deterministic: the
+same script and the same timestamps reproduce them byte for byte, so a
+regenerated deck that differs is a real change. See `tests/bisect/README.md`
+for what to record.
+
+Usage:  python3 scripts/bisect-fixture.py [output-directory]   # or: make bisect
+        uv run --with lxml scripts/validate-ooxml.py tests/bisect/*.pptx
 """
 
 import importlib.util
@@ -25,7 +33,7 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT_DIR = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "..", "target", "bisect")
+OUT_DIR = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "..", "tests", "bisect")
 
 spec = importlib.util.spec_from_file_location(
     "fixture", os.path.join(HERE, "make-torture-fixture.py")
