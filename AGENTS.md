@@ -92,6 +92,15 @@ reports with the change that explains them. Never regenerate to make a
 failure you do not understand go away. A new deck is one file dropped into
 that directory plus `make golden`.
 
+**A corpus deck must be a deck an application opens.** The hand-built decks —
+`torture.pptx`, `clean.pptx`, `broken-arabic.pptx` — come from
+`scripts/make-torture-fixture.py`; regenerate with `make fixtures`, never by
+editing the `.pptx`. `cargo test` asserts the structural invariants of every
+deck (`corpus_packages.rs`), and `make validate-fixtures` validates all of
+them against the published ECMA-376 schemas. A deck PowerPoint offers to
+repair cannot answer "does PowerPoint open the repaired file without a
+prompt", which is the M1 application check.
+
 ### Non-negotiable invariants
 
 1. **`mirsam-core` performs no I/O.** If it needs to open a file, the design
