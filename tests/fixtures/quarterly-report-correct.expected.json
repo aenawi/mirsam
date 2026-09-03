@@ -6,11 +6,11 @@
     "format": "pptx",
     "strict": false,
     "summary": {
-      "arabic_units": 23,
+      "arabic_units": 24,
       "errors": 0,
-      "mixed_units": 8,
+      "mixed_units": 9,
       "notes": 0,
-      "units_scanned": 125,
+      "units_scanned": 126,
       "warnings": 0
     }
   },
@@ -26,22 +26,22 @@
     "after": {
       "diagnostics": [],
       "summary": {
-        "arabic_units": 23,
+        "arabic_units": 24,
         "errors": 0,
-        "mixed_units": 8,
+        "mixed_units": 9,
         "notes": 0,
-        "units_scanned": 125,
+        "units_scanned": 126,
         "warnings": 0
       }
     },
     "before": {
       "diagnostics": [],
       "summary": {
-        "arabic_units": 23,
+        "arabic_units": 24,
         "errors": 0,
-        "mixed_units": 8,
+        "mixed_units": 9,
         "notes": 0,
-        "units_scanned": 125,
+        "units_scanned": 126,
         "warnings": 0
       }
     },

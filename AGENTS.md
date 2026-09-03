@@ -38,6 +38,10 @@ programmatically, or render the escaped form as `mirsam explain` does.
 
 `fixable: true` means a mechanical repair exists.
 
+Unit ids are adapter-issued and opaque: `<part>#p<n>` is a paragraph,
+`<part>#tbl<n>` a table (a unit of its own, judged from its cells' text; its
+one property is its direction). Echo them back; never parse them.
+
 ### Repairing
 
 `repair <in> <out>` never modifies `<in>` and refuses `<out> == <in>` under

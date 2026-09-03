@@ -14,7 +14,7 @@ pub use typography::{DEFAULT_LOCALE, is_arabic_tag};
 use crate::diagnostic::{Diagnostic, Report, RuleId};
 use crate::fix::{Fix, Repair};
 use crate::script;
-use crate::text::TextUnit;
+use crate::text::{TextUnit, UnitKind};
 
 /// One correctness check over a single text unit.
 ///
@@ -25,6 +25,12 @@ pub trait Rule: Send + Sync {
 
     /// One line, present tense, describing what the rule enforces.
     fn description(&self) -> &'static str;
+
+    /// Which kind of unit this rule judges. Paragraphs unless a rule says
+    /// otherwise; the engine never hands a rule a unit it does not apply to.
+    fn applies_to(&self, kind: UnitKind) -> bool {
+        kind == UnitKind::Paragraph
+    }
 
     fn check(&self, unit: &TextUnit) -> Vec<Diagnostic>;
 
@@ -96,6 +102,7 @@ impl Engine {
                 Box::new(direction::AlignmentUnset {
                     align: options.align,
                 }),
+                Box::new(direction::TableDirection),
                 Box::new(typography::LanguageMissing {
                     locale: options.language.clone(),
                 }),
@@ -132,7 +139,9 @@ impl Engine {
                 }
             }
             for rule in &self.rules {
-                report.diagnostics.extend(rule.check(unit));
+                if rule.applies_to(unit.kind) {
+                    report.diagnostics.extend(rule.check(unit));
+                }
             }
         }
         report.sorted()
@@ -146,7 +155,7 @@ impl Engine {
         let mut repairs = Vec::new();
         for unit in units {
             for rule in &self.rules {
-                if rule.check(unit).is_empty() {
+                if !rule.applies_to(unit.kind) || rule.check(unit).is_empty() {
                     continue;
                 }
                 if let Some(fix) = rule.fix(unit) {

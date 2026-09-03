@@ -39,6 +39,29 @@ use std::collections::BTreeMap;
 /// numberings cannot drift.
 pub type PartFixes = BTreeMap<usize, Vec<Fix>>;
 
+/// Repairs for one part's tables, keyed by table index: every `a:tbl` in the
+/// part, 1-based, as the scanner counts them.
+pub type TableFixes = BTreeMap<usize, Vec<Fix>>;
+
+/// Everything to change in one part.
+#[derive(Debug, Default, Clone)]
+pub struct PartPlan {
+    pub paragraphs: PartFixes,
+    pub tables: TableFixes,
+}
+
+impl PartPlan {
+    /// How many repairs the plan carries.
+    pub fn len(&self) -> usize {
+        self.paragraphs.values().map(Vec::len).sum::<usize>()
+            + self.tables.values().map(Vec::len).sum::<usize>()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
 /// The direction each paragraph inherits from its container, by index, for
 /// paragraphs that declare none of their own.
 ///
@@ -390,6 +413,9 @@ fn edit_tag(
     };
 }
 
+/// `CT_Table`: `a:tblPr` first, then the grid, then the rows.
+const TBL_ORDER: &[&str] = &["a:tblPr", "a:tblGrid", "a:tr"];
+
 /// `CT_TextParagraph`: `a:pPr` precedes every run.
 const A_P_ORDER: &[&str] = &["a:pPr"];
 /// `CT_RegularTextRun`: `a:rPr` precedes `a:t`.
@@ -705,18 +731,61 @@ fn apply_to_paragraph(
     Ok(())
 }
 
-/// Every `a:p` in the part with its event range, numbered as the scanner
-/// numbers them: 1-based, counting paragraphs that produced no text unit.
-fn paragraph_ranges(events: &[Event<'static>]) -> Vec<(usize, std::ops::Range<usize>)> {
+/// Every element named `name` in the part with its event range, 1-based in
+/// document order — exactly as the scanner numbers paragraphs and tables.
+fn element_ranges(events: &[Event<'static>], name: &str) -> Vec<(usize, std::ops::Range<usize>)> {
     let mut out = Vec::new();
     let mut index = 0usize;
     for i in 0..events.len() {
-        if name_of(&events[i]).as_deref() == Some("a:p") {
+        if name_of(&events[i]).as_deref() == Some(name) {
             index += 1;
             out.push((index, element_range(events, i)));
         }
     }
     out
+}
+
+/// Every `a:p` in the part, counting paragraphs that produced no text unit.
+fn paragraph_ranges(events: &[Event<'static>]) -> Vec<(usize, std::ops::Range<usize>)> {
+    element_ranges(events, "a:p")
+}
+
+/// Every `a:tbl` in the part.
+fn table_ranges(events: &[Event<'static>]) -> Vec<(usize, std::ops::Range<usize>)> {
+    element_ranges(events, "a:tbl")
+}
+
+/// Apply every repair for one table, whose `a:tbl` starts at `at`.
+///
+/// A table has one property of its own this tool reasons about — its
+/// direction, `a:tblPr/@rtl`, which decides which side the first column sits
+/// on. Anything else a plan names on a table is a mistake upstream and is
+/// refused rather than guessed at.
+fn apply_to_table(
+    part: &str,
+    events: &mut Vec<Event<'static>>,
+    at: usize,
+    fixes: &[Fix],
+) -> Result<()> {
+    for fix in fixes {
+        match fix {
+            Fix::SetDirection(direction) => {
+                let tblpr = child_or_insert(events, at, TBL_ORDER, "a:tblPr");
+                let value = if *direction == Direction::Rtl {
+                    "1"
+                } else {
+                    "0"
+                };
+                edit_tag(events, tblpr, |tag| set_attribute(tag, "rtl", value));
+            }
+            other => {
+                return Err(Error::Format(format!(
+                    "{part}: cannot {other} on a table; only its direction is a table's own"
+                )));
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Apply repairs to a part, leaving every token they do not address untouched.
@@ -734,13 +803,24 @@ pub fn apply_with(
     fixes: &PartFixes,
     inherited: &Inherited,
 ) -> Result<String> {
-    if fixes.is_empty() {
+    let plan = PartPlan {
+        paragraphs: fixes.clone(),
+        tables: TableFixes::new(),
+    };
+    apply_plan(part, xml, &plan, inherited)
+}
+
+/// Apply a whole part's plan — paragraphs and tables — leaving every token it
+/// does not address untouched.
+pub fn apply_plan(part: &str, xml: &str, plan: &PartPlan, inherited: &Inherited) -> Result<String> {
+    if plan.is_empty() {
         return passthrough(part, xml);
     }
 
     let mut events = read_events(part, xml)?;
 
-    if let Some(missing) = fixes
+    if let Some(missing) = plan
+        .paragraphs
         .keys()
         .find(|k| !paragraph_ranges(&events).iter().any(|(i, _)| i == *k))
     {
@@ -748,15 +828,33 @@ pub fn apply_with(
             "{part}: no paragraph {missing}; the document and the report disagree"
         )));
     }
+    if let Some(missing) = plan
+        .tables
+        .keys()
+        .find(|k| !table_ranges(&events).iter().any(|(i, _)| i == *k))
+    {
+        return Err(Error::Format(format!(
+            "{part}: no table {missing}; the document and the report disagree"
+        )));
+    }
 
     // Back to front: splicing a paragraph changes every index after it.
     for (index, range) in paragraph_ranges(&events).into_iter().rev() {
-        let Some(list) = fixes.get(&index) else {
+        let Some(list) = plan.paragraphs.get(&index) else {
             continue;
         };
         let mut para: Vec<Event<'static>> = events[range.clone()].to_vec();
         apply_to_paragraph(&mut para, list, inherited.get(&index).copied())?;
         events.splice(range, para);
+    }
+
+    // Tables after paragraphs, and again back to front: a paragraph edit
+    // inside a table moved its range, and a `a:tblPr` created on one table
+    // moves every table after it.
+    for (index, range) in table_ranges(&events).into_iter().rev() {
+        if let Some(list) = plan.tables.get(&index) {
+            apply_to_table(part, &mut events, range.start, list)?;
+        }
     }
 
     write_events(part, &events)

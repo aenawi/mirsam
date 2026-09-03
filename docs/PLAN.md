@@ -209,10 +209,12 @@ like a real one: six slides on python-pptx's default template — a genuine
 PowerPoint theme with a master, eleven layouts and their English prompt text —
 carrying every defect the rule set knows across placeholders, a text box, a
 grouped text box, a table and speaker notes, beside a correct slide and an
-English one. It reports 3 errors and 17 warnings; repair applies 20 fixes and
-skips none, and the written deck audits clean under `--strict`. (Until 1.2's
-last variant landed it applied 19 and skipped the presentation-forms
-paragraph, which is exactly what the report said at the time.)
+English one. It reports 3 errors, 19 warnings and 17 notes; repair under
+`--convert-bullets --font Dubai --align` applies 39 fixes and skips none,
+and the written deck audits clean under `--strict`. (Until 1.2's last
+variant landed it applied 19 and skipped the presentation-forms paragraph;
+until 1.5 its table was already right-to-left. Each report said exactly
+what the tool did at the time.)
 `quarterly-report-correct.pptx` is the same deck authored properly. Both come from `scripts/make-corpus.py` (`make corpus`),
 which is deterministic: re-running it reproduces the committed bytes.
 
@@ -228,10 +230,33 @@ the committed corpus.
 
 *Observation, for M2.* The scanner audits every `ppt/**/*.xml` part, so the
 template's layouts and master contribute a hundred units of prompt text
-("Click to edit Master title style") to a six-slide deck — 125 units scanned,
-23 of them Arabic. They are English and report nothing, but a template with
+("Click to edit Master title style") to a six-slide deck — 126 units scanned
+(one of them the table), 24 of them Arabic. They are English and report nothing, but a template with
 Arabic prompts would be reported at the layout, not the slide. 2.1's
 relationship graph is what will know a layout from a slide.
+
+### 1.5 Container direction: tables `[x]`
+A table's direction is its own — `a:tblPr/@rtl`, which decides whether the
+first column sits on the right or the left — and no paragraph rule can see
+it. Found by a person looking at the repaired corpus deck after #8.
+
+*Shape.* `TextUnit` gained a `kind`: a table is a unit beside its cells, its
+text every cell's text, its direction the table's. `Rule::applies_to` says
+which kind a rule judges, so the paragraph rules never see a table and
+`table-direction` never sees a paragraph. The adapter issues `<part>#tbl<n>`
+ids and the rewriter sets `a:tblPr/@rtl`, creating `a:tblPr` first in
+`CT_Table`'s sequence when absent; any other fix on a table is refused.
+
+*Acceptance:* met. The corpus's broken deck carries a table with no
+direction; the report shows `table-direction` on `slide3.xml#tbl1`, the
+repair adds `rtl="1"` to the existing `tblPr` in place, and the correctly
+authored twin, whose table is right-to-left, reports nothing. Rewriter tests
+assert the whole part for creation, in-place edit, numbering and the
+composition with a cell's own repair.
+
+- [ ] Multi-column text bodies (`a:bodyPr/@numCol` with `@rtlCol`) are the
+      same mechanism and the next container; tracked as
+      [#12](https://github.com/aenawi/mirsam/issues/12).
 
 ---
 
