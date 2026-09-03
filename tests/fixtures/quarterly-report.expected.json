@@ -43,7 +43,18 @@
       {
         "evidence": {
           "logical": "الملخص التنفيذي: ﺍﻟﺘﻘﺮﻳﺮ ﺍﻟﻔﺼﻠﻲ",
-          "offenders": [],
+          "offenders": [
+            "U+FE8D",
+            "U+FE98",
+            "U+FEAE",
+            "U+FEBC",
+            "U+FED4",
+            "U+FED8",
+            "U+FEDF",
+            "U+FEE0",
+            "U+FEF2",
+            "U+FEF3"
+          ],
           "visual_declared": null,
           "visual_expected": null
         },
@@ -436,7 +447,18 @@
         {
           "evidence": {
             "logical": "الملخص التنفيذي: ﺍﻟﺘﻘﺮﻳﺮ ﺍﻟﻔﺼﻠﻲ",
-            "offenders": [],
+            "offenders": [
+              "U+FE8D",
+              "U+FE98",
+              "U+FEAE",
+              "U+FEBC",
+              "U+FED4",
+              "U+FED8",
+              "U+FEDF",
+              "U+FEE0",
+              "U+FEF2",
+              "U+FEF3"
+            ],
             "visual_declared": null,
             "visual_expected": null
           },
@@ -504,7 +526,18 @@
         {
           "evidence": {
             "logical": "الملخص التنفيذي: ﺍﻟﺘﻘﺮﻳﺮ ﺍﻟﻔﺼﻠﻲ",
-            "offenders": [],
+            "offenders": [
+              "U+FE8D",
+              "U+FE98",
+              "U+FEAE",
+              "U+FEBC",
+              "U+FED4",
+              "U+FED8",
+              "U+FEDF",
+              "U+FEE0",
+              "U+FEF2",
+              "U+FEF3"
+            ],
             "visual_declared": null,
             "visual_expected": null
           },
