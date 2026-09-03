@@ -21,8 +21,9 @@ The schemas are downloaded once from ecma-international.org and cached under
 Usage:
     uv run --with lxml scripts/validate-ooxml.py [deck.pptx ...]
 
-With no arguments, every `.pptx` under `tests/fixtures/` is checked. Exits 0
-when every package is clean, 1 otherwise.
+With no arguments, every `.pptx` under `tests/fixtures/` is checked — the
+corpus only, not the `tests/bisect/` diagnostics, which are checked by naming
+them. Exits 0 when every package is clean, 1 otherwise.
 """
 
 from __future__ import annotations
