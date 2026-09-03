@@ -55,14 +55,14 @@ enum Target {
 /// `#` cannot occur in an OPC part name, so the last `#` is unambiguous.
 fn parse_unit_id(id: &UnitId) -> Option<(&str, Target)> {
     let (part, rest) = id.0.rsplit_once('#')?;
-    let (target, index) = if let Some(n) = rest.strip_prefix("tbl") {
-        (Target::Table as fn(usize) -> Target, n)
-    } else if let Some(n) = rest.strip_prefix('p') {
-        (Target::Paragraph as fn(usize) -> Target, n)
-    } else {
-        return None;
-    };
-    let index: usize = index.parse().ok()?;
+    let (target, digits): (fn(usize) -> Target, &str) = rest
+        .strip_prefix("tbl")
+        .map(|n| (Target::Table as fn(usize) -> Target, n))
+        .or_else(|| {
+            rest.strip_prefix('p')
+                .map(|n| (Target::Paragraph as fn(usize) -> Target, n))
+        })?;
+    let index: usize = digits.parse().ok()?;
     (!part.is_empty() && index > 0).then_some((part, target(index)))
 }
 
