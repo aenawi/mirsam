@@ -3,7 +3,7 @@
 use crate::package::{Edits, Package};
 use crate::rewrite::{self, Inherited, PartFixes};
 use mirsam_core::error::{Error, Result};
-use mirsam_core::fix::{Fix, Repair};
+use mirsam_core::fix::Repair;
 use mirsam_core::ports::{DocumentReader, DocumentWriter};
 use mirsam_core::text::{
     Alignment, Bullet, Direction, Location, Properties, Resolved, TextUnit, UnitId,
@@ -305,10 +305,6 @@ impl DocumentReader for PptxDocument {
 }
 
 impl DocumentWriter for PptxDocument {
-    fn supports(&self, fix: &Fix) -> bool {
-        rewrite::supports(fix)
-    }
-
     /// Stage repairs against the parts they name.
     ///
     /// Repairs are grouped by part and then by paragraph, so a part is read

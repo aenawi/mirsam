@@ -12,9 +12,9 @@ so the corpus exercises the structure mirsam meets in the wild:
       English prompt text they carry — with every defect the rule set knows
       spread across placeholders, a text box, a grouped text box, a table and
       speaker notes, next to paragraphs that are correct and paragraphs that
-      are English. One paragraph carries pre-shaped presentation forms, the
-      one repair the PPTX adapter cannot express yet, so the corpus records a
-      skipped repair as well as applied ones.
+      are English. One paragraph, pasted from a PDF, carries pre-shaped
+      presentation forms, so the corpus exercises the one repair that edits
+      the letters themselves rather than the properties around them.
 
   quarterly-report-correct.pptx
       The same deck, authored correctly: explicit direction and alignment on

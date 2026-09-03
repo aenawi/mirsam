@@ -26,11 +26,23 @@ Working towards byte-preserving `repair` for PPTX. See
 - A CLI suite covering the exit-code contract, which previously had no test at
   any level.
 
-- **`mirsam-ooxml::rewrite`** — token-stream repair for six of the seven `Fix`
-  variants. Attributes are spliced in their raw bytes rather than rebuilt, so
+- **`mirsam-ooxml::rewrite`** — token-stream repair for every `Fix` variant.
+  Attributes are spliced in their raw bytes rather than rebuilt, so
   neighbouring attributes keep their exact quoting; inserted children are
-  placed by DrawingML schema rank. `NormalizePresentationForms` is refused with
-  an explicit message pending NFKC support in `mirsam-core`.
+  placed by DrawingML schema rank.
+- **`NormalizePresentationForms` is expressed.** Pre-shaped Arabic
+  Presentation Forms in a run are replaced by the logical-order codepoints
+  they stand for, one character at a time, through
+  `mirsam_core::script::normalize_presentation_forms`; a run without a form
+  is not rewritten and keeps its character references verbatim. Hamza forms
+  come back precomposed (U+FE83 becomes U+0623), and nothing beside a form —
+  a combining mark the author placed, a Latin ligature, a word ligature — is
+  touched. `mirsam-core` gained `unicode-normalization` for this, used only
+  on single flagged characters; the decision, the measured cost and the
+  reason whole-string NFKC was rejected are in
+  [ADR 0005](docs/adr/0005-presentation-forms-via-unicode-normalization.md).
+  On the corpus deck this moves the one skipped repair to applied, and the
+  written deck audits clean under `--strict`.
 - **`mirsam repair <in> <out>`** — writes a repaired copy and audits it,
   reporting the audit of the input beside the audit of the file actually
   written. `--lang` chooses the language tag, `--font` the complex-script
@@ -64,14 +76,23 @@ Working towards byte-preserving `repair` for PPTX. See
 - `tests/fixtures/quarterly-report.pptx`, the first corpus deck shaped like
   a real one — six slides on PowerPoint's default template, with every
   defect the rule set knows spread across placeholders, a text box, a
-  grouped text box, a table and speaker notes, and one paragraph whose
-  repair the adapter cannot express yet — and
+  grouped text box, a table and speaker notes, and one paragraph pasted
+  from a PDF with pre-shaped presentation forms — and
   `quarterly-report-correct.pptx`, the same deck authored correctly, which
   the tool leaves completely alone. Generated deterministically by
   `scripts/make-corpus.py` (`make corpus`).
 
 ### Fixed
 
+- **`presentation-forms` reported characters no repair could change.** The
+  predicate was a range check over the two Presentation Forms blocks, which
+  also matched U+FEFF (a byte-order mark that leaked into a run), the ornate
+  parentheses, the pedagogical symbol dots and sixty unassigned codepoints.
+  A run with a stray BOM was reported as pre-shaped text and marked fixable;
+  once the repair existed it would have applied, changed nothing, and been
+  reported again by the after-audit. A character is now a presentation form
+  exactly when the repair will change it, so the rule and the repair share
+  one definition.
 - **`Fix` did not serialise.** It was declared internally tagged, which
   serde cannot do for a newtype variant carrying a string or a list:
   `SetDirection(Rtl)` came out as `{"kind":"set_direction","rtl":null}` and
@@ -109,6 +130,15 @@ Working towards byte-preserving `repair` for PPTX. See
 
 ### Changed
 
+- **Word ligatures are reported, not expanded.** U+FDF0–U+FDFF (ﷺ, ﷼, ﷽ and
+  their kin) are content the author chose; expanding ﷺ to the eighteen
+  codepoints of its phrase would rewrite what they wrote. They are now a
+  *warning* under `presentation-forms` — many fonts lack the glyph, and a
+  search for the spelled-out phrase will not match — with no fix attached.
+  Before, they were an error with a repair that could not be made.
+- `presentation-forms` findings carry the offending codepoints as `U+XXXX`
+  in `evidence.offenders`, so a reviewer can verify them without rendering
+  the text.
 - The PPTX adapter reads through `package::Package` instead of opening the ZIP
   itself, so audit and repair cannot drift apart. `pptx::read_part` and
   `pptx::source_path` are superseded by `Package::read_text` /

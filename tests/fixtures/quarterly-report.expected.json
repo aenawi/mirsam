@@ -431,6 +431,8 @@
       "-<a:rPr lang=\"en-US\" dirty=\"0\">",
       "+<a:rPr lang=\"ar-SA\" dirty=\"0\">",
       "+<a:cs typeface=\"Dubai\"/>",
+      "-<a:t>الملخص التنفيذي: ﺍﻟﺘﻘﺮﻳﺮ ﺍﻟﻔﺼﻠﻲ",
+      "+<a:t>الملخص التنفيذي: التقرير الفصلي",
       "+<a:cs typeface=\"Dubai\"/>"
     ]
   },
@@ -438,45 +440,15 @@
   "exit_codes": {
     "audit": 1,
     "audit --strict": 1,
-    "repair": 1,
-    "repair --strict": 1
+    "repair": 0,
+    "repair --strict": 0
   },
   "repair": {
     "after": {
-      "diagnostics": [
-        {
-          "evidence": {
-            "logical": "الملخص التنفيذي: ﺍﻟﺘﻘﺮﻳﺮ ﺍﻟﻔﺼﻠﻲ",
-            "offenders": [
-              "U+FE8D",
-              "U+FE98",
-              "U+FEAE",
-              "U+FEBC",
-              "U+FED4",
-              "U+FED8",
-              "U+FEDF",
-              "U+FEE0",
-              "U+FEF2",
-              "U+FEF3"
-            ],
-            "visual_declared": null,
-            "visual_expected": null
-          },
-          "fixable": true,
-          "location": {
-            "container": "TextBox 1",
-            "paragraph": 2,
-            "part": "ppt/slides/slide4.xml"
-          },
-          "message": "13 pre-shaped presentation form(s); text is not searchable or reflowable",
-          "rule": "presentation-forms",
-          "severity": "error",
-          "unit": "ppt/slides/slide4.xml#p2"
-        }
-      ],
+      "diagnostics": [],
       "summary": {
         "arabic_units": 23,
-        "errors": 1,
+        "errors": 0,
         "mixed_units": 8,
         "notes": 0,
         "units_scanned": 125,
@@ -868,7 +840,7 @@
         "warnings": 17
       }
     },
-    "blocking": true,
+    "blocking": false,
     "file": "quarterly-report.pptx",
     "format": "pptx",
     "options": {
@@ -1011,20 +983,19 @@
         },
         {
           "fix": {
+            "kind": "normalize_presentation_forms"
+          },
+          "unit": "ppt/slides/slide4.xml#p2"
+        },
+        {
+          "fix": {
             "kind": "set_complex_font",
             "value": "Dubai"
           },
           "unit": "ppt/slides/slide4.xml#p3"
         }
       ],
-      "skipped": [
-        {
-          "fix": {
-            "kind": "normalize_presentation_forms"
-          },
-          "unit": "ppt/slides/slide4.xml#p2"
-        }
-      ]
+      "skipped": []
     },
     "strict": false
   }
