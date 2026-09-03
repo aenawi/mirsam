@@ -31,9 +31,16 @@ mutation, or there is nothing to prove the mutation didn't damage anything.
 
 Every work item below has landed. The milestone's application check —
 `ROADMAP.md`'s "PowerPoint opens the result without a repair prompt" — cannot
-be proven by a test and is **NOT RUN**; it is tracked as
-[issue #6](https://github.com/aenawi/mirsam/issues/6) and stays open until a
-person opens the repaired corpus decks in the application.
+be proven by a test. A person ran it on 2026-09-03
+([#6](https://github.com/aenawi/mirsam/issues/6)): the repaired
+`quarterly-report.pptx`, built on PowerPoint's own template, opens without a
+prompt; `torture.pptx` prompts *before* any repair, so the check is
+inconclusive there and continues in
+[#9](https://github.com/aenawi/mirsam/issues/9). The same session saw that
+the repaired deck's Arabic paragraphs keep the template's left alignment,
+which the audit does not report —
+[#8](https://github.com/aenawi/mirsam/issues/8), the first visual evidence
+for what M2 has to resolve.
 
 ### 1.1 Round-trip harness `[x]`
 `mirsam-ooxml::package` opens a package once and rewrites it entry by entry,
