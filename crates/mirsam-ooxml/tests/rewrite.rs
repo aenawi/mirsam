@@ -234,17 +234,67 @@ fn controls_are_removed_before_the_marker_is_stripped_whatever_the_order_given()
     );
 }
 
-// ------------------------------------------------------------------ the rest
+// --------------------------------------------------------- presentation forms
 
 #[test]
-fn normalising_presentation_forms_reports_that_it_is_not_implemented() {
-    // Silently succeeding would let `repair` claim it fixed something it did
-    // not. Reporting honestly is the whole discipline of this project.
-    let mut part = PartFixes::new();
-    part.insert(1, vec![Fix::NormalizePresentationForms]);
-    let err = apply("s.xml", r#"<a:p><a:r><a:t>ﻣﺮﺣﺒﺎ</a:t></a:r></a:p>"#, &part).unwrap_err();
-    assert!(format!("{err}").contains("NFKC"), "unhelpful: {err}");
+fn normalise_presentation_forms_maps_each_form_to_its_logical_letters() {
+    // Five contextual forms, one letter each: the word as any keyboard
+    // would have stored it.
+    assert_rewrite(
+        r#"<a:p><a:r><a:t>ﻣﺮﺣﺒﺎ</a:t></a:r></a:p>"#,
+        vec![Fix::NormalizePresentationForms],
+        r#"<a:p><a:r><a:t>مرحبا</a:t></a:r></a:p>"#,
+    );
 }
+
+#[test]
+fn normalise_presentation_forms_leaves_neighbouring_text_alone() {
+    // Everything whole-string NFKC would also have changed, beside one form:
+    // alef + combining madda as the author typed it, a Latin ligature, a
+    // superscript, a word ligature, a byte-order mark. Only the form moves.
+    assert_rewrite(
+        "<a:p><a:r><a:t>\u{0627}\u{0653} \u{FB01} \u{00B2} \u{FDFA} \u{FEFF} \u{FEF2}</a:t></a:r></a:p>",
+        vec![Fix::NormalizePresentationForms],
+        "<a:p><a:r><a:t>\u{0627}\u{0653} \u{FB01} \u{00B2} \u{FDFA} \u{FEFF} \u{064A}</a:t></a:r></a:p>",
+    );
+}
+
+#[test]
+fn normalise_presentation_forms_recomposes_hamza() {
+    // A lam-alef-with-hamza ligature comes back as lam + U+0623, the
+    // precomposed letter, not as lam + alef + combining hamza.
+    assert_rewrite(
+        "<a:p><a:r><a:t>\u{FEF7}</a:t></a:r></a:p>",
+        vec![Fix::NormalizePresentationForms],
+        "<a:p><a:r><a:t>\u{0644}\u{0623}</a:t></a:r></a:p>",
+    );
+}
+
+#[test]
+fn a_run_without_a_form_keeps_its_character_references_when_another_is_normalised() {
+    assert_rewrite(
+        r#"<a:p><a:r><a:t>&#1585;&#1587;&#1605;</a:t></a:r><a:r><a:t>ﻣﺮﺣﺒﺎ</a:t></a:r></a:p>"#,
+        vec![Fix::NormalizePresentationForms],
+        r#"<a:p><a:r><a:t>&#1585;&#1587;&#1605;</a:t></a:r><a:r><a:t>مرحبا</a:t></a:r></a:p>"#,
+    );
+}
+
+#[test]
+fn controls_are_removed_before_forms_are_normalised_whatever_the_order_given() {
+    // Each form is three bytes and the letter it becomes is two, so
+    // normalising first would leave the control's offset five bytes past
+    // where the mark now sits. "ﻣﺮﺣﺒﺎ" is 15 bytes; the mark is at 15.
+    assert_rewrite(
+        "<a:p><a:r><a:t>ﻣﺮﺣﺒﺎ\u{200F}</a:t></a:r></a:p>",
+        vec![
+            Fix::NormalizePresentationForms,
+            Fix::RemoveControls(vec![15]),
+        ],
+        r#"<a:p><a:r><a:t>مرحبا</a:t></a:r></a:p>"#,
+    );
+}
+
+// ------------------------------------------------------------------ the rest
 
 #[test]
 fn paragraphs_are_numbered_as_the_scanner_numbers_them() {

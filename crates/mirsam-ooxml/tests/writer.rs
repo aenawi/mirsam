@@ -219,20 +219,21 @@ fn a_failed_round_stages_nothing() {
 }
 
 #[test]
-fn the_writer_declines_what_the_rewriter_cannot_express() {
-    let mut doc = PptxDocument::open(fixture("torture.pptx")).unwrap();
-    assert!(!doc.supports(&Fix::NormalizePresentationForms));
-    assert!(doc.supports(&Fix::SetDirection(Direction::Rtl)));
-    assert!(doc.supports(&Fix::RemoveControls(vec![0])));
-
-    // And `apply` refuses rather than drops it, so the count it returns can
-    // never quietly fall short.
-    let refused = Repair::new(
-        &unit("ppt/slides/slide1.xml", 1),
+fn the_writer_expresses_every_fix_variant() {
+    // Listed exhaustively rather than iterated, so adding a variant the
+    // adapter cannot express fails here before it fails in a user's deck.
+    let doc = PptxDocument::open(fixture("torture.pptx")).unwrap();
+    for fix in [
+        Fix::SetDirection(Direction::Rtl),
+        Fix::SetAlignment(mirsam_core::text::Alignment::Start),
+        Fix::SetLanguage("ar-SA".into()),
+        Fix::SetComplexFont("Dubai".into()),
+        Fix::RemoveControls(vec![0]),
+        Fix::ConvertLiteralBullet { marker: '•' },
         Fix::NormalizePresentationForms,
-    );
-    let err = doc.apply(&[refused]).unwrap_err();
-    assert!(format!("{err}").contains("NFKC"), "{err}");
+    ] {
+        assert!(doc.supports(&fix), "{fix}");
+    }
 }
 
 // ----------------------------------------------------------------- acceptance

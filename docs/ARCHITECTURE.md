@@ -146,5 +146,5 @@ crates/
                    repairs and writes
 ```
 
-`mirsam-core` has three dependencies and no I/O. That constraint is the
+`mirsam-core` has four dependencies and no I/O. That constraint is the
 architecture; if it ever needs to open a file, something has gone wrong.

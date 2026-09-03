@@ -12,6 +12,7 @@ categories.workspace = true
 
 [dependencies]
 unicode-bidi.workspace = true
+unicode-normalization.workspace = true
 serde = { workspace = true, optional = true }
 thiserror.workspace = true
 

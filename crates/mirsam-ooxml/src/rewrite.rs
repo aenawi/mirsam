@@ -26,6 +26,7 @@
 use crate::pptx::is_true;
 use mirsam_core::Fix;
 use mirsam_core::error::{Error, Result};
+use mirsam_core::script;
 use mirsam_core::text::{Alignment, Direction};
 use quick_xml::events::{BytesEnd, BytesStart, Event};
 use quick_xml::{Reader, Writer};
@@ -48,18 +49,6 @@ pub type PartFixes = BTreeMap<usize, Vec<Fix>>;
 /// against the direction the rule actually reasoned about rather than
 /// defaulting to left-to-right and reproducing the defect it was sent to fix.
 pub type Inherited = BTreeMap<usize, Direction>;
-
-/// Why `NormalizePresentationForms` is refused, stated once.
-const NFKC_UNAVAILABLE: &str = "normalising presentation forms needs NFKC, which mirsam-core \
-                                does not yet provide; see docs/PLAN.md M1 1.2";
-
-/// Whether this rewriter can express `fix`.
-///
-/// [`apply`] refuses a fix this returns `false` for, rather than dropping it;
-/// a caller that asks first can report the repair as not made.
-pub fn supports(fix: &Fix) -> bool {
-    !matches!(fix, Fix::NormalizePresentationForms)
-}
 
 // ---------------------------------------------------------------- schema order
 
@@ -553,6 +542,27 @@ fn replace_content(
     }
 }
 
+/// Replace every pre-shaped presentation form in the paragraph's runs with the
+/// logical-order codepoints it stands for.
+///
+/// The mapping is the domain's ([`script::normalize_presentation_forms`]):
+/// one character at a time, so a combining mark, a Latin ligature or a word
+/// ligature beside a form is left exactly as the author stored it. A run
+/// containing no form is not rewritten at all, and keeps its character
+/// references verbatim.
+fn normalize_presentation_forms(para: &mut Vec<Event<'static>>) {
+    let ranges = text_content_ranges(para);
+    let before: Vec<String> = ranges
+        .iter()
+        .map(|r| read_content(&para[r.clone()]))
+        .collect();
+    let after: Vec<String> = before
+        .iter()
+        .map(|text| script::normalize_presentation_forms(text))
+        .collect();
+    replace_content(para, &ranges, &before, &after);
+}
+
 /// Strip a typed list marker, and the whitespace after it, from the start of
 /// the paragraph's first run.
 fn strip_leading_marker(para: &mut Vec<Event<'static>>, marker: char) {
@@ -605,19 +615,19 @@ fn apply_to_paragraph(
     fixes: &[Fix],
     inherited: Option<Direction>,
 ) -> Result<()> {
-    if fixes.iter().any(|fix| !supports(fix)) {
-        return Err(Error::Format(NFKC_UNAVAILABLE.into()));
-    }
-
     // Text first: these replace text events in place, so they neither move nor
-    // are moved by the structural edits that follow. Controls before the
-    // bullet, whatever order the fixes arrived in: `RemoveControls` carries
-    // byte offsets into the text as it was scanned, and stripping a marker
-    // from the front would shift every one of them.
+    // are moved by the structural edits that follow. Controls before anything
+    // else, whatever order the fixes arrived in: `RemoveControls` carries byte
+    // offsets into the text as it was scanned, and both stripping a marker
+    // from the front and mapping a three-byte form to a two-byte letter would
+    // shift them.
     for fix in fixes {
         if let Fix::RemoveControls(offsets) = fix {
             remove_controls(para, offsets);
         }
+    }
+    if fixes.contains(&Fix::NormalizePresentationForms) {
+        normalize_presentation_forms(para);
     }
     for fix in fixes {
         if let Fix::ConvertLiteralBullet { marker } = fix {

@@ -29,6 +29,12 @@ Status legend: `[x]` done · `[ ]` ready · `[~]` blocked on the item above.
 The order matters: the round-trip guarantee must exist *before* the first
 mutation, or there is nothing to prove the mutation didn't damage anything.
 
+Every work item below has landed. The milestone's application check —
+`ROADMAP.md`'s "PowerPoint opens the result without a repair prompt" — cannot
+be proven by a test and is **NOT RUN**; it is tracked as
+[issue #6](https://github.com/aenawi/mirsam/issues/6) and stays open until a
+person opens the repaired corpus decks in the application.
+
 ### 1.1 Round-trip harness `[x]`
 `mirsam-ooxml::package` opens a package once and rewrites it entry by entry,
 copying every untouched entry's **already-compressed** bytes across verbatim
@@ -57,7 +63,7 @@ Both properties are mutation-tested: replacing `raw_copy_file` with a
 decompress-recompress cycle fails on `compressed size changed — the entry was
 re-encoded`, and corrupting an untouched part fails on `CRC-32 changed`.
 
-### 1.2 `Fix` application in the token stream `[ ]` *(6 of 7 variants landed)*
+### 1.2 `Fix` application in the token stream `[x]`
 `mirsam-ooxml::rewrite` reads a part into an event vector, edits what a repair
 names, and writes it back. Token round-trip is byte-identical on every part of
 the acceptance deck, so "and nothing else" is a property with a test under it.
@@ -71,16 +77,34 @@ the acceptance deck, so "and nothing else" is a property with a test under it.
 - [x] `RemoveControls` → offsets applied back-to-front
 - [x] `ConvertLiteralBullet` → strip the glyph, add `a:buChar`, set
       `marR`/`indent`
-- [ ] `NormalizePresentationForms` — **blocked**: mapping presentation forms to
-      logical codepoints is NFKC, which `mirsam-core` cannot do without a new
-      dependency (`unicode-normalization`). Core's dependency count is an
-      architectural constraint, so this is an ADR, not a drive-by `cargo add`.
-      Until then `apply` refuses the variant with a message saying so, rather
-      than silently reporting a repair it did not make.
+- [x] `NormalizePresentationForms` → each run's text through
+      `script::normalize_presentation_forms`, one character at a time; runs
+      without a form are not rewritten. The mapping itself lives in core, per
+      [ADR 0005](adr/0005-presentation-forms-via-unicode-normalization.md).
 
-*Acceptance:* met for the six. Each has a test asserting the **entire**
+*Acceptance:* met for all seven. Each has a test asserting the **entire**
 rewritten part, so any unintended byte — a re-quoted attribute, a resolved
 character reference, a moved child — fails.
+
+*What the seventh needed, and why it waited.* Mapping presentation forms to
+logical codepoints is NFKC, and `mirsam-core` had no dependency that could do
+it. Core's dependency count is an architectural constraint, so adding one was
+an ADR. The measured cost of `unicode-normalization` turned out to be small —
+two tiny transitive crates, about 125 KB — and the real hazard was elsewhere:
+NFKC over a whole run also composes canonical pairs the author typed, expands
+compatibility characters of other scripts in the same run, and expands word
+ligatures such as ﷺ into whole phrases. The adapter therefore never
+normalises a string; core maps one flagged character at a time, and the word
+ligatures U+FDF0–U+FDFF are reported as a warning and left as written.
+
+*Third trap, found by looking.* `is_presentation_form` was a range check
+over the two blocks, which also matched U+FEFF, the ornate parentheses, the
+pedagogical symbol dots and sixty unassigned codepoints — forty-one assigned
+characters no normalisation can change. A run with a stray byte-order mark
+was reported as pre-shaped text and marked fixable; the repair would have
+applied, changed nothing, and the after-audit would have reported it again.
+The predicate is now "the repair will change this character", so the rule
+and the repair cannot disagree.
 
 *Trap, confirmed real.* Attributes are spliced in their raw bytes rather than
 rebuilt, so editing `rtl` next to `algn='l'` leaves the single quotes alone.
@@ -112,11 +136,12 @@ other entry's compressed bytes untouched.
 part and then by paragraph, rewrites each part once, and stages nothing unless
 every part succeeds; `write` hands the staged parts to `Package::rewrite`,
 which copies everything else raw. The port grew one default method,
-`supports`, so a fix the adapter cannot express yet
-(`NormalizePresentationForms`, pending 1.2's ADR) is reported as *not applied*
-while the rest of the deck is still repaired — one pre-shaped paragraph must
-not stop the other forty from being fixed, and must not be reported as fixed
-either.
+`supports`, so a fix an adapter cannot express is reported as *not applied*
+while the rest of the deck is still repaired — one paragraph the adapter
+cannot handle must not stop the other forty from being fixed, and must not be
+reported as fixed either. (Until 1.2's last variant landed, that was
+`NormalizePresentationForms`; the PPTX adapter now expresses every variant,
+and the mechanism stays for the next adapter.)
 
 *The options belong to the engine, not the CLI.* `--lang`, `--font` and
 `--convert-bullets` populate `RepairOptions`, which configures the rules that
@@ -174,10 +199,11 @@ like a real one: six slides on python-pptx's default template — a genuine
 PowerPoint theme with a master, eleven layouts and their English prompt text —
 carrying every defect the rule set knows across placeholders, a text box, a
 grouped text box, a table and speaker notes, beside a correct slide and an
-English one. It reports 3 errors and 17 warnings; repair applies 19 fixes and
-skips 1, the presentation-forms paragraph 1.2 is blocked on, which is exactly
-what the report should say. `quarterly-report-correct.pptx` is the same deck
-authored properly. Both come from `scripts/make-corpus.py` (`make corpus`),
+English one. It reports 3 errors and 17 warnings; repair applies 20 fixes and
+skips none, and the written deck audits clean under `--strict`. (Until 1.2's
+last variant landed it applied 19 and skipped the presentation-forms
+paragraph, which is exactly what the report said at the time.)
+`quarterly-report-correct.pptx` is the same deck authored properly. Both come from `scripts/make-corpus.py` (`make corpus`),
 which is deterministic: re-running it reproduces the committed bytes.
 
 *What "real" means here, stated honestly.* No deck in the corpus was captured
