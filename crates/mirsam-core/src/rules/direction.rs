@@ -17,11 +17,18 @@ fn effective_direction(unit: &TextUnit) -> Direction {
         .unwrap_or_else(|| bidi::auto_direction(&unit.text))
 }
 
-/// The declared direction produces a demonstrably different rendering than the
-/// semantically correct one.
+/// The declared direction disagrees with the text's own.
 ///
-/// This is the flagship rule: it fires on proven misrendering, not on a
-/// missing attribute, so it has no false positives by construction.
+/// Two tiers. When the two directions resolve to different visual orders the
+/// finding is an error, proven by the two renderings in its evidence; this
+/// is the flagship rule, and it has no false positives by construction. When
+/// the orders happen to coincide — pure Arabic reorders identically under
+/// either base — an *explicit* contrary direction is still reported, as a
+/// warning: the paragraph direction decides which edge is the start and
+/// where edge punctuation lands, and no alignment repair can be lowered
+/// correctly while it is wrong. That tier was added on visual evidence
+/// (ADR 0006); the evidence it carries shows the two orders equal, which is
+/// exactly the claim.
 pub struct DirectionMismatch;
 
 impl Rule for DirectionMismatch {
@@ -39,26 +46,49 @@ impl Rule for DirectionMismatch {
         }
         let expected = bidi::dominant_direction(&unit.text);
         let actual = effective_direction(unit);
-        if !bidi::order_differs(&unit.text, actual, expected) {
-            return Vec::new();
+        let evidence = || Evidence {
+            logical: Some(unit.text.clone()),
+            visual_declared: Some(bidi::resolve(&unit.text, actual).visual),
+            visual_expected: Some(bidi::resolve(&unit.text, expected).visual),
+            offenders: Vec::new(),
+        };
+
+        if bidi::order_differs(&unit.text, actual, expected) {
+            return vec![
+                Diagnostic::new(
+                    self.id(),
+                    Severity::Error,
+                    &unit.id,
+                    &unit.location,
+                    format!(
+                        "renders as {actual} but reads as {expected}; visual order differs from the logical text"
+                    ),
+                )
+                .with_evidence(evidence())
+                .fixable(),
+            ];
         }
 
+        // Same order either way. Only a direction the author *wrote* is
+        // reported: an absent one is `direction-unset`'s business, and an
+        // inherited one is the container's design.
+        let Resolved::Explicit(declared) = unit.props.direction else {
+            return Vec::new();
+        };
+        if declared == expected {
+            return Vec::new();
+        }
         vec![
             Diagnostic::new(
                 self.id(),
-                Severity::Error,
+                Severity::Warning,
                 &unit.id,
                 &unit.location,
                 format!(
-                    "renders as {actual} but reads as {expected}; visual order differs from the logical text"
+                    "declared {declared} but reads as {expected}; letter order is unaffected, but alignment and edge punctuation follow the paragraph direction"
                 ),
             )
-            .with_evidence(Evidence {
-                logical: Some(unit.text.clone()),
-                visual_declared: Some(bidi::resolve(&unit.text, actual).visual),
-                visual_expected: Some(bidi::resolve(&unit.text, expected).visual),
-                offenders: Vec::new(),
-            })
+            .with_evidence(evidence())
             .fixable(),
         ]
     }
@@ -164,6 +194,207 @@ impl Rule for AlignmentIncoherent {
         // left edge, which is the defect this rule reports, so proposing it
         // would hand back the very alignment being flagged.
         Some(Fix::SetAlignment(Alignment::Start))
+    }
+}
+
+/// Right-to-left text with no alignment of its own.
+///
+/// The paragraph takes its alignment from a layout the adapter cannot yet
+/// read (M2). On a left-to-right template that is the left edge — the very
+/// thing `alignment-incoherent` reports when it is written on the paragraph
+/// — and on a centred title it is the design. The tool cannot tell which
+/// from inside the paragraph, so this is a note: it never blocks, and it is
+/// repaired only when the caller asks with `RepairOptions::align`. Judged
+/// from the text alone, by decision (ADR 0006). It fires on `Unset`, never on
+/// `Inherited`, so invariant 2 holds: once M2 resolves the chain, a layout
+/// that centres or right-aligns the paragraph silences it.
+pub struct AlignmentUnset {
+    /// Whether the caller asked for the repair.
+    pub align: bool,
+}
+
+impl Rule for AlignmentUnset {
+    fn id(&self) -> RuleId {
+        RuleId("alignment-unset")
+    }
+
+    fn description(&self) -> &'static str {
+        "Right-to-left text has no alignment of its own and takes one from a layout the tool cannot yet read"
+    }
+
+    fn check(&self, unit: &TextUnit) -> Vec<Diagnostic> {
+        if !script::has_arabic(&unit.text)
+            || bidi::dominant_direction(&unit.text) != Direction::Rtl
+            || !unit.props.alignment.is_unset()
+        {
+            return Vec::new();
+        }
+        let diagnostic = Diagnostic::new(
+            self.id(),
+            Severity::Note,
+            &unit.id,
+            &unit.location,
+            "no alignment declared; a left-to-right layout places this on the left edge",
+        )
+        .with_evidence(Evidence {
+            logical: Some(unit.text.clone()),
+            ..Default::default()
+        });
+        vec![if self.align {
+            diagnostic.fixable()
+        } else {
+            diagnostic
+        }]
+    }
+
+    fn fix(&self, _unit: &TextUnit) -> Option<Fix> {
+        // `Start`, for the same reason as `alignment-incoherent`: the right
+        // edge in RTL, and still correct if the paragraph is ever re-used
+        // left-to-right.
+        self.align.then_some(Fix::SetAlignment(Alignment::Start))
+    }
+}
+
+#[cfg(test)]
+mod direction_tier_tests {
+    use super::*;
+    use crate::text::Properties;
+
+    fn unit(text: &str, direction: Resolved<Direction>) -> TextUnit {
+        TextUnit::new("u1", text).with_props(Properties {
+            direction,
+            ..Default::default()
+        })
+    }
+
+    #[test]
+    fn a_different_order_is_still_an_error() {
+        let found = DirectionMismatch.check(&unit(
+            "ارتفع الأداء بنسبة 25% في Q4 2026.",
+            Resolved::Explicit(Direction::Ltr),
+        ));
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].severity, Severity::Error);
+    }
+
+    #[test]
+    fn an_explicit_contrary_direction_with_the_same_order_is_a_warning() {
+        // Pure Arabic: the letters come out the same either way, so nothing
+        // is proven about order. The evidence says so — both renderings are
+        // equal — and the direction is still wrong for alignment.
+        let u = unit("التقرير الفصلي", Resolved::Explicit(Direction::Ltr));
+        let found = DirectionMismatch.check(&u);
+        assert_eq!(found.len(), 1, "{found:#?}");
+        assert_eq!(found[0].severity, Severity::Warning);
+        assert!(found[0].fixable);
+        assert_eq!(
+            found[0].evidence.visual_declared,
+            found[0].evidence.visual_expected
+        );
+        assert_eq!(
+            DirectionMismatch.fix(&u),
+            Some(Fix::SetDirection(Direction::Rtl))
+        );
+    }
+
+    #[test]
+    fn the_warning_tier_needs_a_direction_the_author_wrote() {
+        // Absent is direction-unset's finding; inherited is the container's
+        // design and never a finding of this rule.
+        for direction in [Resolved::Unset, Resolved::Inherited(Direction::Ltr)] {
+            assert!(
+                DirectionMismatch
+                    .check(&unit("التقرير الفصلي", direction))
+                    .is_empty()
+            );
+        }
+        assert!(
+            DirectionMismatch
+                .check(&unit("التقرير الفصلي", Resolved::Explicit(Direction::Rtl)))
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn mostly_arabic_decides_not_the_first_letter() {
+        // Opens with a Latin acronym, but is an Arabic sentence. Judged by
+        // counting letters it reads right-to-left, so an explicit LTR on it
+        // is a finding; judged by the first strong letter it would pass.
+        let found = DirectionMismatch.check(&unit(
+            "GPS يعتمد عليه النظام في تتبّع الشحنات",
+            Resolved::Explicit(Direction::Ltr),
+        ));
+        assert_eq!(found.len(), 1, "{found:#?}");
+    }
+}
+
+#[cfg(test)]
+mod alignment_unset_tests {
+    use super::*;
+    use crate::text::Properties;
+
+    fn unit(text: &str, alignment: Resolved<Alignment>) -> TextUnit {
+        TextUnit::new("u1", text).with_props(Properties {
+            alignment,
+            ..Default::default()
+        })
+    }
+
+    #[test]
+    fn rtl_text_with_no_alignment_is_a_note_and_not_repaired_unless_asked() {
+        let u = unit("التقرير الفصلي", Resolved::Unset);
+        let rule = AlignmentUnset { align: false };
+        let found = rule.check(&u);
+        assert_eq!(found.len(), 1, "{found:#?}");
+        assert_eq!(found[0].severity, Severity::Note);
+        assert!(!found[0].fixable);
+        assert_eq!(rule.fix(&u), None);
+
+        let rule = AlignmentUnset { align: true };
+        let found = rule.check(&u);
+        assert!(found[0].fixable);
+        assert_eq!(rule.fix(&u), Some(Fix::SetAlignment(Alignment::Start)));
+    }
+
+    #[test]
+    fn an_alignment_the_author_wrote_or_inherited_is_not_this_finding() {
+        let rule = AlignmentUnset { align: true };
+        for alignment in [
+            Resolved::Explicit(Alignment::Center),
+            Resolved::Explicit(Alignment::Left), // alignment-incoherent's
+            Resolved::Inherited(Alignment::Left), // invariant 2
+        ] {
+            assert!(
+                rule.check(&unit("التقرير الفصلي", alignment.clone()))
+                    .is_empty(),
+                "{alignment:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn text_that_reads_left_to_right_is_left_alone() {
+        let rule = AlignmentUnset { align: true };
+        assert!(
+            rule.check(&unit(
+                "Q4 results for قطاع الطاقة were strong",
+                Resolved::Unset
+            ))
+            .is_empty()
+        );
+        assert!(
+            rule.check(&unit("Quarterly report", Resolved::Unset))
+                .is_empty()
+        );
+        // Mostly Arabic, though it opens with an acronym: reported.
+        assert_eq!(
+            rule.check(&unit(
+                "GPS يعتمد عليه النظام في تتبّع الشحنات",
+                Resolved::Unset
+            ))
+            .len(),
+            1
+        );
     }
 }
 

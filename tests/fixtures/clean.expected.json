@@ -49,6 +49,7 @@
     "file": "clean.pptx",
     "format": "pptx",
     "options": {
+      "align": true,
       "complex_font": "Dubai",
       "convert_bullets": true,
       "language": "ar-SA"

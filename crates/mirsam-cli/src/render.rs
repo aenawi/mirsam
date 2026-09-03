@@ -237,15 +237,13 @@ pub fn repair(r: &Repaired<'_>, as_json: bool) {
         "units {} | arabic {} | mixed {}",
         r.before.units_scanned, r.before.arabic_units, r.before.mixed_units
     );
+    let yes_no = |flag: bool| if flag { "yes" } else { "no" };
     println!(
-        "language {} | font {} | convert-bullets {}",
+        "language {} | font {} | convert-bullets {} | align {}",
         r.options.language,
         r.options.complex_font.as_deref().unwrap_or("(none)"),
-        if r.options.convert_bullets {
-            "yes"
-        } else {
-            "no"
-        }
+        yes_no(r.options.convert_bullets),
+        yes_no(r.options.align),
     );
     println!();
 

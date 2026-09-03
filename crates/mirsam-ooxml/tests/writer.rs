@@ -244,8 +244,12 @@ fn a_planned_repair_audits_clean_and_a_second_pass_is_a_fixed_point() {
     // and repairing the repaired deck does nothing.
     let scratch = Scratch::new("acceptance");
     let (once, twice) = (scratch.join("once.pptx"), scratch.join("twice.pptx"));
+    // Every opt-in repair the deck can take, so "every fixable finding
+    // clears" means every finding: without `align` the alignment notes would
+    // remain, reported and unrepaired by design.
     let engine = Engine::with_options(&RepairOptions {
         convert_bullets: true,
+        align: true,
         ..RepairOptions::default()
     });
 

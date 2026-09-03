@@ -43,6 +43,23 @@ Working towards byte-preserving `repair` for PPTX. See
   [ADR 0005](docs/adr/0005-presentation-forms-via-unicode-normalization.md).
   On the corpus deck this moves the one skipped repair to applied, and the
   written deck audits clean under `--strict`.
+- **`alignment-unset`** and **`repair --align`.** Right-to-left text with
+  no alignment of its own takes one from a layout the tool cannot yet read;
+  on an English template that is the left edge. It is reported as a *note*
+  — never blocking, `--strict` or not — and repaired only when asked, with
+  `--align`, because what the paragraph inherits may be a layout's design.
+  Decided on visual evidence from the first application check (#6, #8) and
+  recorded in
+  [ADR 0006](docs/adr/0006-judge-from-the-text-not-the-template.md): a
+  paragraph is judged from its own letters, never from an assumed template.
+  The golden corpus repairs under `--align`, and the repaired corpus deck
+  now carries the alignment its correctly authored twin has.
+- **`direction-mismatch` gains a warning tier.** An explicit direction
+  contrary to the text's own is reported even when the letter order comes
+  out identical — pure Arabic marked left-to-right — because the paragraph
+  direction still decides which edge is the start and where punctuation
+  lands, and no alignment repair can be lowered correctly while it is
+  wrong. The error tier, proven by two differing renderings, is unchanged.
 - **`mirsam repair <in> <out>`** — writes a repaired copy and audits it,
   reporting the audit of the input beside the audit of the file actually
   written. `--lang` chooses the language tag, `--font` the complex-script
@@ -84,6 +101,11 @@ Working towards byte-preserving `repair` for PPTX. See
 
 ### Fixed
 
+- **The audit was silent on right-to-left paragraphs left on the left edge
+  by their layout (#8).** Found by a person opening the repaired corpus deck
+  beside its correctly authored twin: the only difference on every Arabic
+  paragraph was `algn="r"`. See `alignment-unset` and the `direction-mismatch`
+  warning tier above.
 - **`presentation-forms` reported characters no repair could change.** The
   predicate was a range check over the two Presentation Forms blocks, which
   also matched U+FEFF (a byte-order mark that leaked into a run), the ornate

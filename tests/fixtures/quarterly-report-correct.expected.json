@@ -49,6 +49,7 @@
     "file": "quarterly-report-correct.pptx",
     "format": "pptx",
     "options": {
+      "align": true,
       "complex_font": "Dubai",
       "convert_bullets": true,
       "language": "ar-SA"

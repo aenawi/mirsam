@@ -77,6 +77,12 @@ enum Command {
         /// because it edits the text itself rather than the properties around it.
         #[arg(long)]
         convert_bullets: bool,
+        /// Write an explicit start-edge alignment on right-to-left paragraphs
+        /// that have none of their own. Opt-in: what such a paragraph inherits
+        /// may be a layout's design, such as a centred title, and the tool
+        /// cannot yet read the layout to tell.
+        #[arg(long)]
+        align: bool,
         /// Replace OUTPUT if it already exists. Never permits OUTPUT to be INPUT.
         #[arg(long)]
         force: bool,
@@ -257,6 +263,7 @@ fn run() -> Result<u8> {
             lang,
             font,
             convert_bullets,
+            align,
             force,
             strict,
             format,
@@ -279,6 +286,7 @@ fn run() -> Result<u8> {
                 language: lang,
                 complex_font: font,
                 convert_bullets,
+                align,
             };
             let engine = Engine::with_options(&options);
 
