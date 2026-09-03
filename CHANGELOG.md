@@ -19,8 +19,8 @@ Working towards byte-preserving `repair` for PPTX. See
   package does not contain rather than discarding it.
 - `tests/fixtures/torture.pptx`, the M1 acceptance deck: `mc:AlternateContent`,
   an embedded chart and its `.xlsx` workbook, speaker notes, a non-ASCII part
-  name and four compression settings across 19 entries. Reproducible via
-  `scripts/make-torture-fixture.py`.
+  name and four compression settings across 25 entries. Reproducible via
+  `scripts/make-torture-fixture.py` (`make fixtures`).
 - `tests/fixtures/clean.pptx`, a correctly marked deck the tool must leave
   alone, so exit code `0` from `audit` is provable rather than assumed.
 - A CLI suite covering the exit-code contract, which previously had no test at
@@ -181,14 +181,47 @@ Working towards byte-preserving `repair` for PPTX. See
 - A malformed package is now rejected when it is opened rather than when it is
   scanned. The exit code is unchanged (`3`).
 
+- `scripts/validate-ooxml.py` and `make validate-fixtures` — validate every
+  corpus deck against the published ECMA-376 transitional schemas, plus the
+  OPC container around them. The schemas are fetched once into
+  `target/ooxml-schemas/`; nothing is vendored. Not run in CI, because it
+  needs the network; `corpus_packages.rs` covers the same ground there.
+- `make fixtures` regenerates the hand-built decks and their reports, the way
+  `make corpus` already did for the generated ones.
+
+### Fixed
+
+- **The three hand-built corpus decks were not valid OOXML** (#9).
+  `torture.pptx` made PowerPoint offer to repair it *before* mirsam touched
+  it, which meant the M1 application check — "PowerPoint opens the result
+  without a repair prompt" — could not be asked of it either way.
+  `clean.pptx` and `broken-arabic.pptx` had the same class of defect. Against
+  the ECMA-376 schema: every `p:spTree` was missing the `p:grpSpPr` required
+  after `p:nvGrpSpPr`; the theme carried a font scheme but neither of the
+  colour and format schemes, and its font collections had no `a:ea`; the bar
+  chart had neither of its `c:axId`s nor the axes they name; the notes slide
+  had no notes master; `docProps/core.xml` and `docProps/app.xml` were
+  untyped and unrelated; `clean.pptx` and `broken-arabic.pptx` had
+  relationships pointing at parts that were not in the package. All three are
+  regenerated and now validate, and every deck keeps the hazards it carried —
+  what mirsam reports and writes on the corpus is byte-for-byte unchanged, so
+  no expected report moved.
+- `crates/mirsam-ooxml/tests/corpus_packages.rs` asserts the structural half
+  of "an application would open this" over the committed decks on every
+  `cargo test`, so a regenerated fixture cannot quietly lose it again.
+
 ### Notes
 
 - **Application check, run by a person on 2026-09-03 (#6).** PowerPoint
   opened the repaired `quarterly-report.pptx` without a repair prompt.
-  `torture.pptx` prompts before any repair, so that half is inconclusive
-  (#9). The repaired deck's Arabic paragraphs keep the template's left
-  alignment, which the audit does not yet report (#8). The tests prove
-  structural correctness; this is the record of what was actually seen.
+  `torture.pptx` prompted before any repair, so that half was inconclusive.
+  The fixture was the cause and is fixed (#9), but the check itself is still
+  outstanding: it has to be re-run by a person on the regenerated deck, with
+  the PowerPoint version and OS recorded. Until then the M1 application check
+  stands verified on `quarterly-report.pptx` alone. The repaired deck's
+  Arabic paragraphs keep the template's left alignment, which the audit does
+  not yet report (#8). The tests prove structural correctness; this is the
+  record of what was actually seen.
 
 ## [0.1.0] — 2026-09-02 · "Steppe Eagle"
 

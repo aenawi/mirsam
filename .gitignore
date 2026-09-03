@@ -7,3 +7,4 @@
 /.idea/
 *.tmp
 /tests/fixtures/*.out.*
+__pycache__/
