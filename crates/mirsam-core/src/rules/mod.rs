@@ -102,7 +102,7 @@ impl Engine {
                 Box::new(direction::AlignmentUnset {
                     align: options.align,
                 }),
-                Box::new(direction::TableDirection),
+                Box::new(direction::ContainerDirection),
                 Box::new(typography::LanguageMissing {
                     locale: options.language.clone(),
                 }),

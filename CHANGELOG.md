@@ -55,19 +55,25 @@ Working towards byte-preserving `repair` for PPTX. See
   paragraph is judged from its own letters, never from an assumed template.
   The golden corpus repairs under `--align`, and the repaired corpus deck
   now carries the alignment its correctly authored twin has.
-- **`table-direction`.** A table is now a unit of its own kind beside its
-  cells: its text is every cell's text, its direction is the table's own
-  (`a:tblPr/@rtl`, which decides whether the first column sits on the right
-  or the left). A table whose cells read right-to-left but which declares no
-  direction, or declares the contrary one, is a warning with a repair that
-  sets the table's direction and nothing else — the cells' own paragraphs
-  stay the paragraph rules' business, because DrawingML does not make them
-  inherit from the table. Judged from the cells' letters, like a paragraph.
-  Found by a person looking at the repaired corpus deck (#8 follow-up);
-  the corpus's broken deck now carries a table with no direction so the
-  rule is exercised, and its correctly authored twin keeps `rtl="1"`.
-  Unit ids for tables are `<part>#tbl<n>`; `Rule::applies_to` lets a rule
-  say which kind it judges, so no paragraph rule ever sees a table.
+- **`container-direction`.** A container is a unit of its own kind beside the
+  paragraphs inside it: its text is the text it lays out, its direction is its
+  own, and that direction decides which side the reader starts on. Two
+  containers so far — a **table** (`a:tblPr/@rtl`, which decides whether the
+  first column sits on the right or the left) and a **text body in two or
+  more columns** (`a:bodyPr/@rtlCol`, which decides which column the reader
+  starts in; a single-column body is not a container, because `rtlCol` on it
+  changes nothing a reader sees). A container whose text reads right-to-left
+  but which declares no direction, or declares the contrary one, is a warning
+  with a repair that sets that direction and nothing else — the paragraphs
+  inside stay the paragraph rules' business, because DrawingML does not make
+  them inherit from their container. Judged from the letters, like a
+  paragraph. Tables were found by a person looking at the repaired corpus
+  deck (#8 follow-up); columns are [#12](https://github.com/aenawi/mirsam/issues/12).
+  Unit ids are `<part>#tbl<n>` and `<part>#cols<n>`; `Rule::applies_to` lets
+  a rule say which kind it judges, so no paragraph rule ever sees a
+  container. The corpus's broken decks carry a table and a two-column body
+  with no direction so the rule is exercised, and their correctly authored
+  twins keep `rtl="1"` and `rtlCol="1"`.
 - **`direction-mismatch` gains a warning tier.** An explicit direction
   contrary to the text's own is reported even when the letter order comes
   out identical — pure Arabic marked left-to-right — because the paragraph

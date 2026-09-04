@@ -24,6 +24,24 @@
       },
       {
         "evidence": {
+          "logical": "العمود الأول من النص المتصل.\nالعمود الثاني من النص المتصل.",
+          "offenders": [],
+          "visual_declared": null,
+          "visual_expected": null
+        },
+        "fixable": true,
+        "location": {
+          "container": "Columns 2",
+          "paragraph": null,
+          "part": "ppt/slides/slide1.xml"
+        },
+        "message": "text body declares no direction; its text reads rtl, so the columns flow the wrong way",
+        "rule": "container-direction",
+        "severity": "warning",
+        "unit": "ppt/slides/slide1.xml#cols2"
+      },
+      {
+        "evidence": {
           "logical": null,
           "offenders": [],
           "visual_declared": null,
@@ -153,12 +171,12 @@
     "format": "pptx",
     "strict": false,
     "summary": {
-      "arabic_units": 2,
+      "arabic_units": 5,
       "errors": 1,
       "mixed_units": 1,
       "notes": 2,
-      "units_scanned": 2,
-      "warnings": 5
+      "units_scanned": 5,
+      "warnings": 6
     }
   },
   "changed_parts": {
@@ -172,7 +190,9 @@
       "-<a:rPr lang=\"en-US\"/>",
       "-<a:t>• بند أول‏",
       "+<a:rPr lang=\"ar-SA\"/>",
-      "+<a:t>بند أول"
+      "+<a:t>بند أول",
+      "-<a:bodyPr numCol=\"2\"/>",
+      "+<a:bodyPr numCol=\"2\" rtlCol=\"1\"/>"
     ]
   },
   "deck": "broken-arabic.pptx",
@@ -186,11 +206,11 @@
     "after": {
       "diagnostics": [],
       "summary": {
-        "arabic_units": 2,
+        "arabic_units": 5,
         "errors": 0,
         "mixed_units": 1,
         "notes": 0,
-        "units_scanned": 2,
+        "units_scanned": 5,
         "warnings": 0
       }
     },
@@ -215,6 +235,24 @@
           "rule": "bidi-control",
           "severity": "error",
           "unit": "ppt/slides/slide1.xml#p2"
+        },
+        {
+          "evidence": {
+            "logical": "العمود الأول من النص المتصل.\nالعمود الثاني من النص المتصل.",
+            "offenders": [],
+            "visual_declared": null,
+            "visual_expected": null
+          },
+          "fixable": true,
+          "location": {
+            "container": "Columns 2",
+            "paragraph": null,
+            "part": "ppt/slides/slide1.xml"
+          },
+          "message": "text body declares no direction; its text reads rtl, so the columns flow the wrong way",
+          "rule": "container-direction",
+          "severity": "warning",
+          "unit": "ppt/slides/slide1.xml#cols2"
         },
         {
           "evidence": {
@@ -344,12 +382,12 @@
         }
       ],
       "summary": {
-        "arabic_units": 2,
+        "arabic_units": 5,
         "errors": 1,
         "mixed_units": 1,
         "notes": 2,
-        "units_scanned": 2,
-        "warnings": 5
+        "units_scanned": 5,
+        "warnings": 6
       }
     },
     "blocking": false,
@@ -423,6 +461,13 @@
             }
           },
           "unit": "ppt/slides/slide1.xml#p2"
+        },
+        {
+          "fix": {
+            "kind": "set_direction",
+            "value": "rtl"
+          },
+          "unit": "ppt/slides/slide1.xml#cols2"
         }
       ],
       "skipped": []

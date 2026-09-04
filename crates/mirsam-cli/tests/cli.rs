@@ -645,13 +645,16 @@ fn repair_text_output_reports_both_audits_and_what_changed() {
     assert_eq!(out.code, exit::OK, "stderr:\n{}", out.stderr);
     for needle in [
         "mirsam repair",
-        "applied 6 repair(s)",
+        "applied 7 repair(s)",
         "ppt/slides/slide1.xml:paragraph-2:Title 1",
         "remove 1 explicit bidi control(s)",
         "set direction rtl",
         "set language ar-SA",
         "convert typed '•' to a native bullet",
-        "before  errors=1 warnings=5",
+        // The two-column body is repaired beside the paragraphs, and is
+        // named by its shape rather than by a paragraph number.
+        "ppt/slides/slide1.xml:Columns 2",
+        "before  errors=1 warnings=6",
         "after   errors=0 warnings=0",
         "PASS",
     ] {

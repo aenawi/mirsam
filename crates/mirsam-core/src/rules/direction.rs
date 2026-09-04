@@ -255,47 +255,69 @@ impl Rule for AlignmentUnset {
     }
 }
 
-/// A table whose columns run against the direction its cells read.
-///
-/// The table is a unit of its own kind: its text is every cell's text, and
-/// its direction is the table's own — `a:tblPr/@rtl` in DrawingML — which
-/// decides whether the first column sits on the right or the left. Judged
-/// from the cells' letters, like a paragraph (ADR 0006). The cells' own
-/// paragraph direction and alignment stay the paragraph rules' business:
-/// DrawingML does not make a cell's text inherit them from the table, so
-/// both have to be right, and both are reported separately.
-pub struct TableDirection;
+/// How a finding on one kind of container reads: what to call it, how to
+/// refer to the text it lays out, and what goes wrong when its direction is
+/// not the one that text reads.
+fn wording(kind: UnitKind) -> (&'static str, &'static str, &'static str) {
+    match kind {
+        UnitKind::Table => ("table", "its cells read", "the columns run the wrong way"),
+        UnitKind::Columns => (
+            "text body",
+            "its text reads",
+            "the columns flow the wrong way",
+        ),
+        // `applies_to` never hands this rule a paragraph.
+        UnitKind::Paragraph => ("container", "its text reads", "it starts on the wrong side"),
+    }
+}
 
-impl Rule for TableDirection {
+/// A container whose contents run against the direction they read.
+///
+/// A container is a unit of its own kind: its text is the text it lays out,
+/// and its direction is its own — `a:tblPr/@rtl` for a table,
+/// `a:bodyPr/@rtlCol` for a text body in two or more columns — which decides
+/// which side the reader starts on. Judged from the letters, like a paragraph
+/// (ADR 0006). The paragraphs inside keep their own direction and alignment
+/// and stay the paragraph rules' business: DrawingML does not make a cell's
+/// or a column's text inherit the container's, so both have to be right, and
+/// both are reported separately.
+///
+/// One rule rather than one per container, because the judgement does not
+/// vary with the container: only the attribute an adapter lowers the repair
+/// onto does, and that is the adapter's business.
+pub struct ContainerDirection;
+
+impl Rule for ContainerDirection {
     fn id(&self) -> RuleId {
-        RuleId("table-direction")
+        RuleId("container-direction")
     }
 
     fn description(&self) -> &'static str {
-        "A table's columns run against the direction its cells read"
+        "A container's contents run against the direction its text reads"
     }
 
     fn applies_to(&self, kind: UnitKind) -> bool {
-        kind == UnitKind::Table
+        kind != UnitKind::Paragraph
     }
 
     fn check(&self, unit: &TextUnit) -> Vec<Diagnostic> {
         if !script::has_arabic(&unit.text) {
             return Vec::new();
         }
+        let (subject, reads, consequence) = wording(unit.kind);
         let expected = bidi::dominant_direction(&unit.text);
         let message = match unit.props.direction {
             // The container's design, never a finding.
             Resolved::Inherited(_) => return Vec::new(),
             Resolved::Explicit(declared) if declared == expected => return Vec::new(),
-            // Left-to-right is what an undeclared table gets, and is right.
+            // Left-to-right is what an undeclared container gets, and is right.
             Resolved::Unset if expected == Direction::Ltr => return Vec::new(),
-            Resolved::Explicit(declared) => format!(
-                "table declared {declared} but its cells read {expected}; the columns run the wrong way"
-            ),
-            Resolved::Unset => format!(
-                "table declares no direction; its cells read {expected}, so the columns run the wrong way"
-            ),
+            Resolved::Explicit(declared) => {
+                format!("{subject} declared {declared} but {reads} {expected}; {consequence}")
+            }
+            Resolved::Unset => {
+                format!("{subject} declares no direction; {reads} {expected}, so {consequence}")
+            }
         };
         vec![
             Diagnostic::new(
@@ -319,40 +341,77 @@ impl Rule for TableDirection {
 }
 
 #[cfg(test)]
-mod table_direction_tests {
+mod container_direction_tests {
     use super::*;
     use crate::rules::Engine;
     use crate::text::Properties;
 
-    fn table(text: &str, direction: Resolved<Direction>) -> TextUnit {
-        TextUnit::new("s#tbl1", text)
-            .with_kind(UnitKind::Table)
+    fn container(kind: UnitKind, text: &str, direction: Resolved<Direction>) -> TextUnit {
+        TextUnit::new("s#c1", text)
+            .with_kind(kind)
             .with_props(Properties {
                 direction,
                 ..Default::default()
             })
     }
 
+    fn table(text: &str, direction: Resolved<Direction>) -> TextUnit {
+        container(UnitKind::Table, text, direction)
+    }
+
+    fn columns(text: &str, direction: Resolved<Direction>) -> TextUnit {
+        container(UnitKind::Columns, text, direction)
+    }
+
     const ARABIC: &str = "المؤشر\nالربع الثالث\nالربع الرابع\n2,100\n2,300";
 
     #[test]
-    fn an_arabic_table_with_no_direction_is_a_warning_with_a_fix() {
-        let u = table(ARABIC, Resolved::Unset);
-        let found = TableDirection.check(&u);
-        assert_eq!(found.len(), 1, "{found:#?}");
-        assert_eq!(found[0].severity, Severity::Warning);
-        assert!(found[0].fixable);
-        assert_eq!(
-            TableDirection.fix(&u),
-            Some(Fix::SetDirection(Direction::Rtl))
-        );
+    fn an_arabic_container_with_no_direction_is_a_warning_with_a_fix() {
+        for u in [
+            table(ARABIC, Resolved::Unset),
+            columns(ARABIC, Resolved::Unset),
+        ] {
+            let found = ContainerDirection.check(&u);
+            assert_eq!(found.len(), 1, "{found:#?}");
+            assert_eq!(found[0].severity, Severity::Warning);
+            assert!(found[0].fixable);
+            assert_eq!(
+                ContainerDirection.fix(&u),
+                Some(Fix::SetDirection(Direction::Rtl))
+            );
+        }
     }
 
     #[test]
-    fn a_declared_direction_contrary_to_the_cells_is_a_warning_either_way() {
+    fn each_kind_is_named_in_its_own_words() {
+        // The finding has to say what is wrong with *this* container, or a
+        // reader cannot act on it without opening the file.
+        let table = &ContainerDirection.check(&table(ARABIC, Resolved::Unset))[0];
+        assert!(
+            table.message.contains("table declares no direction"),
+            "{table:#?}"
+        );
+        assert!(table.message.contains("the columns run the wrong way"));
+
+        let columns = &ContainerDirection.check(&columns(ARABIC, Resolved::Unset))[0];
+        assert!(
+            columns.message.contains("text body declares no direction"),
+            "{columns:#?}"
+        );
+        assert!(columns.message.contains("the columns flow the wrong way"));
+    }
+
+    #[test]
+    fn a_declared_direction_contrary_to_the_contents_is_a_warning_either_way() {
         assert_eq!(
-            TableDirection
+            ContainerDirection
                 .check(&table(ARABIC, Resolved::Explicit(Direction::Ltr)))
+                .len(),
+            1
+        );
+        assert_eq!(
+            ContainerDirection
+                .check(&columns(ARABIC, Resolved::Explicit(Direction::Ltr)))
                 .len(),
             1
         );
@@ -361,15 +420,15 @@ mod table_direction_tests {
             "Metric\nThird quarter\nFourth quarter\nRevenue (قطاع الطاقة)",
             Resolved::Explicit(Direction::Rtl),
         );
-        assert_eq!(TableDirection.check(&english).len(), 1);
+        assert_eq!(ContainerDirection.check(&english).len(), 1);
         assert_eq!(
-            TableDirection.fix(&english),
+            ContainerDirection.fix(&english),
             Some(Fix::SetDirection(Direction::Ltr))
         );
     }
 
     #[test]
-    fn a_correct_inherited_or_english_table_is_silent() {
+    fn a_correct_inherited_or_english_container_is_silent() {
         for u in [
             table(ARABIC, Resolved::Explicit(Direction::Rtl)),
             table(ARABIC, Resolved::Inherited(Direction::Ltr)),
@@ -378,20 +437,28 @@ mod table_direction_tests {
                 "Metric\nThird quarter (قطاع الطاقة)\nFourth quarter",
                 Resolved::Unset,
             ),
+            columns(ARABIC, Resolved::Explicit(Direction::Rtl)),
+            columns(ARABIC, Resolved::Inherited(Direction::Ltr)),
+            columns("Two columns of English prose", Resolved::Unset),
         ] {
-            assert!(TableDirection.check(&u).is_empty(), "{u:#?}");
+            assert!(ContainerDirection.check(&u).is_empty(), "{u:#?}");
         }
     }
 
     #[test]
     fn the_engine_hands_each_kind_only_the_rules_that_judge_it() {
-        // A table unit carries no language, font or alignment of its own; the
-        // paragraph rules must not report those as missing on it. And a
-        // paragraph is never a table.
+        // A container unit carries no language, font or alignment of its own;
+        // the paragraph rules must not report those as missing on it. And a
+        // paragraph is never a container.
         let engine = Engine::with_default_rules();
-        let report = engine.audit(&[table(ARABIC, Resolved::Unset)]);
-        let rules: Vec<_> = report.diagnostics.iter().map(|d| d.rule.0).collect();
-        assert_eq!(rules, ["table-direction"], "{report:#?}");
+        for u in [
+            table(ARABIC, Resolved::Unset),
+            columns(ARABIC, Resolved::Unset),
+        ] {
+            let report = engine.audit(&[u]);
+            let rules: Vec<_> = report.diagnostics.iter().map(|d| d.rule.0).collect();
+            assert_eq!(rules, ["container-direction"], "{report:#?}");
+        }
 
         let paragraph = TextUnit::new("s#p1", "المؤشر");
         assert!(
@@ -399,7 +466,7 @@ mod table_direction_tests {
                 .audit(&[paragraph])
                 .diagnostics
                 .iter()
-                .all(|d| d.rule.0 != "table-direction")
+                .all(|d| d.rule.0 != "container-direction")
         );
     }
 }

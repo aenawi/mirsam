@@ -177,18 +177,22 @@ impl fmt::Display for Location {
 
 /// What a unit is, so a rule can say which kind it judges.
 ///
-/// A paragraph is the unit the rules were written for. A table is a
-/// container whose *direction* is its own — it decides which side the first
-/// column sits on — while its cells' paragraphs keep their own direction and
-/// alignment and are units in their own right. Its text is every cell's
-/// text, so the same "mostly Arabic" judgement applies (ADR 0006).
+/// A paragraph is the unit the rules were written for. Every other kind is a
+/// *container*: something whose own direction decides which side its contents
+/// start on, while the paragraphs inside it keep their own direction and
+/// alignment and remain units in their own right. A container's text is the
+/// text it lays out, so the same "mostly Arabic" judgement applies (ADR 0006).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "lowercase"))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
 pub enum UnitKind {
     #[default]
     Paragraph,
+    /// A table, whose direction decides which side the first column sits on.
     Table,
+    /// A text body laid out in two or more columns, whose direction decides
+    /// which column the reader starts in.
+    Columns,
 }
 
 /// One directional run of text plus the properties governing how it renders.

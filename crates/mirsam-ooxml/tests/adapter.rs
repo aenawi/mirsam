@@ -162,5 +162,92 @@ fn an_arabic_table_with_no_direction_is_reported_and_its_cells_are_not_blamed() 
         .filter(|d| d.unit.0 == "s.xml#tbl1")
         .map(|d| d.rule.0)
         .collect();
-    assert_eq!(on_table, ["table-direction"], "{report:#?}");
+    assert_eq!(on_table, ["container-direction"], "{report:#?}");
+}
+
+// -------------------------------------------------------------------- columns
+
+fn slide_with_body(body_pr: &str) -> String {
+    format!(
+        r#"<p:sld {NS}><p:cSld><p:spTree><p:sp><p:nvSpPr><p:cNvPr id="7" name="Columns 7"/></p:nvSpPr><p:txBody>{body_pr}<a:lstStyle/><a:p><a:pPr rtl="1"/><a:r><a:t>الفقرة الأولى</a:t></a:r></a:p><a:p><a:pPr rtl="1"/><a:r><a:t>الفقرة الثانية</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:sld>"#
+    )
+}
+
+#[test]
+fn a_multi_column_body_is_a_unit_of_its_own_kind_beside_its_paragraphs() {
+    let units = scan_xml("s.xml", &slide_with_body(r#"<a:bodyPr numCol="2"/>"#)).unwrap();
+    assert_eq!(units.len(), 3, "{units:#?}");
+    // The paragraphs first, then the body that closes after them.
+    assert!(units[..2].iter().all(|u| u.kind == UnitKind::Paragraph));
+    let columns = &units[2];
+    assert_eq!(columns.kind, UnitKind::Columns);
+    assert_eq!(columns.id.0, "s.xml#cols1");
+    assert_eq!(columns.text, "الفقرة الأولى\nالفقرة الثانية");
+    assert_eq!(columns.props.direction, Resolved::Unset);
+    assert_eq!(columns.location.container.as_deref(), Some("Columns 7"));
+    assert_eq!(columns.location.paragraph, None);
+}
+
+#[test]
+fn a_single_column_body_is_not_a_container() {
+    // `rtlCol` on one column changes nothing a reader sees, so there is
+    // nothing to judge and nothing to repair.
+    for body_pr in [
+        r#"<a:bodyPr/>"#,
+        r#"<a:bodyPr rtlCol="1"/>"#,
+        r#"<a:bodyPr numCol="1"/>"#,
+    ] {
+        let units = scan_xml("s.xml", &slide_with_body(body_pr)).unwrap();
+        assert!(
+            units.iter().all(|u| u.kind == UnitKind::Paragraph),
+            "{body_pr}: {units:#?}"
+        );
+    }
+}
+
+#[test]
+fn a_column_direction_the_body_declares_is_explicit() {
+    let units = scan_xml(
+        "s.xml",
+        &slide_with_body(r#"<a:bodyPr numCol="2" rtlCol="1"/>"#),
+    )
+    .unwrap();
+    assert_eq!(units[2].props.direction, Resolved::Explicit(Direction::Rtl));
+
+    let units = scan_xml(
+        "s.xml",
+        &slide_with_body(r#"<a:bodyPr numCol="2" rtlCol="0"/>"#),
+    )
+    .unwrap();
+    assert_eq!(units[2].props.direction, Resolved::Explicit(Direction::Ltr));
+}
+
+#[test]
+fn the_body_ordinal_counts_every_body_not_only_the_columned_ones() {
+    // The rewriter finds a body by this number. If the scanner skipped the
+    // single-column bodies it does not report on, the two would disagree the
+    // moment a deck carried one — and the repair would land on the wrong shape.
+    let xml = format!(
+        r#"<p:sld {NS}><p:cSld><p:spTree><p:sp><p:nvSpPr><p:cNvPr id="2" name="One"/></p:nvSpPr><p:txBody><a:bodyPr/><a:p><a:r><a:t>مرحبا</a:t></a:r></a:p></p:txBody></p:sp><p:sp><p:nvSpPr><p:cNvPr id="3" name="Two"/></p:nvSpPr><p:txBody><a:bodyPr numCol="3"/><a:p><a:r><a:t>الفقرة</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:sld>"#
+    );
+    let units = scan_xml("s.xml", &xml).unwrap();
+    let columns: Vec<_> = units
+        .iter()
+        .filter(|u| u.kind == UnitKind::Columns)
+        .collect();
+    assert_eq!(columns.len(), 1, "{units:#?}");
+    assert_eq!(columns[0].id.0, "s.xml#cols2");
+}
+
+#[test]
+fn an_arabic_multi_column_body_is_reported_and_its_paragraphs_are_not_blamed() {
+    let units = scan_xml("s.xml", &slide_with_body(r#"<a:bodyPr numCol="2"/>"#)).unwrap();
+    let report = Engine::with_default_rules().audit(&units);
+    let on_body: Vec<_> = report
+        .diagnostics
+        .iter()
+        .filter(|d| d.unit.0 == "s.xml#cols1")
+        .map(|d| d.rule.0)
+        .collect();
+    assert_eq!(on_body, ["container-direction"], "{report:#?}");
 }

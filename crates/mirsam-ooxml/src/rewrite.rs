@@ -43,18 +43,28 @@ pub type PartFixes = BTreeMap<usize, Vec<Fix>>;
 /// part, 1-based, as the scanner counts them.
 pub type TableFixes = BTreeMap<usize, Vec<Fix>>;
 
+/// Repairs for one part's text bodies, keyed by body index: every
+/// `a:bodyPr` in the part, 1-based, as the scanner counts them — including
+/// the single-column bodies that produce no unit, so the two numberings
+/// cannot drift.
+pub type ColumnFixes = BTreeMap<usize, Vec<Fix>>;
+
 /// Everything to change in one part.
 #[derive(Debug, Default, Clone)]
 pub struct PartPlan {
     pub paragraphs: PartFixes,
     pub tables: TableFixes,
+    pub columns: ColumnFixes,
 }
 
 impl PartPlan {
     /// How many repairs the plan carries.
     pub fn len(&self) -> usize {
-        self.paragraphs.values().map(Vec::len).sum::<usize>()
-            + self.tables.values().map(Vec::len).sum::<usize>()
+        [&self.paragraphs, &self.tables, &self.columns]
+            .into_iter()
+            .flat_map(|fixes| fixes.values())
+            .map(Vec::len)
+            .sum()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -755,6 +765,11 @@ fn table_ranges(events: &[Event<'static>]) -> Vec<(usize, std::ops::Range<usize>
     element_ranges(events, "a:tbl")
 }
 
+/// Every `a:bodyPr` in the part, counting the bodies that produced no unit.
+fn body_ranges(events: &[Event<'static>]) -> Vec<(usize, std::ops::Range<usize>)> {
+    element_ranges(events, "a:bodyPr")
+}
+
 /// Apply every repair for one table, whose `a:tbl` starts at `at`.
 ///
 /// A table has one property of its own this tool reasons about — its
@@ -788,6 +803,39 @@ fn apply_to_table(
     Ok(())
 }
 
+/// Apply every repair for one multi-column text body, whose `a:bodyPr` is at
+/// `at`.
+///
+/// Like a table, such a body has one property of its own this tool reasons
+/// about: `a:bodyPr/@rtlCol`, which decides whether the reader starts in the
+/// leftmost column or the rightmost. The paragraphs inside keep their own
+/// direction and are repaired as paragraphs.
+fn apply_to_columns(
+    part: &str,
+    events: &mut [Event<'static>],
+    at: usize,
+    fixes: &[Fix],
+) -> Result<()> {
+    for fix in fixes {
+        match fix {
+            Fix::SetDirection(direction) => {
+                let value = if *direction == Direction::Rtl {
+                    "1"
+                } else {
+                    "0"
+                };
+                edit_tag(events, at, |tag| set_attribute(tag, "rtlCol", value));
+            }
+            other => {
+                return Err(Error::Format(format!(
+                    "{part}: cannot {other} on a text body; only its column direction is the body's own"
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Apply repairs to a part, leaving every token they do not address untouched.
 ///
 /// Every paragraph is taken to declare its own direction or to be
@@ -805,7 +853,7 @@ pub fn apply_with(
 ) -> Result<String> {
     let plan = PartPlan {
         paragraphs: fixes.clone(),
-        tables: TableFixes::new(),
+        ..Default::default()
     };
     apply_plan(part, xml, &plan, inherited)
 }
@@ -837,6 +885,15 @@ pub fn apply_plan(part: &str, xml: &str, plan: &PartPlan, inherited: &Inherited)
             "{part}: no table {missing}; the document and the report disagree"
         )));
     }
+    if let Some(missing) = plan
+        .columns
+        .keys()
+        .find(|k| !body_ranges(&events).iter().any(|(i, _)| i == *k))
+    {
+        return Err(Error::Format(format!(
+            "{part}: no text body {missing}; the document and the report disagree"
+        )));
+    }
 
     // Back to front: splicing a paragraph changes every index after it.
     for (index, range) in paragraph_ranges(&events).into_iter().rev() {
@@ -854,6 +911,15 @@ pub fn apply_plan(part: &str, xml: &str, plan: &PartPlan, inherited: &Inherited)
     for (index, range) in table_ranges(&events).into_iter().rev() {
         if let Some(list) = plan.tables.get(&index) {
             apply_to_table(part, &mut events, range.start, list)?;
+        }
+    }
+
+    // Text bodies last, their ranges taken after both of the above have
+    // moved them. A body's own repair is one attribute on one tag, so it
+    // moves nothing itself.
+    for (index, range) in body_ranges(&events).into_iter().rev() {
+        if let Some(list) = plan.columns.get(&index) {
+            apply_to_columns(part, &mut events, range.start, list)?;
         }
     }
 

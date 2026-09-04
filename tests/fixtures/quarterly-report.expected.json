@@ -143,6 +143,24 @@
       },
       {
         "evidence": {
+          "logical": "المؤشر\nالربع الثالث\nالربع الرابع\nالإيرادات (مليون درهم)\n120\n142\nعدد العملاء\n1,850\n2,300\nرضا العملاء NPS\n41\n48",
+          "offenders": [],
+          "visual_declared": null,
+          "visual_expected": null
+        },
+        "fixable": true,
+        "location": {
+          "container": "Table 2",
+          "paragraph": null,
+          "part": "ppt/slides/slide3.xml"
+        },
+        "message": "table declares no direction; its cells read rtl, so the columns run the wrong way",
+        "rule": "container-direction",
+        "severity": "warning",
+        "unit": "ppt/slides/slide3.xml#tbl1"
+      },
+      {
+        "evidence": {
           "logical": "التقرير الفصلي للأداء المؤسسي",
           "offenders": [],
           "visual_declared": "يسسؤملا ءادألل يلصفلا ريرقتلا",
@@ -392,24 +410,6 @@
         "rule": "literal-bullet",
         "severity": "warning",
         "unit": "ppt/slides/slide2.xml#p5"
-      },
-      {
-        "evidence": {
-          "logical": "المؤشر\nالربع الثالث\nالربع الرابع\nالإيرادات (مليون درهم)\n120\n142\nعدد العملاء\n1,850\n2,300\nرضا العملاء NPS\n41\n48",
-          "offenders": [],
-          "visual_declared": null,
-          "visual_expected": null
-        },
-        "fixable": true,
-        "location": {
-          "container": "Table 2",
-          "paragraph": null,
-          "part": "ppt/slides/slide3.xml"
-        },
-        "message": "table declares no direction; its cells read rtl, so the columns run the wrong way",
-        "rule": "table-direction",
-        "severity": "warning",
-        "unit": "ppt/slides/slide3.xml#tbl1"
       },
       {
         "evidence": {
@@ -964,6 +964,24 @@
         },
         {
           "evidence": {
+            "logical": "المؤشر\nالربع الثالث\nالربع الرابع\nالإيرادات (مليون درهم)\n120\n142\nعدد العملاء\n1,850\n2,300\nرضا العملاء NPS\n41\n48",
+            "offenders": [],
+            "visual_declared": null,
+            "visual_expected": null
+          },
+          "fixable": true,
+          "location": {
+            "container": "Table 2",
+            "paragraph": null,
+            "part": "ppt/slides/slide3.xml"
+          },
+          "message": "table declares no direction; its cells read rtl, so the columns run the wrong way",
+          "rule": "container-direction",
+          "severity": "warning",
+          "unit": "ppt/slides/slide3.xml#tbl1"
+        },
+        {
+          "evidence": {
             "logical": "التقرير الفصلي للأداء المؤسسي",
             "offenders": [],
             "visual_declared": "يسسؤملا ءادألل يلصفلا ريرقتلا",
@@ -1213,24 +1231,6 @@
           "rule": "literal-bullet",
           "severity": "warning",
           "unit": "ppt/slides/slide2.xml#p5"
-        },
-        {
-          "evidence": {
-            "logical": "المؤشر\nالربع الثالث\nالربع الرابع\nالإيرادات (مليون درهم)\n120\n142\nعدد العملاء\n1,850\n2,300\nرضا العملاء NPS\n41\n48",
-            "offenders": [],
-            "visual_declared": null,
-            "visual_expected": null
-          },
-          "fixable": true,
-          "location": {
-            "container": "Table 2",
-            "paragraph": null,
-            "part": "ppt/slides/slide3.xml"
-          },
-          "message": "table declares no direction; its cells read rtl, so the columns run the wrong way",
-          "rule": "table-direction",
-          "severity": "warning",
-          "unit": "ppt/slides/slide3.xml#tbl1"
         },
         {
           "evidence": {
