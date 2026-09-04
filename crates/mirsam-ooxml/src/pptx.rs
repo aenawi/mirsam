@@ -2,6 +2,7 @@
 
 use crate::chart::{self, ChartText};
 use crate::package::{Edits, Package};
+use crate::rels::RelationshipGraph;
 use crate::rewrite::{self, Inherited, PartPlan};
 use mirsam_core::error::{Error, Result};
 use mirsam_core::fix::Repair;
@@ -203,6 +204,15 @@ impl PptxDocument {
     /// The package underneath, for callers that need part-level access.
     pub fn package(&self) -> &Package {
         &self.package
+    }
+
+    /// The package's relationship graph: which part each part inherits from.
+    ///
+    /// Read on demand rather than cached with the document, because nothing in
+    /// the audit path needs it yet — 2.2 resolves properties along it — and a
+    /// field every `open` pays for is a cost `mirsam explain` should not carry.
+    pub fn relationships(&self) -> Result<RelationshipGraph> {
+        RelationshipGraph::read(&self.package)
     }
 
     /// Parts this adapter reads: PowerPoint's own XML, excluding relationships.

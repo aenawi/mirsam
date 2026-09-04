@@ -137,6 +137,25 @@ Working towards byte-preserving `repair` for PPTX. See
   the tool leaves completely alone. Generated deterministically by
   `scripts/make-corpus.py` (`make corpus`).
 
+- **`mirsam-ooxml::rels`** — the package relationship graph, and the first
+  half of the inheritance milestone. It reads every `_rels/*.rels` and
+  answers, for any part, which parts it inherits from and in what order:
+  slide → layout → master → theme, notes slide → notes master → theme.
+  `PptxDocument::relationships()` exposes it. No report changes yet — walking
+  the chain to resolve properties is the next item — so the golden corpus is
+  untouched.
+
+  What a part *is* comes from the relationship type pointing at it, never
+  from its directory: OPC does not require `ppt/slides/`, and a name match
+  cannot settle the ambiguity that matters — a slide master relates to its
+  layouts as well as its theme, so following the first relationship upward
+  walks a master back down into a layout. Types are matched against the full
+  standard namespace, so a Microsoft extension of the same name is not
+  mistaken for a standard one. Targets resolve to the item names the ZIP
+  actually stores, percent-encoding included, because the only useful thing
+  to do with a resolved target is read that part. A cycle terminates the walk
+  instead of hanging.
+
 ### Fixed
 
 - **`make validate-fixtures` reported a part that was there (#21).**
