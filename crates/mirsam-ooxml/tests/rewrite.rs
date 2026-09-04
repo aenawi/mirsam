@@ -7,6 +7,7 @@
 
 use mirsam_core::Fix;
 use mirsam_core::text::{Alignment, Direction};
+use mirsam_ooxml::chart::ChartText;
 use mirsam_ooxml::rewrite::{Inherited, PartFixes, PartPlan, apply, apply_plan, apply_with};
 
 fn rewrite(xml: &str, fixes: Vec<Fix>) -> String {
@@ -503,6 +504,184 @@ fn a_plan_naming_a_body_that_is_not_there_is_an_error() {
     )
     .unwrap_err();
     assert!(format!("{err}").contains("no text body 2"), "{err}");
+}
+
+// --------------------------------------------------------- chart containers
+
+fn rewrite_chart_part(xml: &str, kind: ChartText, index: usize, fixes: Vec<Fix>) -> String {
+    let mut plan = PartPlan::default();
+    plan.chart_text.insert((kind, index), fixes);
+    apply_plan("ppt/charts/chart1.xml", xml, &plan, &Inherited::new()).expect("rewrite failed")
+}
+
+/// The root a chart part has, declaring both prefixes as every chart an
+/// application writes does.
+const CHART_HEAD: &str = r#"<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">"#;
+
+/// Rewrite a fragment inside a real chart root, and give back the fragment,
+/// so an assertion says only what happened to the container.
+fn rewrite_chart(xml: &str, kind: ChartText, index: usize, fixes: Vec<Fix>) -> String {
+    let part = format!("{CHART_HEAD}{xml}</c:chartSpace>");
+    let out = rewrite_chart_part(&part, kind, index, fixes);
+    out.strip_prefix(CHART_HEAD)
+        .and_then(|s| s.strip_suffix("</c:chartSpace>"))
+        .expect("the root was rewritten")
+        .to_string()
+}
+
+/// The created `c:txPr`, as every test below expects to find it.
+const TXPR: &str =
+    r#"<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr rtl="1"/><a:endParaRPr/></a:p></c:txPr>"#;
+
+#[test]
+fn set_direction_on_an_axis_creates_txpr_in_schema_position() {
+    // CT_CatAx is a sequence: c:txPr belongs after c:spPr and before
+    // c:crossAx, and an axis carrying it anywhere else is a chart
+    // PowerPoint will not draw.
+    assert_eq!(
+        rewrite_chart(
+            r#"<c:catAx><c:axId val="1"/><c:axPos val="b"/><c:crossAx val="2"/></c:catAx>"#,
+            ChartText::CategoryAxis,
+            1,
+            vec![Fix::SetDirection(Direction::Rtl)],
+        ),
+        format!(
+            r#"<c:catAx><c:axId val="1"/><c:axPos val="b"/>{TXPR}<c:crossAx val="2"/></c:catAx>"#
+        ),
+    );
+}
+
+#[test]
+fn set_direction_edits_an_axis_that_already_states_one() {
+    assert_eq!(
+        rewrite_chart(
+            r#"<c:catAx><c:axId val="1"/><c:txPr><a:bodyPr rot='0'/><a:lstStyle/><a:p><a:pPr rtl="0" algn='l'/></a:p></c:txPr></c:catAx>"#,
+            ChartText::CategoryAxis,
+            1,
+            vec![Fix::SetDirection(Direction::Rtl)],
+        ),
+        r#"<c:catAx><c:axId val="1"/><c:txPr><a:bodyPr rot='0'/><a:lstStyle/><a:p><a:pPr rtl="1" algn='l'/></a:p></c:txPr></c:catAx>"#,
+    );
+}
+
+#[test]
+fn set_direction_creates_the_paragraph_properties_a_txpr_lacks() {
+    assert_eq!(
+        rewrite_chart(
+            r#"<c:legend><c:legendPos val="r"/><c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr lang="ar-SA"/></a:p></c:txPr></c:legend>"#,
+            ChartText::Legend,
+            1,
+            vec![Fix::SetDirection(Direction::Rtl)],
+        ),
+        r#"<c:legend><c:legendPos val="r"/><c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr rtl="1"/><a:endParaRPr lang="ar-SA"/></a:p></c:txPr></c:legend>"#,
+    );
+}
+
+#[test]
+fn a_legends_txpr_lands_after_its_position_and_before_its_extensions() {
+    assert_eq!(
+        rewrite_chart(
+            r#"<c:legend><c:legendPos val="r"/><c:overlay val="0"/><c:extLst/></c:legend>"#,
+            ChartText::Legend,
+            1,
+            vec![Fix::SetDirection(Direction::Rtl)],
+        ),
+        format!(
+            r#"<c:legend><c:legendPos val="r"/><c:overlay val="0"/>{TXPR}<c:extLst/></c:legend>"#
+        ),
+    );
+}
+
+#[test]
+fn data_labels_take_their_txpr_before_the_flags_that_choose_what_they_show() {
+    assert_eq!(
+        rewrite_chart(
+            r#"<c:dLbls><c:showVal val="0"/><c:showCatName val="1"/></c:dLbls>"#,
+            ChartText::DataLabels,
+            1,
+            vec![Fix::SetDirection(Direction::Rtl)],
+        ),
+        format!(r#"<c:dLbls>{TXPR}<c:showVal val="0"/><c:showCatName val="1"/></c:dLbls>"#),
+    );
+}
+
+#[test]
+fn containers_are_numbered_per_kind_and_the_others_are_untouched() {
+    let two = r#"<c:catAx><c:axId val="1"/></c:catAx><c:catAx><c:axId val="3"/></c:catAx>"#;
+    assert_eq!(
+        rewrite_chart(
+            two,
+            ChartText::CategoryAxis,
+            2,
+            vec![Fix::SetDirection(Direction::Rtl)]
+        ),
+        format!(
+            r#"<c:catAx><c:axId val="1"/></c:catAx><c:catAx><c:axId val="3"/>{TXPR}</c:catAx>"#
+        ),
+    );
+}
+
+#[test]
+fn a_chart_that_declares_no_drawingml_prefix_gets_one_on_the_element_created() {
+    // Nothing else in such a part uses the `a:` prefix, so a c:txPr written
+    // without a declaration would be a document no parser can read.
+    let bare = r#"<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:legend><c:legendPos val="r"/></c:legend></c:chartSpace>"#;
+    let out = rewrite_chart_part(
+        bare,
+        ChartText::Legend,
+        1,
+        vec![Fix::SetDirection(Direction::Rtl)],
+    );
+    assert!(
+        out.contains(r#"<c:txPr xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">"#),
+        "{out}"
+    );
+
+    // And when the part already declares it, nothing is added.
+    let out = rewrite_chart(
+        r#"<c:legend><c:legendPos val="r"/></c:legend>"#,
+        ChartText::Legend,
+        1,
+        vec![Fix::SetDirection(Direction::Rtl)],
+    );
+    assert_eq!(
+        out,
+        format!("<c:legend><c:legendPos val=\"r\"/>{TXPR}</c:legend>")
+    );
+}
+
+#[test]
+fn only_direction_can_be_set_on_a_chart_container() {
+    let mut plan = PartPlan::default();
+    plan.chart_text.insert(
+        (ChartText::CategoryAxis, 1),
+        vec![Fix::SetLanguage("ar-SA".into())],
+    );
+    let err = apply_plan(
+        "c.xml",
+        r#"<c:catAx><c:axId val="1"/></c:catAx>"#,
+        &plan,
+        &Inherited::new(),
+    )
+    .unwrap_err();
+    assert!(format!("{err}").contains("category axis"), "{err}");
+}
+
+#[test]
+fn a_plan_naming_a_container_that_is_not_there_is_an_error() {
+    let mut plan = PartPlan::default();
+    plan.chart_text.insert(
+        (ChartText::Legend, 1),
+        vec![Fix::SetDirection(Direction::Rtl)],
+    );
+    let err = apply_plan(
+        "c.xml",
+        r#"<c:catAx><c:axId val="1"/></c:catAx>"#,
+        &plan,
+        &Inherited::new(),
+    )
+    .unwrap_err();
+    assert!(format!("{err}").contains("no legend 1"), "{err}");
 }
 
 // ------------------------------------------------------------------ the rest

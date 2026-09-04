@@ -15,6 +15,7 @@
 //! So the adapter streams tokens and passes through everything it is not
 //! explicitly asked to change.
 
+pub mod chart;
 pub mod package;
 pub mod pptx;
 pub mod rewrite;

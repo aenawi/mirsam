@@ -193,6 +193,12 @@ pub enum UnitKind {
     /// A text body laid out in two or more columns, whose direction decides
     /// which column the reader starts in.
     Columns,
+    /// A chart container — an axis, a legend, a set of data labels — whose
+    /// direction decides how every string it draws is laid out. Its strings
+    /// are not paragraphs: they are the values the chart caches, and the
+    /// container's text properties are the only place their direction can be
+    /// stated.
+    ChartText,
 }
 
 /// One directional run of text plus the properties governing how it renders.

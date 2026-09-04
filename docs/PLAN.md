@@ -328,6 +328,59 @@ in the other. The paragraphs inside are identical and correct in both, which
 is the point: a container's direction is not its paragraphs'. `clean.pptx`
 is still reported on at no severity at all.
 
+### 1.6 Container direction: chart text `[x]`
+The third container, and the first whose text is not paragraphs at all
+([#18](https://github.com/aenawi/mirsam/issues/18)). A chart's category
+labels and series names come from `c:strCache/c:pt/c:v` — cached strings —
+and the direction they are drawn in belongs to the container that draws
+them: `c:catAx/c:txPr`, `c:legend/c:txPr`, `c:dLbls/c:txPr`, each an
+`a:bodyPr` + `a:lstStyle` + one `a:p` whose `a:pPr/@rtl` governs every
+string in it. Found by a person: during the #9 application check the torture
+deck's Arabic axis labels rendered with no direction selected at all, and
+`audit` said nothing, because the only `a:p` in the chart part is its title.
+
+*Shape.* `mirsam-ooxml::chart` is a second pass over a part whose root is
+`c:chartSpace`; it reads only as far as that root on every other part, so
+the adapter can hand it everything. `UnitKind::ChartText`, ids
+`<part>#catax<n>` / `#legend<n>` / `#dlbls<n>`, the ordinal counting the
+elements of that kind in the part. The rewriter sets `a:pPr/@rtl` inside the
+container's `c:txPr`, creating the whole `c:txPr` in schema position when
+there is none — which is the usual case, since most generated charts have
+none — and bringing an `xmlns:a` declaration with it in the rare part that
+declares no DrawingML prefix. Any other fix on such a container is refused.
+
+*What each container draws is read from the file, never assumed.* This is
+the whole difficulty: a finding on strings a container does not draw is a
+false positive on text the reviewer cannot even find. A category axis draws
+the categories of the chart group that names it in `c:axId`; a legend draws
+its series' names, or its categories when the chart is a pie, where the
+legend lists the slices; data labels draw whichever of those their
+`c:showCatName` / `c:showSerName` flags turn on, and nothing when they show
+only values, which are numbers. An axis *title* has a `c:txPr` of its own,
+and reading that as the axis's would silence a real finding — so the
+container's `c:txPr` is taken only when it is a direct child.
+
+*Deliberately not covered, and why.* A value axis draws formatted numbers,
+which have no direction to get wrong. The chart-space-level `c:txPr` is a
+default for text other containers draw rather than a container that draws
+strings of its own. Neither can be given text to show a reviewer, so neither
+is a unit.
+
+*Acceptance:* met for the machine half. `torture.pptx` already carried the
+broken shape: its report now shows `container-direction` on
+`chart1.xml#catax1` with the four cached quarter names as evidence, the
+repair creates a `c:txPr` carrying `rtl="1"` between `c:axPos` and
+`c:crossAx`, and `make validate-fixtures` accepts the repaired chart part
+against the ECMA-376 schemas. Rewriter tests assert the whole part for
+creation in each of the three containers, for editing a direction already
+there, for a `c:txPr` that has no `a:pPr`, for per-kind numbering, and for
+the namespace declaration.
+
+- [ ] **Application check, `NOT RUN`.** The issue's last criterion is a
+      person opening the repaired deck and seeing the labels laid out
+      right-to-left. That cannot be proven by a test, and it has not been
+      run. Schema validity is not the same claim.
+
 ---
 
 ## M2 — Inheritance `[ ]`
