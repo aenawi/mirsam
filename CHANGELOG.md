@@ -200,6 +200,20 @@ Working towards byte-preserving `repair` for PPTX. See
 
 ### Changed
 
+- **The token-rewrite scaffold is now `mirsam-ooxml::token`**, a module that
+  names no element (PLAN M3 3.1). Reading a part into events and writing it
+  back, `passthrough`, the raw-byte attribute splice, element lookup and
+  ranges, schema-ranked child creation and run-text rewriting all moved there
+  from `rewrite`, which keeps its public API and is now what it always was:
+  DrawingML's repair vocabulary, performing no XML editing of its own. Where
+  the scaffold had `a:t` it now takes the element name as an argument, and
+  `remove_controls` / `normalize_presentation_forms` became the vocabulary-free
+  `remove_at_offsets` / `map_runs`. A second OOXML format reuses this rather
+  than reimplementing it, exactly as it already reuses `package`. Sixteen new
+  tests drive the scaffold entirely in WordprocessingML, which is the only way
+  to prove no DrawingML name is left in it. No report or byte of output
+  changed.
+- `rewrite::passthrough` moved to `token::passthrough`.
 - **An inherited value that agrees with the text now silences its finding, and
   one that contradicts it keeps it** ([ADR 0007](docs/adr/0007-an-inherited-default-is-not-a-choice.md)).
   Arabic under an `rtl="1"` master is the layout doing its job and is no

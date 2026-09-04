@@ -571,18 +571,44 @@ report change, and `make validate-fixtures` still passes on all five decks.
 
 ## M3 — Word `[ ]`
 
-### 3.1 Extract the shared package layer `[~]` *(partly done in 1.1)*
-ZIP access, part enumeration and the byte-preserving rewrite already live in
+### 3.1 Extract the shared package layer `[x]`
+ZIP access, part enumeration and the byte-preserving rewrite already lived in
 `mirsam-ooxml::package` — 1.1 needed them there, because a writer that reads
 the package through a second code path is a writer whose round-trip guarantee
-covers only half of what ships. `pptx.rs` is DrawingML vocabulary plus its
-paragraph scanner.
+covers only half of what ships. This item did the same one level down, for the
+*token-rewrite* scaffold 1.2 built against DrawingML: extraction after a
+working adapter, not anticipation of one.
 
-What remains for M3 is the *token-rewrite* scaffold, which 1.2 will build
-against DrawingML first. Generalise it by extraction once it works, not by
-anticipation — the shape is only known from a working adapter.
+`rewrite.rs` split in two along one line — *does this code name an element?*
+Everything that does not is now `token.rs`: reading a part into events and
+writing it back, `passthrough`, the raw-byte attribute splice, finding
+elements and their ranges, creating a child at a rank the caller's schema
+sequence decides, and reading and rewriting run text. Everything that does
+stayed in `rewrite.rs`, which keeps its name and its public API and is now
+what it always was — DrawingML's repair vocabulary. It performs no XML
+editing of its own; every mutation there is a scaffold call with a DrawingML
+name in it.
 
-### 3.2 DOCX reader `[~]`
+Three functions took a parameter where they had a constant. `a:t` became the
+`text_element` argument of the text helpers, because `w:t` is the same thing
+in the other vocabulary. `normalize_presentation_forms` and
+`remove_controls`, which were the domain's mapping and the domain's offsets
+wrapped in a run-splice, became `map_runs` and `remove_at_offsets` — the
+splice without the mapping, so the caller supplies both the element name and
+what to do with the text. Nothing else changed shape.
+
+*Acceptance:* `crates/mirsam-ooxml/tests/token.rs`, sixteen tests written
+entirely in **WordprocessingML** — `w:p`, `w:pPr`, `w:bidi`, `w:jc`, `w:t` —
+a vocabulary nothing in the crate reads yet. That is the only assertion that
+can settle whether the extraction is real: a scaffold with `a:t` or `a:pPr`
+still baked into it passes every DrawingML test in `rewrite.rs` and fails
+here. `a_text_element_of_another_vocabulary_is_not_run_text_here` is the
+narrow version of the same claim — an `a:t` sitting in a Word part is a
+foreign element, not a run. The golden corpus did not move by a line, and the
+byte-identical passthrough over every part of the torture deck still holds;
+this is a refactor, and a refactor that changed a report would be a bug.
+
+### 3.2 DOCX reader `[ ]`
 `w:p`, `w:pPr/w:bidi`, `w:jc`, `w:lang/@w:bidi`, `w:rFonts/@w:cs`.
 
 ### 3.3 Style-chain inheritance `[~]`
