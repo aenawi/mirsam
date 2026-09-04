@@ -659,10 +659,82 @@ any of this.
 
 [MS-OE376]: https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oe376/26ecf09a-0f0b-4574-9907-ebd1ddf3015f
 
-### 3.3 Style-chain inheritance `[~]`
+### 3.3 Style-chain inheritance `[x]`
 `docDefaults` → linked styles → direct formatting.
 
-### 3.4 Tables `[~]`
+`style.rs` is WordprocessingML's answer to `inherit.rs`, and the two share no
+element name. Word's chain is not a walk between parts: every source lives in
+one `word/styles.xml`, and a paragraph reaches its own by *name* — `w:pStyle`,
+a run's `w:rStyle`, and the `w:basedOn` above each — rather than by a
+relationship. So the graph is not the thing being walked here, and
+`rels` supplies exactly two edges: which part is the stylesheet and which is
+the theme.
+
+The order, nearest first, is the character style's chain, then the paragraph
+style's, then `w:docDefaults`. **A paragraph that names a style does not also
+take the document's default one** ([ECMA-376] Part 1 §17.7.2) — the style it
+named is the whole answer, and its `w:basedOn` chain is where it looks next. A
+walk that consulted the default anyway would report `Normal`'s direction on a
+paragraph laid out by a style that states none, which is a value no reader
+will see.
+
+*What is resolved is exactly what `inherit.rs` resolves*, for the reasons ADR
+0007 gives, plus the list. Direction and alignment have the agreement test;
+the `cs` slot needs none because `complex-font-missing` asks only whether *a*
+font is named, so resolving it can only make the tool quieter; the Latin slot
+is left alone because inheriting a template's `w:asciiTheme` would manufacture
+that rule's precondition on every paragraph in every document; and `w:lang`
+stays unresolved because ADR 0007 has no answer for a tag that disagrees with
+the letters. The list is the quieter-only argument again — Word's own list
+styles carry the `w:numPr`, so a paragraph in one has a real list its `w:pPr`
+says nothing about, and reporting a typed glyph there is invariant 2 reached
+through the chain. `Bullet` has no `Inherited` state and so records no origin,
+which is sound only because a resolved list can never *raise* a finding.
+
+**`w:link` is not a hop.** A linked style is one paragraph style and one
+character style Word shows as a single entry, and it writes the run properties
+into *both* halves. Following the link would resolve a value already stated
+where the walk is looking, and on a document whose halves disagree it would
+prefer the half Word does not apply.
+
+*Two decisions the schema does not make for you.* `@w:cstheme` names a slot of
+the theme's `a:fontScheme` — `minorBidi` is `+mn-cs` in the other spelling —
+and a reader that took it for a typeface would put `complex_font: "minorBidi"`
+in a report, the WordprocessingML form of the defect 2.3 fixed in DrawingML.
+The theme part is DrawingML in *both* formats, so `FontScheme` reads Word's
+unchanged; only the reference syntax differs. And where a `w:rFonts` states
+both `@w:cs` and `@w:cstheme`, the theme wins, because the theme is what Word
+renders and `@w:cs` is the resolved value it caches beside it for consumers
+without theme support — which is exactly what that name becomes when the
+theme's slot is empty or the package has no theme at all.
+
+*Two smaller ones.* `w:numId w:val="0"` says the opposite of the `w:numPr`
+enclosing it: it *removes* the list a style supplies, which is
+`Bullet::Suppressed`, and a paragraph that suppressed its list and then typed a
+glyph is exactly the defect `literal-bullet` reports. And `Role::Presentation`
+became `Role::OfficeDocument`: one relationship type reaches the main part of
+both formats, and a `Presentation` role on `word/document.xml` would be the
+graph misreporting what it read.
+
+*Acceptance:* `crates/mirsam-ooxml/tests/style.rs`, twenty-four cases. Three
+are load-bearing. `a_table_styles_own_alignment_is_not_the_paragraphs` puts a
+`w:jc` in a `w:tblPr` and a whole `w:pPr` in a `w:tblStylePr`, both inside a
+`w:style`: a reader matching element names instead of the element *path* reads
+a table's alignment as a paragraph's and passes every other case in the file.
+`a_scan_resolves_every_part_against_the_stylesheet_the_relationships_name`
+stores the stylesheet and theme under names no reader could guess, so anything
+hard-coding `word/styles.xml` resolves nothing and reports every paragraph in
+that package undeclared. And the DrawingML case is `token.rs`'s claim run once
+more in this direction — an `a:lvl1pPr` is PowerPoint's style vocabulary and
+answers nothing here.
+
+The golden corpus did not move: no `.pptx` reads differently for any of this,
+and the corpus has no `.docx` in it yet — which is 3.5's to add, not this
+item's.
+
+[ECMA-376]: https://ecma-international.org/publications-and-standards/standards/ecma-376/
+
+### 3.4 Tables `[ ]`
 `w:bidiVisual` only where semantic reading order is RTL.
 
 ### 3.5 Conformance suite `[~]`

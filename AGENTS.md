@@ -50,6 +50,14 @@ paragraph. The repair still writes to the paragraph the finding names: setting
 `rtl="1"` on a master would change every paragraph in the deck, including text
 that is correctly left-to-right.
 
+A `.docx` cites Word's own chain instead: `word/styles.xml
+style[Heading1]/pPr@bidi` is a named style, `word/styles.xml
+docDefaults/pPrDefault/pPr@jc` the document's defaults. A style is cited by the
+`w:styleId` that actually stated the value, not by the one the paragraph asked
+for — a paragraph naming `Heading1` may well be answered by the `Normal` it is
+`w:basedOn`, and citing `Heading1` would send a reviewer to a style that says
+nothing about it.
+
 The list level in that path is the level the paragraph is actually at
 (`a:pPr/@lvl`, zero-based, so `lvl="1"` cites `lvl2pPr`). A font slot may name
 a theme part instead — `ppt/theme/theme1.xml fontScheme/minorFont/cs@typeface`

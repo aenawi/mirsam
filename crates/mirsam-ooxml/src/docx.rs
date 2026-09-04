@@ -35,6 +35,14 @@
 //! which is invariant 2 — a rule firing on formatting the author chose —
 //! reached through the adapter rather than through the rule.
 //!
+//! ## What the paragraph does not state
+//!
+//! `w:docDefaults`, the named styles above it and the theme its `@w:cstheme`
+//! points at are [`crate::style`]'s, and a property this scanner leaves unset
+//! is filled in from there. Without a stylesheet — [`scan_xml`], and any
+//! caller holding one part and no package — an unstated property stays
+//! `Unset` rather than being guessed at.
+//!
 //! ## Reading only, for now
 //!
 //! [`DocumentWriter`] is deliberately not implemented. `DocumentReader` and
@@ -46,7 +54,9 @@
 //! [`DocumentWriter`]: mirsam_core::ports::DocumentWriter
 //! [MS-OE376]: https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oe376/26ecf09a-0f0b-4574-9907-ebd1ddf3015f
 
+use crate::inherit::{ThemeFont, ThemeScript};
 use crate::package::Package;
+use crate::style::{StyleSheet, theme_reference};
 use crate::token::is_true;
 use mirsam_core::error::{Error, Result};
 use mirsam_core::ports::DocumentReader;
@@ -62,7 +72,7 @@ use std::path::{Path, PathBuf};
 /// The kashida forms are Arabic justification and read correctly in either
 /// direction, as does `numTab`, which aligns at the numbering tab — the start
 /// side of whichever direction the paragraph runs.
-fn parse_alignment(value: &str) -> Option<Alignment> {
+pub(crate) fn parse_alignment(value: &str) -> Option<Alignment> {
     Some(match value {
         "start" | "left" | "numTab" => Alignment::Start,
         "end" | "right" => Alignment::End,
@@ -123,9 +133,51 @@ struct ParagraphBuilder {
     index: usize,
     text: String,
     props: Properties,
+    /// `w:pPr/w:pStyle/@w:val`: the paragraph style this resolves against.
+    style: Option<String>,
+    /// `w:rPr/w:rStyle/@w:val` of the first run that named one.
+    run_style: Option<String>,
+    /// A `@w:cstheme` this paragraph's own runs wrote, held apart from the
+    /// resolved slot because a theme reference is not a typeface: recording
+    /// `minorBidi` as the font would put a slot name in a report as though a
+    /// reader had that font installed.
+    complex_reference: Option<(ThemeFont, ThemeScript)>,
+    /// A `@w:cs` this paragraph's own runs wrote. Held rather than written
+    /// straight into the properties because the reference beside it wins where
+    /// a theme answers it, and which one that is is not known until the
+    /// paragraph closes.
+    complex_named: Option<String>,
 }
 
 impl ParagraphBuilder {
+    /// Settle the complex-script slot, and resolve whatever the paragraph left
+    /// unset to the stylesheet above it.
+    ///
+    /// The theme reference this paragraph's own runs wrote comes first, and
+    /// the name beside it is the fallback: `@w:cstheme` is what Word renders,
+    /// and `@w:cs` is the resolved value it caches beside it for consumers
+    /// that do not implement themes. Both are the paragraph's own statement,
+    /// so both outrank every style — a chain that overwrote them would report
+    /// a style's font on a paragraph that named one itself.
+    fn settle(&mut self, styles: Option<&StyleSheet>) {
+        self.props.complex_font = match (
+            self.complex_reference
+                .and_then(|r| styles.and_then(|s| s.theme_font(r))),
+            self.complex_named.take(),
+        ) {
+            (Some((name, origin)), _) => Resolved::Inherited(name, origin),
+            (None, Some(name)) => Resolved::Explicit(name),
+            (None, None) => Resolved::Unset,
+        };
+        if let Some(styles) = styles {
+            styles.resolve(
+                self.style.as_deref(),
+                self.run_style.as_deref(),
+                &mut self.props,
+            );
+        }
+    }
+
     fn finish(self, part: &str) -> TextUnit {
         let index = self.index;
         TextUnit::new(unit_id(part, index), self.text)
@@ -180,10 +232,11 @@ impl PartScan {
         }
     }
 
-    fn close_paragraph(&mut self, part: &str) {
-        if let Some(b) = self.open.pop()
+    fn close_paragraph(&mut self, part: &str, styles: Option<&StyleSheet>) {
+        if let Some(mut b) = self.open.pop()
             && !b.text.trim().is_empty()
         {
+            b.settle(styles);
             self.units.push(b.finish(part));
         }
     }
@@ -229,9 +282,41 @@ impl PartScan {
             // A real list, whatever it draws. `literal-bullet` exists to catch
             // a glyph typed in place of one, and a paragraph that has a list
             // is not that paragraph.
+            //
+            // `w:numId w:val="0"` inside it says the opposite — it *removes*
+            // the list a style would otherwise supply — which is
+            // [`Bullet::Suppressed`], and a paragraph that suppressed its list
+            // and then typed a glyph is exactly the defect the rule reports.
             "w:numPr" if !in_section => {
                 if let Some(b) = self.current() {
                     b.props.bullet = Bullet::Native;
+                }
+            }
+            "w:numId" if !in_section => {
+                if let Some(value) = attribute(e, "w:val")
+                    && value.trim() == "0"
+                    && let Some(b) = self.current()
+                {
+                    b.props.bullet = Bullet::Suppressed;
+                }
+            }
+            // The style this paragraph resolves against, and the character
+            // style its runs do. Both are ids into `word/styles.xml`, not
+            // formatting: what they supply is [`crate::style`]'s to say.
+            "w:pStyle" if !in_section => {
+                let id = non_empty_attribute(e, "w:val");
+                if let Some(b) = self.current()
+                    && b.style.is_none()
+                {
+                    b.style = id;
+                }
+            }
+            "w:rStyle" if !in_section => {
+                let id = non_empty_attribute(e, "w:val");
+                if let Some(b) = self.current()
+                    && b.run_style.is_none()
+                {
+                    b.run_style = id;
                 }
             }
             // The complex-script language, not `@w:val`, which is the Latin
@@ -248,23 +333,29 @@ impl PartScan {
                     b.props.language = Resolved::Explicit(tag);
                 }
             }
-            // `@w:cstheme` and `@w:asciiTheme` name the theme's font scheme
-            // rather than a typeface, and the theme is PLAN §3.3. Recording
-            // one here would put `majorBidi` in a report as though it named a
-            // font.
+            // `@w:cstheme` names a slot of the theme's font scheme rather than
+            // a typeface, so it is kept as a reference and resolved against
+            // the theme when the paragraph closes. `@w:asciiTheme` is read by
+            // nobody: the Latin slot is not resolved through any chain, for
+            // the reason [`crate::style`] states.
             "w:rFonts" => {
+                let reference = non_empty_attribute(e, "w:cstheme")
+                    .as_deref()
+                    .and_then(theme_reference);
                 let complex = non_empty_attribute(e, "w:cs");
                 let latin = non_empty_attribute(e, "w:ascii");
                 if let Some(b) = self.current() {
-                    for (face, slot) in [
-                        (complex, &mut b.props.complex_font),
-                        (latin, &mut b.props.latin_font),
-                    ] {
-                        if slot.is_unset()
-                            && let Some(face) = face
-                        {
-                            *slot = Resolved::Explicit(face);
-                        }
+                    // First writer wins per slot, as `w:lang` does above.
+                    if b.complex_reference.is_none() {
+                        b.complex_reference = reference;
+                    }
+                    if b.complex_named.is_none() {
+                        b.complex_named = complex;
+                    }
+                    if b.props.latin_font.is_unset()
+                        && let Some(latin) = latin
+                    {
+                        b.props.latin_font = Resolved::Explicit(latin);
                     }
                 }
             }
@@ -311,13 +402,24 @@ impl DocxDocument {
         Ok(parts)
     }
 
+    /// The document's style sources, read from the package once.
+    ///
+    /// Read on demand rather than cached with the document, for the reason
+    /// [`crate::pptx::PptxDocument::styles`] gives: a scan reads it once, and
+    /// a field every `open` pays for is a cost no other command should carry.
+    pub fn styles(&self) -> Result<StyleSheet> {
+        StyleSheet::read(&self.package)
+    }
+
     /// Parse one `word/**/*.xml` part into text units.
     ///
-    /// Every property is `Explicit` or `Unset`: this reads what the paragraph
-    /// itself states. `docDefaults` and the style chain above it are PLAN
-    /// §3.3, and until they are read an unstated property is honestly absent
-    /// rather than guessed at.
-    fn scan_part(part: &str, xml: &str) -> Result<Vec<TextUnit>> {
+    /// Direction, alignment, the font slots and the language are recorded as
+    /// `Explicit` only when the paragraph itself carries them. What it leaves
+    /// unset is filled in from `styles` — `w:docDefaults`, the named styles
+    /// above it and the theme — as `Inherited`, naming the part and property
+    /// that supplied it. Without a stylesheet the chain is simply absent, and
+    /// an unresolved property stays `Unset`.
+    fn scan_part(part: &str, xml: &str, styles: Option<&StyleSheet>) -> Result<Vec<TextUnit>> {
         let mut reader = Reader::from_str(xml);
         let mut state = PartScan::default();
 
@@ -374,7 +476,7 @@ impl DocxDocument {
                     "w:t" if state.reading() => state.in_text = false,
                     // Guarded, because a `w:p` inside a fallback would
                     // otherwise close the paragraph that encloses it.
-                    "w:p" if state.reading() => state.close_paragraph(part),
+                    "w:p" if state.reading() => state.close_paragraph(part, styles),
                     _ => {}
                 },
 
@@ -391,10 +493,11 @@ impl DocumentReader for DocxDocument {
     }
 
     fn scan(&mut self) -> Result<Vec<TextUnit>> {
+        let styles = self.styles()?;
         let mut units = Vec::new();
         for part in self.text_parts()? {
             let xml = self.package.read_text(&part)?;
-            units.extend(Self::scan_part(&part, &xml)?);
+            units.extend(Self::scan_part(&part, &xml, Some(&styles))?);
         }
         Ok(units)
     }
@@ -402,7 +505,14 @@ impl DocumentReader for DocxDocument {
 
 /// Parse an in-memory part into every unit this adapter produces for it.
 ///
-/// Exposed for tests and for callers that already hold the XML.
+/// Exposed for tests and for callers that already hold the XML. There is no
+/// package here and so no stylesheet: a property the paragraph does not state
+/// comes back `Unset`, not `Inherited`. Use [`scan_xml_with`] to resolve one.
 pub fn scan_xml(part: &str, xml: &str) -> Result<Vec<TextUnit>> {
-    DocxDocument::scan_part(part, xml)
+    scan_xml_with(part, xml, None)
+}
+
+/// The same, resolving each paragraph against a stylesheet the caller holds.
+pub fn scan_xml_with(part: &str, xml: &str, styles: Option<&StyleSheet>) -> Result<Vec<TextUnit>> {
+    DocxDocument::scan_part(part, xml, styles)
 }

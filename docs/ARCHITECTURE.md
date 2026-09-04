@@ -176,6 +176,12 @@ crates/
     docx.rs        WordprocessingML vocabulary: paragraphs and the properties
                    the rules judge. DocumentReader only — Word's writer is
                    not built, and the split ports are what let it wait
+    style.rs       Word's own chain, which is not a walk between parts:
+                   docDefaults, the styles a paragraph and its runs name, and
+                   the w:basedOn above each — all in one word/styles.xml.
+                   Resolved the same way inherit.rs resolves PowerPoint's,
+                   and sharing its theme reader, because a fontScheme is
+                   DrawingML wherever it is stored
   mirsam-cli/      driving adapter — argument parsing and rendering only
     tests/golden.rs  the golden corpus: every deck under tests/fixtures/
                    against its committed report of what the binary finds,

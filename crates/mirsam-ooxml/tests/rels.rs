@@ -58,7 +58,7 @@ fn role_by_convention(part: &str) -> Option<Role> {
         return None;
     }
     if part == "ppt/presentation.xml" {
-        return Some(Role::Presentation);
+        return Some(Role::OfficeDocument);
     }
     by_prefix
         .iter()
@@ -72,7 +72,7 @@ fn every_deck_reaches_its_presentation_from_the_package_root() {
         let pkg = Package::open(&deck).unwrap();
         let graph = RelationshipGraph::read(&pkg).unwrap();
         let presentation = graph
-            .presentation()
+            .office_document()
             .unwrap_or_else(|| panic!("{}: no officeDocument relationship", name_of(&deck)));
         assert!(
             pkg.read_text(presentation).is_ok(),
