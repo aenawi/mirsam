@@ -575,6 +575,19 @@ mod unit_id_tests {
             parse_unit_id(&id),
             Some(("ppt/slides/slide1.xml", Target::Table(2)))
         );
+        let id = UnitId(columns_id("ppt/slides/slide1.xml", 4));
+        assert_eq!(
+            parse_unit_id(&id),
+            Some(("ppt/slides/slide1.xml", Target::Columns(4)))
+        );
+        for kind in ChartText::all() {
+            let id = UnitId(chart::unit_id("ppt/charts/chart1.xml", kind, 1));
+            assert_eq!(
+                parse_unit_id(&id),
+                Some(("ppt/charts/chart1.xml", Target::ChartText(kind, 1))),
+                "{id}"
+            );
+        }
     }
 
     #[test]
@@ -589,6 +602,13 @@ mod unit_id_tests {
             "x#tbl0",
             "x#tblx",
             "x#t1",
+            "x#cols0",
+            "x#colsx",
+            "x#col1",
+            "x#catax0",
+            "x#legendx",
+            "x#dlbls",
+            "x#axis1",
         ] {
             assert_eq!(parse_unit_id(&UnitId(foreign.into())), None, "{foreign:?}");
         }
