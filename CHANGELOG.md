@@ -18,8 +18,9 @@ Working towards byte-preserving `repair` for PPTX. See
   temporary and renames into place, and rejects an edit naming a part the
   package does not contain rather than discarding it.
 - `tests/fixtures/torture.pptx`, the M1 acceptance deck: `mc:AlternateContent`,
-  an embedded chart and its `.xlsx` workbook, speaker notes, a non-ASCII part
-  name and four compression settings across 25 entries. Reproducible via
+  an embedded chart and its `.xlsx` workbook, speaker notes, a
+  percent-encoded item name, and four compression settings across 25
+  entries. Reproducible via
   `scripts/make-torture-fixture.py` (`make fixtures`).
 - `tests/fixtures/clean.pptx`, a correctly marked deck the tool must leave
   alone, so exit code `0` from `audit` is provable rather than assumed.
@@ -191,6 +192,21 @@ Working towards byte-preserving `repair` for PPTX. See
 
 ### Fixed
 
+- **`torture.pptx` made PowerPoint 2016 offer to repair it** (#9, the
+  remaining cause). The deck carried a media part named `صورة.png`, and
+  PowerPoint 2016 does not resolve a relationship to a part whose name has
+  a non-ASCII octet — raw UTF-8 or percent-encoded, in the item name, the
+  `.rels` target or both, Arabic or a single Latin letter. It prompts to
+  repair, and a picture shape showing the part reports "The picture can't
+  be displayed". Found by a person on PowerPoint 2016 across a 23-deck
+  bisect: additive, subtractive, then every encoding of that one name.
+  Every one of those decks validated against the ECMA-376 schemas, so
+  schema validity is now known to be necessary and not sufficient. The
+  part is now `ppt/media/my%20image.png`: still percent-encoded, so a
+  rewriter that decodes item names is still caught, and proven to open.
+  The fixture guard asserts an encoded name is present and that no item
+  name leaves ASCII; the generator's own check refuses one. What mirsam
+  reports and writes on the corpus is unchanged.
 - **The three hand-built corpus decks were not valid OOXML** (#9).
   `torture.pptx` made PowerPoint offer to repair it *before* mirsam touched
   it, which meant the M1 application check — "PowerPoint opens the result
@@ -215,10 +231,19 @@ Working towards byte-preserving `repair` for PPTX. See
 - **Application check, run by a person on 2026-09-03 (#6).** PowerPoint
   opened the repaired `quarterly-report.pptx` without a repair prompt.
   `torture.pptx` prompted before any repair, so that half was inconclusive.
-  The fixture was the cause and is fixed (#9), but the check itself is still
-  outstanding: it has to be re-run by a person on the regenerated deck, with
-  the PowerPoint version and OS recorded. Until then the M1 application check
-  stands verified on `quarterly-report.pptx` alone. The repaired deck's
+  The fixture was the cause and is fixed (#9). **Second pass, 2026-09-04,
+  PowerPoint 2016 on Windows 10:** `clean.pptx`, `broken-arabic.pptx` and
+  their repaired copies open without a prompt and render right-to-left; the
+  repaired `quarterly-report.pptx` renders every Arabic slide right-to-left
+  with the table's first column on the right; `torture.pptx` still
+  prompted, and the bisect named the media item name above. The torture
+  deck's left-to-right title before repair is its seeded
+  `direction-mismatch`, and the repaired copy showed it right-to-left. The
+  regenerated `torture.pptx` and its repaired copy, with the media part
+  renamed, then opened without a prompt, the repaired one with its title
+  right-to-left. The M1 application check is verified on every corpus
+  deck. The same pass found chart category-axis labels with no text
+  properties and no direction, which no rule sees yet. The repaired deck's
   Arabic paragraphs keep the template's left alignment, which the audit does
   not yet report (#8). The tests prove structural correctness; this is the
   record of what was actually seen.
