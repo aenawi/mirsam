@@ -211,6 +211,8 @@ def shape_pr(x, y, cx, cy):
 # person opening a fixture can see at a glance whether it rendered.
 TITLE_PR = shape_pr(838200, 365125, 10515600, 1325563)
 BODY_PR = shape_pr(838200, 1825625, 10515600, 1325563)
+# The two-column box of the one-slide decks sits in the band below the body.
+COLUMNS_PR = shape_pr(838200, 3300000, 10515600, 2000000)
 FRAME_OFF = '<a:off x="838200" y="3300000"/><a:ext cx="10515600" cy="3000000"/>'
 # The notes page is 6858000 x 9144000, and the body sits on its lower half.
 NOTES_PR = shape_pr(685800, 4571999, 5486400, 3886200)
@@ -689,6 +691,28 @@ def one_slide_deck(slide, day):
     ]
 
 
+# A text body laid out in columns is a container of its own: `numCol` decides
+# there are columns, `rtlCol` decides which one the reader starts in. Written
+# as a pair — the correct body in the clean deck, the same body without a
+# column direction in the broken one — so the corpus proves both the finding
+# and the silence. The paragraphs inside are identical and correct in both,
+# which is the point: a container's direction is not its paragraphs'.
+def columns_box(body_pr):
+    return (
+        '<p:sp><p:nvSpPr><p:cNvPr id="3" name="Columns 2"/>'
+        '<p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>'
+        + COLUMNS_PR +
+        f"<p:txBody>{body_pr}<a:lstStyle/>"
+        '<a:p><a:pPr rtl="1" algn="r"/><a:r>'
+        '<a:rPr lang="ar-SA"><a:cs typeface="Dubai"/></a:rPr>'
+        "<a:t>العمود الأول من النص المتصل.</a:t></a:r></a:p>"
+        '<a:p><a:pPr rtl="1" algn="r"/><a:r>'
+        '<a:rPr lang="ar-SA"><a:cs typeface="Dubai"/></a:rPr>'
+        "<a:t>العمود الثاني من النص المتصل.</a:t></a:r></a:p>"
+        "</p:txBody></p:sp>"
+    )
+
+
 # Everything the rules ask for: an explicit base direction that matches how the
 # text actually resolves, coherent alignment, an Arabic language tag, a
 # complex-script font, a native bullet, no embedded controls and no
@@ -707,6 +731,7 @@ CLEAN_SLIDE = PROLOG + (
     '<a:rPr lang="ar-SA"><a:cs typeface="Dubai"/></a:rPr>'
     "<a:t>بند أول</a:t></a:r></a:p>"
     "</p:txBody></p:sp>"
+    + columns_box('<a:bodyPr numCol="2" rtlCol="1"/>') +
     "</p:spTree></p:cSld>"
     "<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr>"
     "</p:sld>"
@@ -728,6 +753,7 @@ BROKEN_SLIDE = PROLOG + (
     '<a:p><a:r><a:rPr lang="en-US"/>'
     "<a:t>• بند أول\u200f</a:t></a:r></a:p>"
     "</p:txBody></p:sp>"
+    + columns_box('<a:bodyPr numCol="2"/>') +
     "</p:spTree></p:cSld>"
     "<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr>"
     "</p:sld>"

@@ -127,7 +127,7 @@ loop, and it should stay that way until something forces otherwise.
 ```
 crates/
   mirsam-core/     domain — Unicode, bidi, rules, ports. No I/O whatsoever.
-    text.rs        TextUnit (paragraph or table), Properties, Resolved<T>
+    text.rs        TextUnit (paragraph or container), Properties, Resolved<T>
     bidi.rs        UAX#9 resolution, dominant vs auto direction
     script.rs      Arabic script detection, presentation forms
     controls.rs    explicit bidi controls (never ZWJ/ZWNJ)

@@ -43,35 +43,107 @@ fn table_id(part: &str, index: usize) -> String {
     format!("{part}#tbl{index}")
 }
 
+/// The unit id for a multi-column text body: the part name and the body's
+/// 1-based ordinal.
+///
+/// The ordinal counts *every* `a:bodyPr` in the part, not only the bodies
+/// laid out in columns, exactly as the paragraph ordinal counts every `a:p`
+/// including the ones that produce no unit. A numbering that skipped the
+/// bodies this adapter has nothing to say about would drift the moment a
+/// single-column body was added, and the rewriter would edit the wrong one.
+fn columns_id(part: &str, index: usize) -> String {
+    format!("{part}#cols{index}")
+}
+
 /// What a unit id this adapter issued points at.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Target {
     Paragraph(usize),
     Table(usize),
+    Columns(usize),
 }
+
+/// Builds a [`Target`] from the ordinal an id carries.
+type MakeTarget = fn(usize) -> Target;
 
 /// Recover the part and target from an id this adapter issued.
 ///
 /// `#` cannot occur in an OPC part name, so the last `#` is unambiguous.
 fn parse_unit_id(id: &UnitId) -> Option<(&str, Target)> {
     let (part, rest) = id.0.rsplit_once('#')?;
-    let (target, digits): (fn(usize) -> Target, &str) = rest
-        .strip_prefix("tbl")
-        .map(|n| (Target::Table as fn(usize) -> Target, n))
-        .or_else(|| {
-            rest.strip_prefix('p')
-                .map(|n| (Target::Paragraph as fn(usize) -> Target, n))
-        })?;
+    let prefixes: [(&str, MakeTarget); 3] = [
+        ("tbl", Target::Table),
+        ("cols", Target::Columns),
+        ("p", Target::Paragraph),
+    ];
+    let (target, digits) = prefixes
+        .into_iter()
+        .find_map(|(prefix, target)| Some((target, rest.strip_prefix(prefix)?)))?;
     let index: usize = digits.parse().ok()?;
     (!part.is_empty() && index > 0).then_some((part, target(index)))
 }
 
-/// Accumulates a table while its rows are being parsed.
-struct TableBuilder {
-    /// Every cell's text, one paragraph per line.
+/// Accumulates a container — a table, or a text body in columns — while the
+/// paragraphs inside it are being parsed.
+struct ContainerBuilder {
+    /// The index the unit id carries: the table's, or the text body's.
+    index: usize,
+    /// Every enclosed paragraph's text, one per line.
     text: String,
     direction: Resolved<Direction>,
     shape: Option<String>,
+}
+
+impl ContainerBuilder {
+    fn new(index: usize, direction: Resolved<Direction>, shape: Option<String>) -> Self {
+        Self {
+            index,
+            text: String::new(),
+            direction,
+            shape,
+        }
+    }
+
+    fn push(&mut self, paragraph: &str) {
+        if !self.text.is_empty() {
+            self.text.push('\n');
+        }
+        self.text.push_str(paragraph);
+    }
+
+    /// The unit, unless the container laid out no text at all.
+    fn finish(
+        self,
+        part: &str,
+        kind: UnitKind,
+        id: impl Fn(&str, usize) -> String,
+    ) -> Option<TextUnit> {
+        if self.text.trim().is_empty() {
+            return None;
+        }
+        Some(
+            TextUnit::new(id(part, self.index), self.text)
+                .with_kind(kind)
+                .with_props(Properties {
+                    direction: self.direction,
+                    ..Default::default()
+                })
+                .with_location(Location {
+                    part: part.to_string(),
+                    paragraph: None,
+                    container: self.shape,
+                }),
+        )
+    }
+}
+
+/// The direction an `ST_OnOff` attribute states.
+fn direction_of(value: &str) -> Direction {
+    if is_true(value) {
+        Direction::Rtl
+    } else {
+        Direction::Ltr
+    }
 }
 
 /// Accumulates the properties of the paragraph currently being parsed.
@@ -148,8 +220,10 @@ impl PptxDocument {
         let mut body_rtl: Option<bool> = None;
         let mut in_text = false;
         let mut paragraph_index = 0usize;
-        let mut table: Option<TableBuilder> = None;
+        let mut table: Option<ContainerBuilder> = None;
         let mut table_index = 0usize;
+        let mut columns: Option<ContainerBuilder> = None;
+        let mut body_index = 0usize;
 
         loop {
             match reader.read_event() {
@@ -171,20 +245,40 @@ impl PptxDocument {
                             }
                         }
                         "a:bodyPr" => {
-                            body_rtl = e
-                                .attributes()
-                                .flatten()
-                                .find(|a| a.key.as_ref() == "rtlCol")
-                                .and_then(|a| a.normalized_value(XmlVersion::Implicit1_0).ok())
-                                .map(|v| is_true(&v));
+                            body_index += 1;
+                            let attribute = |name: &str| {
+                                e.attributes()
+                                    .flatten()
+                                    .find(|a| a.key.as_ref() == name)
+                                    .and_then(|a| a.normalized_value(XmlVersion::Implicit1_0).ok())
+                                    .map(|v| v.into_owned())
+                            };
+                            body_rtl = attribute("rtlCol").map(|v| is_true(&v));
+                            // Only a body actually laid out in columns is a
+                            // container of its own: `rtlCol` on a single
+                            // column changes nothing a reader sees.
+                            let column_count: usize = attribute("numCol")
+                                .and_then(|v| v.parse().ok())
+                                .unwrap_or(1);
+                            columns = (column_count >= 2).then(|| {
+                                ContainerBuilder::new(
+                                    body_index,
+                                    match body_rtl {
+                                        Some(true) => Resolved::Explicit(Direction::Rtl),
+                                        Some(false) => Resolved::Explicit(Direction::Ltr),
+                                        None => Resolved::Unset,
+                                    },
+                                    shape.clone(),
+                                )
+                            });
                         }
                         "a:tbl" => {
                             table_index += 1;
-                            table = Some(TableBuilder {
-                                text: String::new(),
-                                direction: Resolved::Unset,
-                                shape: shape.clone(),
-                            });
+                            table = Some(ContainerBuilder::new(
+                                table_index,
+                                Resolved::Unset,
+                                shape.clone(),
+                            ));
                         }
                         "a:tblPr" => {
                             if let Some(t) = table.as_mut()
@@ -194,11 +288,7 @@ impl PptxDocument {
                                     .find(|a| a.key.as_ref() == "rtl")
                                     .and_then(|a| a.normalized_value(XmlVersion::Implicit1_0).ok())
                             {
-                                t.direction = Resolved::Explicit(if is_true(&value) {
-                                    Direction::Rtl
-                                } else {
-                                    Direction::Ltr
-                                });
+                                t.direction = Resolved::Explicit(direction_of(&value));
                             }
                         }
                         "a:p" => {
@@ -224,11 +314,7 @@ impl PptxDocument {
                                     match attr.key.as_ref() {
                                         "rtl" => {
                                             b.props.direction =
-                                                Resolved::Explicit(if is_true(&value) {
-                                                    Direction::Rtl
-                                                } else {
-                                                    Direction::Ltr
-                                                });
+                                                Resolved::Explicit(direction_of(&value));
                                         }
                                         "algn" => {
                                             if let Some(a) = parse_alignment(&value) {
@@ -327,38 +413,35 @@ impl PptxDocument {
                         if let Some(b) = current.take()
                             && !b.text.trim().is_empty()
                         {
-                            // A cell's paragraph is the table's text too: the
-                            // table is judged from what its cells say.
+                            // An enclosed paragraph is its container's text
+                            // too: a container is judged from what it lays
+                            // out — a table from its cells, a multi-column
+                            // body from its columns.
                             if let Some(t) = table.as_mut() {
-                                if !t.text.is_empty() {
-                                    t.text.push('\n');
-                                }
-                                t.text.push_str(&b.text);
+                                t.push(&b.text);
+                            }
+                            if let Some(c) = columns.as_mut() {
+                                c.push(&b.text);
                             }
                             units.push(b.finish(part, paragraph_index));
                         }
                     }
                     "a:tbl" => {
-                        if let Some(t) = table.take()
-                            && !t.text.trim().is_empty()
-                        {
-                            units.push(
-                                TextUnit::new(table_id(part, table_index), t.text)
-                                    .with_kind(UnitKind::Table)
-                                    .with_props(Properties {
-                                        direction: t.direction,
-                                        ..Default::default()
-                                    })
-                                    .with_location(Location {
-                                        part: part.to_string(),
-                                        paragraph: None,
-                                        container: t.shape,
-                                    }),
-                            );
-                        }
+                        units.extend(
+                            table
+                                .take()
+                                .and_then(|t| t.finish(part, UnitKind::Table, table_id)),
+                        );
                     }
                     "p:sp" | "p:graphicFrame" | "p:pic" | "p:cxnSp" => shape = None,
-                    "a:txBody" | "c:txPr" => body_rtl = None,
+                    "p:txBody" | "a:txBody" | "c:txPr" => {
+                        units.extend(
+                            columns
+                                .take()
+                                .and_then(|c| c.finish(part, UnitKind::Columns, columns_id)),
+                        );
+                        body_rtl = None;
+                    }
                     _ => {}
                 },
 
@@ -404,6 +487,7 @@ impl DocumentWriter for PptxDocument {
             match target {
                 Target::Paragraph(index) => plan.paragraphs.entry(index).or_default(),
                 Target::Table(index) => plan.tables.entry(index).or_default(),
+                Target::Columns(index) => plan.columns.entry(index).or_default(),
             }
             .push(repair.fix.clone());
         }

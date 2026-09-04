@@ -405,6 +405,106 @@ fn a_plan_naming_a_table_that_is_not_there_is_an_error() {
     assert!(format!("{err}").contains("no table 2"), "{err}");
 }
 
+// -------------------------------------------------------------------- columns
+
+fn rewrite_columns(xml: &str, body: usize, fixes: Vec<Fix>) -> String {
+    let mut plan = PartPlan::default();
+    plan.columns.insert(body, fixes);
+    apply_plan("s.xml", xml, &plan, &Inherited::new()).expect("rewrite failed")
+}
+
+const COLUMN_TEXT: &str = r#"<a:p><a:r><a:t>الفقرة</a:t></a:r></a:p>"#;
+
+#[test]
+fn set_direction_on_a_body_adds_rtlcol_and_leaves_the_rest_of_the_tag_alone() {
+    assert_eq!(
+        rewrite_columns(
+            &format!(r#"<p:txBody><a:bodyPr numCol="2" anchor='t'/>{COLUMN_TEXT}</p:txBody>"#),
+            1,
+            vec![Fix::SetDirection(Direction::Rtl)],
+        ),
+        format!(
+            r#"<p:txBody><a:bodyPr numCol="2" anchor='t' rtlCol="1"/>{COLUMN_TEXT}</p:txBody>"#
+        ),
+    );
+}
+
+#[test]
+fn set_direction_on_a_body_replaces_a_column_direction_already_there() {
+    assert_eq!(
+        rewrite_columns(
+            &format!(r#"<p:txBody><a:bodyPr numCol="2" rtlCol="1"/>{COLUMN_TEXT}</p:txBody>"#),
+            1,
+            vec![Fix::SetDirection(Direction::Ltr)],
+        ),
+        format!(r#"<p:txBody><a:bodyPr numCol="2" rtlCol="0"/>{COLUMN_TEXT}</p:txBody>"#),
+    );
+}
+
+#[test]
+fn bodies_are_numbered_in_document_order_including_the_single_column_ones() {
+    // The scanner numbers every a:bodyPr, so body 2 here is the columned one
+    // even though body 1 produced no unit.
+    let two = format!(
+        r#"<p:txBody><a:bodyPr/>{COLUMN_TEXT}</p:txBody><p:txBody><a:bodyPr numCol="2"/>{COLUMN_TEXT}</p:txBody>"#
+    );
+    assert_eq!(
+        rewrite_columns(&two, 2, vec![Fix::SetDirection(Direction::Rtl)]),
+        format!(
+            r#"<p:txBody><a:bodyPr/>{COLUMN_TEXT}</p:txBody><p:txBody><a:bodyPr numCol="2" rtlCol="1"/>{COLUMN_TEXT}</p:txBody>"#
+        ),
+    );
+}
+
+#[test]
+fn a_paragraph_and_the_body_it_sits_in_are_repaired_together() {
+    let mut plan = PartPlan::default();
+    plan.paragraphs
+        .insert(1, vec![Fix::SetDirection(Direction::Rtl)]);
+    plan.columns
+        .insert(1, vec![Fix::SetDirection(Direction::Rtl)]);
+    assert_eq!(
+        apply_plan(
+            "s.xml",
+            &format!(r#"<p:txBody><a:bodyPr numCol="2"/>{COLUMN_TEXT}</p:txBody>"#),
+            &plan,
+            &Inherited::new()
+        )
+        .unwrap(),
+        r#"<p:txBody><a:bodyPr numCol="2" rtlCol="1"/><a:p><a:pPr rtl="1"/><a:r><a:t>الفقرة</a:t></a:r></a:p></p:txBody>"#,
+    );
+}
+
+#[test]
+fn only_direction_can_be_set_on_a_body() {
+    let mut plan = PartPlan::default();
+    plan.columns
+        .insert(1, vec![Fix::SetLanguage("ar-SA".into())]);
+    let err = apply_plan(
+        "s.xml",
+        &format!(r#"<p:txBody><a:bodyPr numCol="2"/>{COLUMN_TEXT}</p:txBody>"#),
+        &plan,
+        &Inherited::new(),
+    )
+    .unwrap_err();
+    assert!(format!("{err}").contains("text body"), "{err}");
+}
+
+#[test]
+fn a_plan_naming_a_body_that_is_not_there_is_an_error() {
+    let mut plan = PartPlan::default();
+    plan.columns
+        .insert(2, vec![Fix::SetDirection(Direction::Rtl)]);
+    let err = apply_plan(
+        "s.xml",
+        &format!(r#"<p:txBody><a:bodyPr numCol="2"/>{COLUMN_TEXT}</p:txBody>"#),
+        &plan,
+        &Inherited::new(),
+    )
+    .unwrap_err();
+    assert!(format!("{err}").contains("no text body 2"), "{err}");
+}
+
 // ------------------------------------------------------------------ the rest
 
 #[test]

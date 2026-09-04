@@ -277,28 +277,56 @@ template's layouts and master contribute a hundred units of prompt text
 Arabic prompts would be reported at the layout, not the slide. 2.1's
 relationship graph is what will know a layout from a slide.
 
-### 1.5 Container direction: tables `[x]`
+### 1.5 Container direction: tables and columns `[x]`
 A table's direction is its own — `a:tblPr/@rtl`, which decides whether the
 first column sits on the right or the left — and no paragraph rule can see
 it. Found by a person looking at the repaired corpus deck after #8.
 
-*Shape.* `TextUnit` gained a `kind`: a table is a unit beside its cells, its
-text every cell's text, its direction the table's. `Rule::applies_to` says
-which kind a rule judges, so the paragraph rules never see a table and
-`table-direction` never sees a paragraph. The adapter issues `<part>#tbl<n>`
-ids and the rewriter sets `a:tblPr/@rtl`, creating `a:tblPr` first in
-`CT_Table`'s sequence when absent; any other fix on a table is refused.
+*Shape.* `TextUnit` gained a `kind`: a container is a unit beside the
+paragraphs inside it, its text the text it lays out, its direction its own.
+`Rule::applies_to` says which kind a rule judges, so the paragraph rules
+never see a container and `container-direction` never sees a paragraph. The
+adapter issues `<part>#tbl<n>` ids and the rewriter sets `a:tblPr/@rtl`,
+creating `a:tblPr` first in `CT_Table`'s sequence when absent; any other fix
+on a table is refused.
 
 *Acceptance:* met. The corpus's broken deck carries a table with no
-direction; the report shows `table-direction` on `slide3.xml#tbl1`, the
+direction; the report shows `container-direction` on `slide3.xml#tbl1`, the
 repair adds `rtl="1"` to the existing `tblPr` in place, and the correctly
 authored twin, whose table is right-to-left, reports nothing. Rewriter tests
 assert the whole part for creation, in-place edit, numbering and the
 composition with a cell's own repair.
 
-- [ ] Multi-column text bodies (`a:bodyPr/@numCol` with `@rtlCol`) are the
-      same mechanism and the next container; tracked as
-      [#12](https://github.com/aenawi/mirsam/issues/12).
+*Columns, the second container* ([#12](https://github.com/aenawi/mirsam/issues/12)).
+A text body with `a:bodyPr/@numCol` ≥ 2 flows its columns left-to-right
+unless `@rtlCol="1"`, which for Arabic text starts the reader in the wrong
+column — the same defect as a table's, one attribute along. It is
+`UnitKind::Columns`, id `<part>#cols<n>`, text every enclosed paragraph's
+text, direction the body's `rtlCol`; the repair sets that one attribute and
+any other fix on a body is refused. A single-column body is deliberately not
+a unit of this kind: `rtlCol` on one column changes nothing a reader sees,
+so there is nothing to judge and nothing to repair.
+
+*One rule, not two.* `table-direction` became `container-direction`, applying
+to every kind that is not a paragraph. The judgement does not vary with the
+container — mostly-Arabic text, direction unset or contrary, warning with a
+`SetDirection` fix — only the attribute an adapter lowers the repair onto
+does, and that is the adapter's business. The finding still names what it
+found: a table's says its columns run the wrong way, a body's that they flow
+the wrong way. The rule id moved in every committed report; the messages did
+not.
+
+*The ordinal counts every body, not every columned one.* `#cols<n>` is the
+nth `a:bodyPr` in the part, exactly as `#p<n>` counts every `a:p` including
+the ones that produce no unit. A numbering that skipped the bodies the tool
+has nothing to say about would drift the moment a deck carried one, and the
+repair would land on the wrong shape.
+
+*Corpus.* `clean.pptx` and `broken-arabic.pptx` gained the same two-column
+box, correct in one (`numCol="2" rtlCol="1"`) and without a column direction
+in the other. The paragraphs inside are identical and correct in both, which
+is the point: a container's direction is not its paragraphs'. `clean.pptx`
+is still reported on at no severity at all.
 
 ---
 
