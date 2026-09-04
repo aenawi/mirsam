@@ -152,15 +152,22 @@ crates/
     fix.rs         format-agnostic repairs
     ports.rs       DocumentReader / DocumentWriter
     rules/         the rule set
-  mirsam-ooxml/    adapter — PPTX today; DOCX and XLSX share the package layer
+  mirsam-ooxml/    adapter — PPTX today; DOCX and XLSX share the two modules
+                   below that name no element: the package and the scaffold
     package.rs     ZIP access and the byte-preserving rewrite (raw entry copy)
+    token.rs       the same guarantee inside a part: read to events, splice an
+                   attribute in its raw bytes, insert a child at the rank a
+                   caller's schema sequence decides, rewrite run text. Which
+                   element is which is the caller's to say
     rels.rs        the OPC relationship graph: which part a part inherits
                    from — slide → layout → master → theme, with each part's
                    role read from the relationships pointing at it
     inherit.rs     the properties along that chain: placeholder list styles
                    and a master's named text styles, resolved into
                    Resolved::Inherited with the part that supplied each value
-    rewrite.rs     token-stream repair: change what a Fix names, nothing else
+    rewrite.rs     DrawingML's repair vocabulary: which element and which
+                   attribute each Fix lands on, and where a created element
+                   goes. Every edit is a token.rs call with a name in it
     pptx.rs        DrawingML vocabulary: paragraphs, properties, bullets;
                    DocumentReader and DocumentWriter
     chart.rs       chart text containers: the cached strings an axis, a

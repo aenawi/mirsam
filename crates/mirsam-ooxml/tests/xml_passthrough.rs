@@ -6,7 +6,7 @@
 //! can be tested.
 
 use mirsam_ooxml::package::Package;
-use mirsam_ooxml::rewrite::passthrough;
+use mirsam_ooxml::token::passthrough;
 use std::path::{Path, PathBuf};
 
 fn fixture(name: &str) -> PathBuf {

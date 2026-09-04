@@ -14,6 +14,21 @@
 //!
 //! So the adapter streams tokens and passes through everything it is not
 //! explicitly asked to change.
+//!
+//! ## The shared layer and the vocabularies
+//!
+//! Two modules know nothing about any one OOXML format and are what a second
+//! format reuses rather than reimplements: [`package`] holds the ZIP container
+//! and its byte-preserving rewrite, and [`token`] the token-stream editing
+//! inside a part. Everything else names elements, and an element name belongs
+//! to exactly one format: [`rewrite`] is DrawingML's repair vocabulary,
+//! [`pptx`] its reader, [`chart`] the chart parts a deck references.
+//!
+//! A part a repair does not touch survives byte for byte ([`package`]); a
+//! token a repair does not address survives byte for byte ([`token`]). The
+//! guarantee is the same one stated at two scales, and a format that reads the
+//! package or edits tokens through a second code path would hold it only
+//! where that path happened to agree.
 
 pub mod chart;
 pub mod inherit;
@@ -21,6 +36,7 @@ pub mod package;
 pub mod pptx;
 pub mod rels;
 pub mod rewrite;
+pub mod token;
 
 pub use inherit::StyleIndex;
 pub use package::Package;
