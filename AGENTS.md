@@ -108,8 +108,14 @@ prompt", which is the M1 application check.
 
 1. **`mirsam-core` performs no I/O.** If it needs to open a file, the design
    has gone wrong.
-2. **A rule that fires on `Resolved::Inherited` is a bug.** Inherited
-   formatting is the author's layout choice.
+2. **A rule that fires on formatting the author chose is a bug.**
+   `Resolved::Inherited` is evidence of a choice only where it *agrees* with
+   the text: Arabic under a master saying `rtl="1"`, or under a layout that
+   centres or right-aligns it, is the layout doing its job and is never
+   reported. An inherited value that contradicts the text is a template
+   default nobody aimed at the text — an English master's `rtl="0" algn="l"`
+   under Arabic — and is reported exactly as an absent one is.
+   [ADR 0007](docs/adr/0007-an-inherited-default-is-not-a-choice.md).
 3. **Repairs are byte-preserving.** Everything a `Fix` does not address passes
    through untouched. The round-trip test guards this; it must stay green.
 4. **Never insert bidi control characters.** Direction belongs to the
