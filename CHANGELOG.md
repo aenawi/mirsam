@@ -11,6 +11,26 @@ Working towards byte-preserving `repair` for PPTX. See
 
 ### Added
 
+- **`mirsam-ooxml::docx`** — a Word reader. `mirsam audit report.docx` now
+  works, reading `w:p`, `w:pPr/w:bidi`, `w:jc`, `w:lang/@w:bidi` and
+  `w:rFonts/@w:cs` (with `@w:ascii`) from every `word/**/*.xml` part, so a
+  header, a footer and a footnote are audited alongside the body. No line of
+  `mirsam-core` changed to accommodate it, which is what M3 set out to test.
+  `DocumentWriter` is deliberately not implemented yet.
+- Word's `w:jc` is lowered as **direction-relative**: `left`/`right` become
+  `Start`/`End`, because Word evaluates them against `w:bidi` whatever the
+  standard says ([MS-OE376] Part 4 §2.3.1.13, note b). One consequence is
+  worth stating outright — `alignment-incoherent` is structurally silent on
+  DOCX, since a Word author cannot write the defect it reports. Reading
+  `left` as a physical edge would have raised it on every left-aligned Arabic
+  paragraph in Word.
+- `is_true` moved from `pptx` to `token`, the format-neutral layer. `ST_OnOff`
+  is defined once in ECMA-376 and names no element, so both vocabularies now
+  read a document's booleans through one definition rather than Word's reader
+  depending on PowerPoint's.
+
+[MS-OE376]: https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oe376/26ecf09a-0f0b-4574-9907-ebd1ddf3015f
+
 - **`mirsam-ooxml::package`** — the shared OOXML package layer, and the
   round-trip guarantee the repair milestone is built on. A rewrite copies every
   entry it was not asked to edit as already-compressed bytes, so no part can be

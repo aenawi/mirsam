@@ -195,6 +195,7 @@ dependencies = [
  "mirsam-core",
  "mirsam-ooxml",
  "serde_json",
+ "zip",
 ]
 
 [[package]]

@@ -33,7 +33,7 @@ use mirsam_core::text::{Direction, Location, Properties, Resolved, TextUnit, Uni
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::{Reader, XmlVersion};
 
-use crate::pptx::is_true;
+use crate::token::is_true;
 
 /// A chart element whose `c:txPr` decides how the strings it draws are laid
 /// out.

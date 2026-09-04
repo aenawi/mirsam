@@ -608,8 +608,56 @@ foreign element, not a run. The golden corpus did not move by a line, and the
 byte-identical passthrough over every part of the torture deck still holds;
 this is a refactor, and a refactor that changed a report would be a bug.
 
-### 3.2 DOCX reader `[ ]`
+### 3.2 DOCX reader `[x]`
 `w:p`, `w:pPr/w:bidi`, `w:jc`, `w:lang/@w:bidi`, `w:rFonts/@w:cs`.
+
+`docx.rs` is a `DocumentReader` and nothing else. `DocumentWriter` is a
+separate port precisely so an adapter can arrive one half at a time, and
+`mirsam repair` refuses a `.docx` as a *readable* format without a writer
+rather than as an unknown extension — the audit path reads it, and one
+command denying what the other does would be the tool contradicting itself.
+`mirsam-core` did not move by a line, which is what M3 is testing.
+
+**`w:jc` is direction-relative, and that is the one real decision here.** The
+standard says its values "are always specified relative to the page, and do
+not change semantic from right-to-left and left-to-right documents". Word does
+not implement that. Its own note is explicit: *"Word evaluates the value of
+this attribute based on the value of the bidi element: Left is the right side
+of a right-to-left paragraph, and right is the left side of a right-to-left
+paragraph"* ([MS-OE376] Part 4 §2.3.1.13, note b). So `left` is the *start*
+edge — the same value ISO 29500 Strict later spelled `start` — and this
+adapter lowers `left`/`right` onto `Start`/`End`. **No Word paragraph ever
+produces `Alignment::Left`**, so `alignment-incoherent` is structurally silent
+on DOCX. That is not a gap: a Word author cannot write the defect that rule
+reports, because the attribute they would use is direction-relative. Reading
+`left` as a physical edge would have manufactured the finding on every
+left-aligned Arabic paragraph in Word — invariant 2 reached through the
+adapter instead of through the rule.
+
+Three smaller decisions, each of which is a defect if taken the other way.
+`<w:bidi/>` with no `w:val` is *on*, which is the form Word writes far more
+often than `w:val="1"`; reading a missing attribute as false would report
+every correctly-marked Arabic paragraph in Word. A `w:sectPr` inside a
+paragraph's `w:pPr` — where the last section's properties live — is the
+section's statement, not that paragraph's. And an `mc:Fallback` is skipped
+beside the `mc:Choice` it stands in for, because both spell out the same text
+box and reading both reports every defect in it twice, under two unit ids
+naming one paragraph. Paragraphs are held on a stack rather than in a slot,
+because `w:txbxContent` nests them and a single slot loses the outer
+paragraph's text when the inner one closes.
+
+`is_true` moved from `pptx.rs` to `token.rs`. `ST_OnOff` is defined once in
+ECMA-376 and names no element; leaving it in DrawingML's reader would have
+made WordprocessingML's depend on it to agree about what a document says.
+
+*Acceptance:* `crates/mirsam-ooxml/tests/docx.rs`, twenty-four cases, and four
+in `cli.rs`. Every `w:jc` value this adapter reads is asserted *not* to raise
+`alignment-incoherent`; a DrawingML `a:p` sitting in a Word part is asserted
+to be no paragraph at all, which is `token.rs`'s claim run in the other
+direction. The golden corpus did not move: no `.pptx` reads differently for
+any of this.
+
+[MS-OE376]: https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oe376/26ecf09a-0f0b-4574-9907-ebd1ddf3015f
 
 ### 3.3 Style-chain inheritance `[~]`
 `docDefaults` → linked styles → direct formatting.

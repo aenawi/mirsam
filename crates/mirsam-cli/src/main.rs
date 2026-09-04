@@ -12,7 +12,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 use mirsam_core::error::Error as CoreError;
 use mirsam_core::rules::{DEFAULT_LOCALE, is_arabic_tag};
 use mirsam_core::{DocumentReader, DocumentWriter, Engine, Repair, RepairOptions};
-use mirsam_ooxml::PptxDocument;
+use mirsam_ooxml::{DocxDocument, PptxDocument};
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -137,7 +137,15 @@ fn non_empty(value: &str) -> std::result::Result<String, String> {
 #[derive(Debug)]
 enum Refusal {
     OutputExists(PathBuf),
-    OutputExtension { input: PathBuf, output: PathBuf },
+    OutputExtension {
+        input: PathBuf,
+        output: PathBuf,
+    },
+    /// A format this build can audit but cannot yet repair. Distinct from an
+    /// unknown extension: the document was understood, and saying so is the
+    /// difference between "mirsam does not know what this is" and "mirsam
+    /// knows, and has not learned to write it back yet".
+    ReadOnlyFormat(String),
 }
 
 impl fmt::Display for Refusal {
@@ -154,6 +162,11 @@ impl fmt::Display for Refusal {
                 output.display(),
                 extension(input),
                 input.display()
+            ),
+            Self::ReadOnlyFormat(format) => write!(
+                f,
+                ".{format} can be audited but not yet repaired; \
+                 `mirsam audit` reads it, and the writer is scheduled in docs/ROADMAP.md"
             ),
         }
     }
@@ -179,22 +192,32 @@ fn same_file(a: &Path, b: &Path) -> bool {
     }
 }
 
+/// The extensions `open` accepts, for the hint an unknown one gets.
+const READABLE: &[&str] = &["pptx", "docx"];
+
 fn open(path: &Path) -> Result<Box<dyn DocumentReader>> {
+    let context = || format!("opening {}", path.display());
     match extension(path).as_str() {
-        "pptx" => Ok(Box::new(
-            PptxDocument::open(path).with_context(|| format!("opening {}", path.display()))?,
-        )),
+        "pptx" => Ok(Box::new(PptxDocument::open(path).with_context(context)?)),
+        "docx" => Ok(Box::new(DocxDocument::open(path).with_context(context)?)),
         other => Err(CoreError::UnknownFormat(other.to_string()).into()),
     }
 }
 
 /// The formats that can be repaired in place are a subset of those that can
-/// be read; this is where a read-only adapter would be turned away.
+/// be read; this is where a read-only adapter is turned away.
+///
+/// A readable format without a writer is refused as such rather than as an
+/// unknown one, so the message does not deny knowing a document the audit
+/// path reads perfectly well.
 fn open_for_repair(path: &Path) -> Result<Box<dyn DocumentWriter>> {
     match extension(path).as_str() {
         "pptx" => Ok(Box::new(
             PptxDocument::open(path).with_context(|| format!("opening {}", path.display()))?,
         )),
+        readable if READABLE.contains(&readable) => {
+            Err(Refusal::ReadOnlyFormat(readable.to_string()).into())
+        }
         other => Err(CoreError::UnknownFormat(other.to_string()).into()),
     }
 }
@@ -213,8 +236,13 @@ fn classify(error: &anyhow::Error) -> (u8, Option<String>) {
         Some(CoreError::UnknownFormat(_)) => (
             exit::USAGE,
             Some(format!(
-                "mirsam {} reads .pptx; the other formats are scheduled in docs/ROADMAP.md",
-                env!("CARGO_PKG_VERSION")
+                "mirsam {} reads {}; the other formats are scheduled in docs/ROADMAP.md",
+                env!("CARGO_PKG_VERSION"),
+                READABLE
+                    .iter()
+                    .map(|e| format!(".{e}"))
+                    .collect::<Vec<_>>()
+                    .join(" and ")
             )),
         ),
         Some(CoreError::WouldOverwriteSource) => (exit::USAGE, None),

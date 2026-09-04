@@ -1,11 +1,11 @@
 # mirsam · مرسم
 
 **Arabic text correctness for documents.** A single dependency-free binary that
-finds right-to-left, bidirectional and typography defects in PowerPoint files,
-*proves* each one by resolving what the text will actually look like when
-rendered, and repairs them without touching a byte it was not asked to. The
-DOCX, XLSX, HTML and PDF adapters are scheduled; see
-[Roadmap](docs/ROADMAP.md).
+finds right-to-left, bidirectional and typography defects in PowerPoint and
+Word files, *proves* each one by resolving what the text will actually look
+like when rendered, and repairs them without touching a byte it was not asked
+to. Word is audit-only so far; the XLSX, HTML and PDF adapters are scheduled;
+see [Roadmap](docs/ROADMAP.md).
 
 > **mirsam** (مَرْسَم) — an atelier; the room where things are properly drawn.
 > From the root ر-س-م: to draw, to inscribe, to render.
@@ -127,10 +127,12 @@ so an agent can act on it without opening PowerPoint. See [`AGENTS.md`](AGENTS.m
 ## Status
 
 **v0.1 “Steppe Eagle” — audit only, PPTX only.** Byte-preserving `repair` for
-PPTX has landed on `main` and ships as v0.2; the DOCX, XLSX, HTML and PDF
-adapters are specified and scheduled; see
-[`docs/ROADMAP.md`](docs/ROADMAP.md). The tool reports what it can actually
-verify and nothing more — a discipline inherited from its prior art.
+PPTX has landed on `main` and ships as v0.2. A DOCX **reader** has landed too,
+so `mirsam audit report.docx` works; `repair` refuses a `.docx` and says why,
+because the Word writer is not built yet. The XLSX, HTML and PDF adapters are
+specified and scheduled; see [`docs/ROADMAP.md`](docs/ROADMAP.md). The tool
+reports what it can actually verify and nothing more — a discipline inherited
+from its prior art.
 
 ## Design
 
