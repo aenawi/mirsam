@@ -60,6 +60,24 @@
       },
       {
         "evidence": {
+          "logical": "الربع الأول\nالربع الثاني\nالربع الثالث\nالربع الرابع",
+          "offenders": [],
+          "visual_declared": null,
+          "visual_expected": null
+        },
+        "fixable": true,
+        "location": {
+          "container": "category axis",
+          "paragraph": null,
+          "part": "ppt/charts/chart1.xml"
+        },
+        "message": "chart text declares no direction; the strings it draws read rtl, so they are laid out the wrong way round",
+        "rule": "container-direction",
+        "severity": "warning",
+        "unit": "ppt/charts/chart1.xml#catax1"
+      },
+      {
+        "evidence": {
           "logical": null,
           "offenders": [],
           "visual_declared": null,
@@ -225,18 +243,26 @@
     "format": "pptx",
     "strict": false,
     "summary": {
-      "arabic_units": 5,
+      "arabic_units": 6,
       "errors": 2,
       "mixed_units": 1,
       "notes": 4,
-      "units_scanned": 5,
-      "warnings": 6
+      "units_scanned": 6,
+      "warnings": 7
     }
   },
   "changed_parts": {
     "ppt/charts/chart1.xml": [
       "-<a:pPr rtl=\"1\"/>",
-      "+<a:pPr rtl=\"1\" algn=\"r\"/>"
+      "+<a:pPr rtl=\"1\" algn=\"r\"/>",
+      "+<c:txPr>",
+      "+<a:bodyPr/>",
+      "+<a:lstStyle/>",
+      "+<a:p>",
+      "+<a:pPr rtl=\"1\"/>",
+      "+<a:endParaRPr/>",
+      "+</a:p>",
+      "+</c:txPr>"
     ],
     "ppt/notesSlides/notesSlide1.xml": [
       "-<a:pPr rtl=\"1\"/>",
@@ -269,11 +295,11 @@
     "after": {
       "diagnostics": [],
       "summary": {
-        "arabic_units": 5,
+        "arabic_units": 6,
         "errors": 0,
         "mixed_units": 1,
         "notes": 0,
-        "units_scanned": 5,
+        "units_scanned": 6,
         "warnings": 0
       }
     },
@@ -334,6 +360,24 @@
           "rule": "alignment-incoherent",
           "severity": "warning",
           "unit": "ppt/slides/slide1.xml#p1"
+        },
+        {
+          "evidence": {
+            "logical": "الربع الأول\nالربع الثاني\nالربع الثالث\nالربع الرابع",
+            "offenders": [],
+            "visual_declared": null,
+            "visual_expected": null
+          },
+          "fixable": true,
+          "location": {
+            "container": "category axis",
+            "paragraph": null,
+            "part": "ppt/charts/chart1.xml"
+          },
+          "message": "chart text declares no direction; the strings it draws read rtl, so they are laid out the wrong way round",
+          "rule": "container-direction",
+          "severity": "warning",
+          "unit": "ppt/charts/chart1.xml#catax1"
         },
         {
           "evidence": {
@@ -499,12 +543,12 @@
         }
       ],
       "summary": {
-        "arabic_units": 5,
+        "arabic_units": 6,
         "errors": 2,
         "mixed_units": 1,
         "notes": 4,
-        "units_scanned": 5,
-        "warnings": 6
+        "units_scanned": 6,
+        "warnings": 7
       }
     },
     "blocking": false,
@@ -525,6 +569,13 @@
             "value": "start"
           },
           "unit": "ppt/charts/chart1.xml#p1"
+        },
+        {
+          "fix": {
+            "kind": "set_direction",
+            "value": "rtl"
+          },
+          "unit": "ppt/charts/chart1.xml#catax1"
         },
         {
           "fix": {

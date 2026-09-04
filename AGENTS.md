@@ -38,11 +38,12 @@ programmatically, or render the escaped form as `mirsam explain` does.
 
 `fixable: true` means a mechanical repair exists.
 
-Unit ids are adapter-issued and opaque: `<part>#p<n>` is a paragraph,
-`<part>#tbl<n>` a table and `<part>#cols<n>` a text body laid out in two or
-more columns. The last two are *containers*: units of their own, judged from
-the text they lay out, whose one property is their direction. Echo them back;
-never parse them.
+Unit ids are adapter-issued and opaque: `<part>#p<n>` is a paragraph;
+`<part>#tbl<n>` a table, `<part>#cols<n>` a text body laid out in two or more
+columns, and `<part>#catax<n>` / `#legend<n>` / `#dlbls<n>` a chart's category
+axis, legend or data labels. Everything but the paragraph is a *container*: a
+unit of its own, judged from the text it lays out, whose one property is its
+direction. Echo them back; never parse them.
 
 ### Repairing
 

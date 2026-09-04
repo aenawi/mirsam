@@ -266,6 +266,13 @@ fn wording(kind: UnitKind) -> (&'static str, &'static str, &'static str) {
             "its text reads",
             "the columns flow the wrong way",
         ),
+        // Which chart container it is — axis, legend, labels — is in the
+        // finding's location, where a reader looks to find it in the file.
+        UnitKind::ChartText => (
+            "chart text",
+            "the strings it draws read",
+            "they are laid out the wrong way round",
+        ),
         // `applies_to` never hands this rule a paragraph.
         UnitKind::Paragraph => ("container", "its text reads", "it starts on the wrong side"),
     }

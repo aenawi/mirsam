@@ -1,5 +1,6 @@
 //! PowerPoint (PPTX) adapter.
 
+use crate::chart::{self, ChartText};
 use crate::package::{Edits, Package};
 use crate::rewrite::{self, Inherited, PartPlan};
 use mirsam_core::error::{Error, Result};
@@ -61,26 +62,34 @@ enum Target {
     Paragraph(usize),
     Table(usize),
     Columns(usize),
+    ChartText(ChartText, usize),
 }
-
-/// Builds a [`Target`] from the ordinal an id carries.
-type MakeTarget = fn(usize) -> Target;
 
 /// Recover the part and target from an id this adapter issued.
 ///
 /// `#` cannot occur in an OPC part name, so the last `#` is unambiguous.
+/// `p` is tried last because it is one letter: every other prefix would
+/// otherwise have to be checked for beginning with it.
 fn parse_unit_id(id: &UnitId) -> Option<(&str, Target)> {
     let (part, rest) = id.0.rsplit_once('#')?;
-    let prefixes: [(&str, MakeTarget); 3] = [
-        ("tbl", Target::Table),
-        ("cols", Target::Columns),
-        ("p", Target::Paragraph),
-    ];
-    let (target, digits) = prefixes
+    let ordinal = |digits: &str| digits.parse::<usize>().ok().filter(|n| *n > 0);
+
+    let target = if let Some(n) = rest.strip_prefix("tbl") {
+        Target::Table(ordinal(n)?)
+    } else if let Some(n) = rest.strip_prefix("cols") {
+        Target::Columns(ordinal(n)?)
+    } else if let Some((kind, n)) = ChartText::all()
         .into_iter()
-        .find_map(|(prefix, target)| Some((target, rest.strip_prefix(prefix)?)))?;
-    let index: usize = digits.parse().ok()?;
-    (!part.is_empty() && index > 0).then_some((part, target(index)))
+        .find_map(|kind| Some((kind, rest.strip_prefix(kind.tag())?)))
+    {
+        Target::ChartText(kind, ordinal(n)?)
+    } else if let Some(n) = rest.strip_prefix('p') {
+        Target::Paragraph(ordinal(n)?)
+    } else {
+        return None;
+    };
+
+    (!part.is_empty()).then_some((part, target))
 }
 
 /// Accumulates a container — a table, or a text body in columns — while the
@@ -461,7 +470,13 @@ impl DocumentReader for PptxDocument {
         let mut units = Vec::new();
         for part in self.text_parts()? {
             let xml = self.package.read_text(&part)?;
+            // Two passes over a chart part, deliberately: the first finds the
+            // paragraphs any DrawingML has (a chart title is one), the second
+            // the containers whose strings are not paragraphs at all. The
+            // chart pass reads only as far as the root element of a part that
+            // is not a chart.
             units.extend(Self::scan_part(&part, &xml)?);
+            units.extend(chart::scan(&part, &xml)?);
         }
         Ok(units)
     }
@@ -488,6 +503,7 @@ impl DocumentWriter for PptxDocument {
                 Target::Paragraph(index) => plan.paragraphs.entry(index).or_default(),
                 Target::Table(index) => plan.tables.entry(index).or_default(),
                 Target::Columns(index) => plan.columns.entry(index).or_default(),
+                Target::ChartText(kind, index) => plan.chart_text.entry((kind, index)).or_default(),
             }
             .push(repair.fix.clone());
         }
@@ -535,10 +551,12 @@ impl DocumentWriter for PptxDocument {
     }
 }
 
-/// Parse an in-memory part. Exposed for tests and for callers that already
-/// hold the XML.
+/// Parse an in-memory part into every unit this adapter produces for it.
+/// Exposed for tests and for callers that already hold the XML.
 pub fn scan_xml(part: &str, xml: &str) -> Result<Vec<TextUnit>> {
-    PptxDocument::scan_part(part, xml)
+    let mut units = PptxDocument::scan_part(part, xml)?;
+    units.extend(chart::scan(part, xml)?);
+    Ok(units)
 }
 
 #[cfg(test)]

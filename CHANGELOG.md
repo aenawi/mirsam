@@ -74,6 +74,24 @@ Working towards byte-preserving `repair` for PPTX. See
   container. The corpus's broken decks carry a table and a two-column body
   with no direction so the rule is exercised, and their correctly authored
   twins keep `rtl="1"` and `rtlCol="1"`.
+- **Chart text containers**, the third kind of container and the first whose
+  text is not paragraphs at all
+  ([#18](https://github.com/aenawi/mirsam/issues/18)). A chart's category
+  labels and series names are cached strings, not `a:p` elements, and the
+  direction they are drawn in belongs to `c:catAx/c:txPr`,
+  `c:legend/c:txPr` or `c:dLbls/c:txPr` — which most generated charts do not
+  have at all, so Arabic labels are drawn with no direction selected. Found
+  by a person opening the corpus deck in PowerPoint 2016. `mirsam-ooxml::chart`
+  is a second pass over any part whose root is `c:chartSpace`; ids are
+  `<part>#catax<n>`, `#legend<n>` and `#dlbls<n>`, and the repair creates the
+  whole `c:txPr` in schema position when there is none. What a container
+  draws is read from the file rather than assumed: an axis draws the
+  categories of the chart that names it in `c:axId`, a legend its series'
+  names (or its categories, on a pie), data labels whichever of those their
+  `c:showCatName` / `c:showSerName` flags turn on. A value axis draws
+  numbers and the chart-level `c:txPr` draws nothing of its own, so neither
+  is a unit. The torture deck's chart already carried the defect; its report
+  and its repair now show it.
 - **`direction-mismatch` gains a warning tier.** An explicit direction
   contrary to the text's own is reported even when the letter order comes
   out identical — pure Arabic marked left-to-right — because the paragraph

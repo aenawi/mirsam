@@ -140,6 +140,9 @@ crates/
     rewrite.rs     token-stream repair: change what a Fix names, nothing else
     pptx.rs        DrawingML vocabulary: paragraphs, properties, bullets;
                    DocumentReader and DocumentWriter
+    chart.rs       chart text containers: the cached strings an axis, a
+                   legend or a set of data labels draws, which are not
+                   paragraphs and which no DrawingML pass can see
   mirsam-cli/      driving adapter — argument parsing and rendering only
     tests/golden.rs  the golden corpus: every deck under tests/fixtures/
                    against its committed report of what the binary finds,

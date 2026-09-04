@@ -23,6 +23,7 @@
 //! those sequences, and insertion is by rank against them rather than by
 //! appending and hoping.
 
+use crate::chart::ChartText;
 use crate::pptx::is_true;
 use mirsam_core::Fix;
 use mirsam_core::error::{Error, Result};
@@ -49,12 +50,17 @@ pub type TableFixes = BTreeMap<usize, Vec<Fix>>;
 /// cannot drift.
 pub type ColumnFixes = BTreeMap<usize, Vec<Fix>>;
 
+/// Repairs for one part's chart text containers, keyed by the container's
+/// kind and its 1-based ordinal among the elements of that kind in the part.
+pub type ChartTextFixes = BTreeMap<(ChartText, usize), Vec<Fix>>;
+
 /// Everything to change in one part.
 #[derive(Debug, Default, Clone)]
 pub struct PartPlan {
     pub paragraphs: PartFixes,
     pub tables: TableFixes,
     pub columns: ColumnFixes,
+    pub chart_text: ChartTextFixes,
 }
 
 impl PartPlan {
@@ -64,7 +70,8 @@ impl PartPlan {
             .into_iter()
             .flat_map(|fixes| fixes.values())
             .map(Vec::len)
-            .sum()
+            .sum::<usize>()
+            + self.chart_text.values().map(Vec::len).sum::<usize>()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -361,10 +368,25 @@ fn insert_child(
     order: &[&str],
     child: Event<'static>,
 ) {
+    insert_children(events, at, order, vec![child]);
+}
+
+/// Insert a whole element — its start tag, its contents and its end tag —
+/// into the element at `at`, in the schema-sequence position its first event
+/// ranks at.
+fn insert_children(
+    events: &mut Vec<Event<'static>>,
+    at: usize,
+    order: &[&str],
+    children: Vec<Event<'static>>,
+) {
+    let Some(first) = children.first() else {
+        return;
+    };
     expand_empty(events, at);
     let range = element_range(events, at);
     let inner: Vec<Event<'static>> = events[range.clone()].to_vec();
-    let child_rank = rank(order, name_of(&child).unwrap_or_default().as_str());
+    let child_rank = rank(order, name_of(first).unwrap_or_default().as_str());
 
     // The first existing child that sorts after the newcomer; if there is none,
     // the newcomer goes last, immediately before the closing tag.
@@ -373,7 +395,7 @@ fn insert_child(
         .find(|&i| rank(order, name_of(&inner[i]).unwrap_or_default().as_str()) > child_rank)
         .map_or(range.end - 1, |i| range.start + i);
 
-    events.insert(position, child);
+    events.splice(position..position, children);
 }
 
 /// Find a direct child by name, or create it in schema position and return its
@@ -425,6 +447,74 @@ fn edit_tag(
 
 /// `CT_Table`: `a:tblPr` first, then the grid, then the rows.
 const TBL_ORDER: &[&str] = &["a:tblPr", "a:tblGrid", "a:tr"];
+
+/// `CT_CatAx`, in schema sequence order. `c:txPr` sits between `c:spPr` and
+/// `c:crossAx`, and an axis with it anywhere else is a chart PowerPoint
+/// refuses to draw.
+const CAT_AX_ORDER: &[&str] = &[
+    "c:axId",
+    "c:scaling",
+    "c:delete",
+    "c:axPos",
+    "c:majorGridlines",
+    "c:minorGridlines",
+    "c:title",
+    "c:numFmt",
+    "c:majorTickMark",
+    "c:minorTickMark",
+    "c:tickLblPos",
+    "c:spPr",
+    "c:txPr",
+    "c:crossAx",
+    "c:crosses",
+    "c:crossesAt",
+    "c:auto",
+    "c:lblAlgn",
+    "c:lblOffset",
+    "c:tickLblSkip",
+    "c:tickMarkSkip",
+    "c:noMultiLvlLbl",
+    "c:extLst",
+];
+
+/// `CT_Legend`, in schema sequence order.
+const LEGEND_ORDER: &[&str] = &[
+    "c:legendPos",
+    "c:legendEntry",
+    "c:layout",
+    "c:overlay",
+    "c:spPr",
+    "c:txPr",
+    "c:extLst",
+];
+
+/// `CT_DLbls`, in schema sequence order: the individually formatted labels
+/// first, then the settings that govern all of them.
+const DLBLS_ORDER: &[&str] = &[
+    "c:dLbl",
+    "c:delete",
+    "c:numFmt",
+    "c:spPr",
+    "c:txPr",
+    "c:dLblPos",
+    "c:showLegendKey",
+    "c:showVal",
+    "c:showCatName",
+    "c:showSerName",
+    "c:showPercent",
+    "c:showBubbleSize",
+    "c:separator",
+    "c:showLeaderLines",
+    "c:leaderLines",
+    "c:extLst",
+];
+
+/// `CT_TextBody` as a chart declares it: all three children, in this order.
+const TXPR_ORDER: &[&str] = &["a:bodyPr", "a:lstStyle", "a:p"];
+
+/// The DrawingML namespace, for the rare chart part that does not already
+/// declare a prefix for it.
+const DML_NAMESPACE: &str = "http://schemas.openxmlformats.org/drawingml/2006/main";
 
 /// `CT_TextParagraph`: `a:pPr` precedes every run.
 const A_P_ORDER: &[&str] = &["a:pPr"];
@@ -836,6 +926,116 @@ fn apply_to_columns(
     Ok(())
 }
 
+/// Every `c:catAx`, `c:legend` or `c:dLbls` in the part.
+fn chart_text_ranges(
+    events: &[Event<'static>],
+    kind: ChartText,
+) -> Vec<(usize, std::ops::Range<usize>)> {
+    element_ranges(events, kind.element())
+}
+
+/// The schema sequence of the element a chart text container is.
+fn chart_text_order(kind: ChartText) -> &'static [&'static str] {
+    match kind {
+        ChartText::CategoryAxis => CAT_AX_ORDER,
+        ChartText::Legend => LEGEND_ORDER,
+        ChartText::DataLabels => DLBLS_ORDER,
+    }
+}
+
+/// Whether the part's root element declares a prefix bound to DrawingML.
+///
+/// A chart written by an application always does — its title is DrawingML —
+/// but a chart with no text at all need not, and a `c:txPr` created in such a
+/// part would carry an undeclared prefix and make the document unreadable.
+/// When the declaration is missing the created element brings its own.
+fn declares_drawingml(events: &[Event<'static>]) -> bool {
+    events.iter().find_map(|event| match event {
+        Event::Start(tag) | Event::Empty(tag) => Some(get_attribute(tag, "xmlns:a").is_some()),
+        _ => None,
+    }) == Some(true)
+}
+
+/// A `c:txPr` stating one direction and nothing else: the minimum a chart
+/// container needs for its strings to have a direction at all.
+fn text_properties(rtl: &str, declare_namespace: bool) -> Vec<Event<'static>> {
+    let mut txpr = BytesStart::new("c:txPr");
+    if declare_namespace {
+        txpr.push_attribute(("xmlns:a", DML_NAMESPACE));
+    }
+    let mut ppr = BytesStart::new("a:pPr");
+    ppr.push_attribute(("rtl", rtl));
+    vec![
+        Event::Start(txpr),
+        Event::Empty(BytesStart::new("a:bodyPr")),
+        Event::Empty(BytesStart::new("a:lstStyle")),
+        Event::Start(BytesStart::new("a:p")),
+        Event::Empty(ppr),
+        Event::Empty(BytesStart::new("a:endParaRPr")),
+        Event::End(BytesEnd::new("a:p")),
+        Event::End(BytesEnd::new("c:txPr")),
+    ]
+}
+
+/// Apply every repair for one chart text container, whose element starts at
+/// `at`.
+///
+/// Its one property is the direction its strings are laid out in, held in
+/// `c:txPr/a:p/a:pPr/@rtl`. Most charts have no `c:txPr`, so the usual case
+/// is creating one; when there is one already, only that attribute changes.
+fn apply_to_chart_text(
+    part: &str,
+    events: &mut Vec<Event<'static>>,
+    at: usize,
+    kind: ChartText,
+    fixes: &[Fix],
+    declare_namespace: bool,
+) -> Result<()> {
+    for fix in fixes {
+        let Fix::SetDirection(direction) = fix else {
+            return Err(Error::Format(format!(
+                "{part}: cannot {fix} on a chart's {}; only its direction is the container's own",
+                kind.label()
+            )));
+        };
+        let rtl = if *direction == Direction::Rtl {
+            "1"
+        } else {
+            "0"
+        };
+
+        let Some(txpr) = find_direct_child(events, at, "c:txPr") else {
+            insert_children(
+                events,
+                at,
+                chart_text_order(kind),
+                text_properties(rtl, declare_namespace),
+            );
+            continue;
+        };
+        // A `c:txPr` with no paragraph is not a document an application
+        // writes, but the direction still has to land somewhere.
+        let Some(paragraph) = find_direct_child(events, txpr, "a:p") else {
+            let mut ppr = BytesStart::new("a:pPr");
+            ppr.push_attribute(("rtl", rtl));
+            insert_children(
+                events,
+                txpr,
+                TXPR_ORDER,
+                vec![
+                    Event::Start(BytesStart::new("a:p")),
+                    Event::Empty(ppr),
+                    Event::End(BytesEnd::new("a:p")),
+                ],
+            );
+            continue;
+        };
+        let ppr = child_or_insert(events, paragraph, A_P_ORDER, "a:pPr");
+        edit_tag(events, ppr, |tag| set_attribute(tag, "rtl", rtl));
+    }
+    Ok(())
+}
+
 /// Apply repairs to a part, leaving every token they do not address untouched.
 ///
 /// Every paragraph is taken to declare its own direction or to be
@@ -894,6 +1094,16 @@ pub fn apply_plan(part: &str, xml: &str, plan: &PartPlan, inherited: &Inherited)
             "{part}: no text body {missing}; the document and the report disagree"
         )));
     }
+    if let Some((kind, missing)) = plan.chart_text.keys().find(|(kind, index)| {
+        !chart_text_ranges(&events, *kind)
+            .iter()
+            .any(|(i, _)| i == index)
+    }) {
+        return Err(Error::Format(format!(
+            "{part}: no {} {missing}; the document and the report disagree",
+            kind.label()
+        )));
+    }
 
     // Back to front: splicing a paragraph changes every index after it.
     for (index, range) in paragraph_ranges(&events).into_iter().rev() {
@@ -914,12 +1124,31 @@ pub fn apply_plan(part: &str, xml: &str, plan: &PartPlan, inherited: &Inherited)
         }
     }
 
-    // Text bodies last, their ranges taken after both of the above have
+    // Text bodies next, their ranges taken after both of the above have
     // moved them. A body's own repair is one attribute on one tag, so it
     // moves nothing itself.
     for (index, range) in body_ranges(&events).into_iter().rev() {
         if let Some(list) = plan.columns.get(&index) {
             apply_to_columns(part, &mut events, range.start, list)?;
+        }
+    }
+
+    // Chart containers last of all, because creating a `c:txPr` adds both a
+    // paragraph and a text body to the part, and every ordinal above counts
+    // those. Ranges are taken per kind and applied back to front.
+    let declare_namespace = !declares_drawingml(&events);
+    for kind in ChartText::all() {
+        for (index, range) in chart_text_ranges(&events, kind).into_iter().rev() {
+            if let Some(list) = plan.chart_text.get(&(kind, index)) {
+                apply_to_chart_text(
+                    part,
+                    &mut events,
+                    range.start,
+                    kind,
+                    list,
+                    declare_namespace,
+                )?;
+            }
         }
     }
 
