@@ -245,7 +245,7 @@
       },
       {
         "evidence": {
-          "inherited_from": "ppt/slideMasters/slideMaster1.xml bodyStyle/lvl1pPr@rtl",
+          "inherited_from": "ppt/slideMasters/slideMaster1.xml bodyStyle/lvl2pPr@rtl",
           "logical": null,
           "offenders": [],
           "visual_declared": null,
@@ -473,7 +473,7 @@
       },
       {
         "evidence": {
-          "inherited_from": "ppt/slideMasters/slideMaster1.xml bodyStyle/lvl1pPr@algn",
+          "inherited_from": "ppt/slideMasters/slideMaster1.xml bodyStyle/lvl2pPr@algn",
           "logical": "وارتفع هامش الربح إلى 32%",
           "offenders": [],
           "visual_declared": null,
@@ -1027,7 +1027,7 @@
         },
         {
           "evidence": {
-            "inherited_from": "ppt/slideMasters/slideMaster1.xml bodyStyle/lvl1pPr@rtl",
+            "inherited_from": "ppt/slideMasters/slideMaster1.xml bodyStyle/lvl2pPr@rtl",
             "logical": null,
             "offenders": [],
             "visual_declared": null,
@@ -1255,7 +1255,7 @@
         },
         {
           "evidence": {
-            "inherited_from": "ppt/slideMasters/slideMaster1.xml bodyStyle/lvl1pPr@algn",
+            "inherited_from": "ppt/slideMasters/slideMaster1.xml bodyStyle/lvl2pPr@algn",
             "logical": "وارتفع هامش الربح إلى 32%",
             "offenders": [],
             "visual_declared": null,

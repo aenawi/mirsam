@@ -1,7 +1,7 @@
 //! PowerPoint (PPTX) adapter.
 
 use crate::chart::{self, ChartText};
-use crate::inherit::{Placeholder, StyleIndex};
+use crate::inherit::{self, Placeholder, StyleIndex, Typeface};
 use crate::package::{Edits, Package};
 use crate::rels::RelationshipGraph;
 use crate::rewrite::{self, Inherited, PartPlan};
@@ -167,9 +167,37 @@ struct ParagraphBuilder {
     /// The placeholder its shape declares, which decides what the paragraph
     /// inherits from the layout and master above it.
     placeholder: Option<Placeholder>,
+    /// `a:pPr/@lvl`, zero-based, which decides *which* list level of each
+    /// source above it answers.
+    level: usize,
+    /// A `+mn-cs`-style theme reference the paragraph's own run wrote in place
+    /// of a typeface, kept until the theme can be consulted. Recording it as
+    /// the font would put `+mn-cs` in a report as though it named one.
+    complex_reference: Option<Typeface>,
+    latin_reference: Option<Typeface>,
 }
 
 impl ParagraphBuilder {
+    /// Resolve whatever the paragraph left to the parts above it.
+    ///
+    /// The theme references its own runs wrote come first: they are the
+    /// paragraph's own statement, and a chain that overwrote them would report
+    /// a master's font on a paragraph that named one itself.
+    fn resolve(&mut self, part: &str, styles: &StyleIndex) {
+        for (reference, slot) in [
+            (&self.complex_reference, &mut self.props.complex_font),
+            (&self.latin_reference, &mut self.props.latin_font),
+        ] {
+            if slot.is_unset()
+                && let Some(reference) = reference
+                && let Some((name, origin)) = styles.theme_font(part, reference)
+            {
+                *slot = Resolved::Inherited(name, origin);
+            }
+        }
+        styles.resolve(part, self.placeholder.as_ref(), self.level, &mut self.props);
+    }
+
     fn finish(self, part: &str, index: usize) -> TextUnit {
         TextUnit::new(unit_id(part, index), self.text)
             .with_props(self.props)
@@ -358,6 +386,12 @@ impl PptxDocument {
                                                 b.props.alignment = Resolved::Explicit(a);
                                             }
                                         }
+                                        // Zero-based, and absent means zero:
+                                        // the level every paragraph that says
+                                        // nothing is laid out at.
+                                        "lvl" => {
+                                            b.level = inherit::level_of_attribute(&value);
+                                        }
                                         _ => {}
                                     }
                                 }
@@ -395,14 +429,26 @@ impl PptxDocument {
                                     .and_then(|a| a.normalized_value(XmlVersion::Implicit1_0).ok())
                                     .map(|v| v.into_owned())
                                     .filter(|v| !v.is_empty());
-                                if let Some(typeface) = typeface {
-                                    let slot = if name == "a:cs" {
-                                        &mut b.props.complex_font
+                                // `+mn-cs` is a pointer into the theme's font
+                                // scheme, not a typeface. It is held aside and
+                                // resolved when the paragraph closes, because
+                                // the theme is reached through the package and
+                                // this scanner may be running without one.
+                                if let Some(typeface) =
+                                    typeface.as_deref().and_then(Typeface::parse)
+                                {
+                                    let (slot, reference) = if name == "a:cs" {
+                                        (&mut b.props.complex_font, &mut b.complex_reference)
                                     } else {
-                                        &mut b.props.latin_font
+                                        (&mut b.props.latin_font, &mut b.latin_reference)
                                     };
-                                    if slot.is_unset() {
-                                        *slot = Resolved::Explicit(typeface);
+                                    if slot.is_unset() && reference.is_none() {
+                                        match typeface {
+                                            Typeface::Named(name) => {
+                                                *slot = Resolved::Explicit(name);
+                                            }
+                                            theme => *reference = Some(theme),
+                                        }
                                     }
                                 }
                             }
@@ -463,7 +509,7 @@ impl PptxDocument {
                             // Whatever the paragraph did not say, said by the
                             // nearest part above it that does.
                             if let Some(styles) = styles {
-                                styles.resolve(part, b.placeholder.as_ref(), &mut b.props);
+                                b.resolve(part, styles);
                             }
                             units.push(b.finish(part, paragraph_index));
                         }

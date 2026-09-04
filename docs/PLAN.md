@@ -387,7 +387,7 @@ the namespace declaration.
 
 ---
 
-## M2 — Inheritance `[ ]`
+## M2 — Inheritance `[x]`
 
 ### 2.1 Package relationship graph `[x]`
 `mirsam-ooxml::rels` reads every `_rels/*.rels` in a package and answers, for
@@ -450,6 +450,7 @@ worse than undecided — a real master writes `<a:cs typeface="+mn-cs"/>`, a
 reference into the theme's `a:fontScheme` — and so is list level: `a:pPr/@lvl`
 selecting between `lvl1pPr` and `lvl9pPr` is 2.3 by name. Level 1 is the level
 a paragraph that states no `@lvl` uses, which is every paragraph in the corpus.
+Both landed in 2.3 below; the language tag did not, and still has no decision.
 
 *Acceptance:* met, on both halves. A deck with direction set only on the
 master reports zero `direction-unset` warnings, and a right-to-left paragraph
@@ -493,14 +494,78 @@ untouched `rtl="0"`. Those paragraphs really do render in the wrong order, so
 the tool now says so at warning rather than error severity, naming the master.
 `--strict` still blocks on them.
 
-### 2.3 List levels and theme fonts `[ ]`
-`lvl1pPr`…`lvl9pPr` by `a:pPr/@lvl`; `a:fontScheme` for the `cs` slot. Both
-walk the chain 2.2 built: `inherit::Level` becomes nine levels rather than
-one, and resolving `+mn-cs` needs the theme part, which
-`RelationshipGraph::theme_of` already reaches. An inherited language tag
-belongs here too, once there is a decision about what an inherited `lang`
-that disagrees with the letters means — ADR 0007's agreement test is stated
-for direction and alignment only.
+### 2.3 List levels and theme fonts `[x]`
+Both walk the chain 2.2 built. A style source now states its properties nine
+times over — `a:lvl1pPr` … `a:lvl9pPr` — and a paragraph's `a:pPr/@lvl`
+selects which one answers it at *every* hop, the shape's own list style and
+the layout's as much as the master's named styles. `@lvl` is zero-based, so
+`lvl="1"` reads `lvl2pPr`; a paragraph that states no `@lvl` is at level 1 as
+before, which is every paragraph in the corpus but one.
+
+**A level is answered only by the same level above it.** A master stating
+`lvl1pPr` and nothing else supplies nothing to a paragraph at level 3, and the
+walk carries on to the next source rather than falling back to level 1 here.
+PowerPoint's own fallback for a level a master leaves out is its application
+default, not that master's first level, so reaching for level 1 would report a
+value no reader will see — and report it as *inherited*, which is a claim
+about the document rather than a guess.
+
+**The complex-script slot resolves; the Latin slot deliberately does not.**
+`complex-font-missing` asks whether *any* complex-script font is named, not
+whether the named one suits the text, so ADR 0007's agreement test has nothing
+to decide here and inheriting the slot can only ever make the tool quieter.
+Read the other way round, the same rule is why the Latin slot stays where it
+was: the finding fires only where a Latin font is *chosen*, and a template's
+`+mn-lt` is not a choice anyone made about this paragraph. Inheriting it would
+manufacture the rule's precondition on every Arabic paragraph in every deck
+sitting on a stock theme — a rule firing on formatting nobody chose, which
+standing rule 2 calls a bug.
+
+**`+mn-cs` is a pointer, not a font.** A real master writes
+`<a:cs typeface="+mn-cs"/>`, a reference into the theme's `a:fontScheme`;
+`RelationshipGraph::theme_of` reaches the part and `inherit::FontScheme` reads
+it. The finding names the *theme*, not the master that wrote the reference,
+because the theme is where a reviewer can read the typeface the reader will
+see in one look (invariant 6). Before this, a run writing `+mn-cs` on itself
+was recorded as a font by that name — a font nobody has — and a report said
+so; it now resolves, or stays `Unset` where nothing answers it.
+
+**An empty answer is not an answer.** The stock Office theme states
+`<a:cs typeface=""/>`, which is a theme naming no complex-script font. It
+resolves to nothing rather than to the empty string, so
+`quarterly-report.pptx` keeps all four of its `complex-font-missing` warnings
+— the deck really does name no Arabic font anywhere. Its
+`<a:font script="Arab" typeface="Times New Roman"/>` sits beside those slots
+and is the application's per-script fallback rather than the slot a reference
+names; what it means for an empty `cs` is not a question this milestone
+answers, and it is left alone rather than guessed at.
+
+*An inherited language tag is still not resolved,* and that is the one bullet
+of this item deliberately not built. ADR 0007's agreement test is stated for
+direction and alignment; there is no decided answer for an inherited `lang`
+that disagrees with the letters, and resolving one would be inventing the
+semantics rather than implementing them.
+
+*Acceptance:* met, and the golden corpus moved by exactly four lines — the
+`@rtl` and `@algn` evidence on `quarterly-report.pptx`'s one `lvl="1"`
+paragraph, before and after repair, now citing `bodyStyle/lvl2pPr` rather
+than `lvl1pPr`. No finding appeared, disappeared or changed severity, which is
+the intended shape: every stock master states all nine levels alike, so the
+cited level is the *only* thing that can tell a resolver reading `@lvl` from
+one that always reads the first. Eleven tests in `crates/mirsam-ooxml/tests/inherit.rs`
+cover the rest. Two are load-bearing:
+`a_paragraph_at_the_second_level_reads_the_sources_second_level` puts the same
+Arabic under a master whose `lvl2pPr` contradicts its `lvl1pPr` — nothing real
+ships that, which is the point, because two levels that agree cannot fail —
+and `the_torture_deck_resolves_its_complex_font_through_the_theme` asserts a
+resolved typeface arrived from a `ppt/theme/` part, so a resolver that read
+only the name `otherStyle` states outright and never opened the theme fails it.
+
+*One fixture changed.* `torture.pptx`'s master used to name `Dubai` outright
+in all three text styles. It now writes `+mj-cs` in `titleStyle` and `+mn-cs`
+in `bodyStyle` — what PowerPoint itself writes — and keeps the literal name in
+`otherStyle`, so one deck exercises both forms. It is a byte change with no
+report change, and `make validate-fixtures` still passes on all five decks.
 
 ---
 

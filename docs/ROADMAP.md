@@ -50,8 +50,13 @@ resolves paragraph → placeholder → layout → master → theme.
 
 **Done when** a deck whose direction is set only on the slide master reports
 zero `direction-unset` warnings. **Met** by
-[PLAN](PLAN.md) 2.2, on the corpus and on hand-built packages; the two
-remaining bullets above are 2.3, and the milestone ships when they do.
+[PLAN](PLAN.md) 2.2, on the corpus and on hand-built packages. The two
+remaining bullets landed in 2.3: a paragraph's `a:pPr/@lvl` now selects which
+of the nine levels answers it, and a `+mn-cs` reference resolves through the
+theme's `a:fontScheme`. An inherited language tag is the one property left
+unresolved, and deliberately: ADR 0007's agreement test is stated for
+direction and alignment, and there is no decided answer for a `lang` that
+disagrees with the letters.
 
 This is where the `Resolved<T>` design pays for itself, and where a linter that
 lacks it starts producing noise users learn to ignore. It is also where the

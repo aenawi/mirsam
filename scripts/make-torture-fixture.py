@@ -540,11 +540,17 @@ MASTER = PROLOG + (
     # automatic bullet, and the typed '•' that `literal-bullet` exists to
     # catch renders as a *second* one. The defect is the character in the
     # text, so the text is where it should be visible.
+    # The complex-script slot is written both ways it occurs in the wild, so
+    # the corpus exercises both: `+mj-cs` / `+mn-cs` are references into the
+    # theme's `a:fontScheme` (what PowerPoint itself writes) and resolve to
+    # Dubai only by reading `ppt/theme/theme1.xml`; `otherStyle` names the
+    # typeface outright. A deck with only the second form cannot tell a
+    # resolver that reads the theme from one that treats "+mn-cs" as a font.
     '<p:txStyles><p:titleStyle><a:lvl1pPr rtl="1" algn="r">'
-    '<a:defRPr lang="ar-SA"><a:cs typeface="Dubai"/></a:defRPr>'
+    '<a:defRPr lang="ar-SA"><a:cs typeface="+mj-cs"/></a:defRPr>'
     "</a:lvl1pPr></p:titleStyle>"
     '<p:bodyStyle><a:lvl1pPr rtl="1" algn="r"><a:buNone/>'
-    '<a:defRPr lang="ar-SA"><a:cs typeface="Dubai"/></a:defRPr>'
+    '<a:defRPr lang="ar-SA"><a:cs typeface="+mn-cs"/></a:defRPr>'
     "</a:lvl1pPr></p:bodyStyle>"
     '<p:otherStyle><a:lvl1pPr rtl="1" algn="r">'
     '<a:defRPr lang="ar-SA"><a:cs typeface="Dubai"/></a:defRPr>'
