@@ -83,10 +83,10 @@ fn parse_unit_id(id: &UnitId) -> Option<(&str, Target)> {
         .find_map(|kind| Some((kind, rest.strip_prefix(kind.tag())?)))
     {
         Target::ChartText(kind, ordinal(n)?)
-    } else if let Some(n) = rest.strip_prefix('p') {
-        Target::Paragraph(ordinal(n)?)
     } else {
-        return None;
+        // The last arm rather than one more `else if`: a newer clippy reads
+        // an `else { return None }` after it as a `?` waiting to happen.
+        Target::Paragraph(ordinal(rest.strip_prefix('p')?)?)
     };
 
     (!part.is_empty()).then_some((part, target))
