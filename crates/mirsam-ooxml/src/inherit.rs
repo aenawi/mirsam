@@ -311,7 +311,7 @@ impl FontScheme {
     }
 
     /// How a finding cites one slot: `fontScheme/minorFont/cs@typeface`.
-    fn property(font: ThemeFont, script: ThemeScript) -> String {
+    pub(crate) fn property(font: ThemeFont, script: ThemeScript) -> String {
         format!(
             "fontScheme/{}/{}@typeface",
             font.element(),
@@ -319,7 +319,7 @@ impl FontScheme {
         )
     }
 
-    fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.major.is_empty() && self.minor.is_empty()
     }
 }

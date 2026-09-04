@@ -11,6 +11,25 @@ Working towards byte-preserving `repair` for PPTX. See
 
 ### Added
 
+- **`mirsam-ooxml::style`** — Word's style chain. A property a paragraph does
+  not state is now taken from the character style its run names, the paragraph
+  style it names (or the document's default one, where it names none), the
+  `w:basedOn` chain above either, and finally `w:docDefaults` — each finding
+  citing the `w:styleId` that actually supplied the value, as
+  `word/styles.xml style[Normal]/pPr@bidi`. This is `inherit`'s job for the
+  other vocabulary, and it shares no element name with it; the stylesheet and
+  the theme are reached by the relationship pointing at them, never by their
+  conventional path.
+- `w:rFonts/@w:cstheme` is resolved against the document's theme, so a
+  complex-script font named `minorBidi` no longer reads as unset. A theme's
+  `a:fontScheme` is DrawingML in both formats, so Word's theme is read by the
+  same code PowerPoint's is. Where a `w:rFonts` states both `@w:cs` and
+  `@w:cstheme`, the theme wins and the name beside it is the fallback.
+- A list supplied by a paragraph style is now a list: Word's own list styles
+  carry the `w:numPr`, and `literal-bullet` was reporting a typed glyph on
+  paragraphs that already had real numbering. `w:numId w:val="0"` reads as
+  `Bullet::Suppressed`, which is what it means — the removal of a list a style
+  supplies, not the presence of one.
 - **`mirsam-ooxml::docx`** — a Word reader. `mirsam audit report.docx` now
   works, reading `w:p`, `w:pPr/w:bidi`, `w:jc`, `w:lang/@w:bidi` and
   `w:rFonts/@w:cs` (with `@w:ascii`) from every `word/**/*.xml` part, so a
@@ -220,6 +239,10 @@ Working towards byte-preserving `repair` for PPTX. See
 
 ### Changed
 
+- `rels::Role::Presentation` is now `Role::OfficeDocument`, and
+  `RelationshipGraph::presentation` is `office_document`. One relationship type
+  reaches the main part of both formats, and a `Presentation` role on
+  `word/document.xml` would be the graph misreporting what it read.
 - **The token-rewrite scaffold is now `mirsam-ooxml::token`**, a module that
   names no element (PLAN M3 3.1). Reading a part into events and writing it
   back, `passthrough`, the raw-byte attribute splice, element lookup and

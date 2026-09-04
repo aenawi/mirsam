@@ -228,7 +228,11 @@ impl PartRelationships {
 /// no well-formed package produces — resolves to the same role on every run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub enum Role {
-    Presentation,
+    /// The package's main story: a presentation, or a Word document. Named for
+    /// the relationship that reaches it rather than for either format, because
+    /// one relationship type reaches both and a `Presentation` role on
+    /// `word/document.xml` would be the graph misreporting what it read.
+    OfficeDocument,
     Slide,
     SlideLayout,
     SlideMaster,
@@ -246,7 +250,7 @@ impl Role {
     /// The role a part takes from the relationship type pointing at it.
     fn from_kind(kind: &str) -> Self {
         match kind {
-            "officeDocument" => Self::Presentation,
+            "officeDocument" => Self::OfficeDocument,
             "slide" => Self::Slide,
             "slideLayout" => Self::SlideLayout,
             "slideMaster" => Self::SlideMaster,
@@ -260,16 +264,19 @@ impl Role {
 
     /// The relationship kind that leads one step up the inheritance chain.
     ///
-    /// `None` ends the walk. A theme is the top; a presentation is beside the
-    /// chain rather than above it — it *owns* the masters, and a property is
-    /// never inherited from it by this route.
+    /// `None` ends the walk. A theme is the top; the main document part is
+    /// beside the chain rather than above it — it *owns* the masters, and a
+    /// property is never inherited from it by this route. Word's own chain is
+    /// not walked here at all: a paragraph style is named inside
+    /// `word/styles.xml` rather than by a relationship, so it is
+    /// [`crate::style`]'s to resolve and not the graph's.
     pub fn inherits_from(self) -> Option<&'static str> {
         match self {
             Self::Slide => Some("slideLayout"),
             Self::SlideLayout | Self::HandoutMaster => Some("slideMaster"),
             Self::NotesSlide => Some("notesMaster"),
             Self::SlideMaster | Self::NotesMaster => Some("theme"),
-            Self::Presentation | Self::Theme | Self::Other => None,
+            Self::OfficeDocument | Self::Theme | Self::Other => None,
         }
     }
 }
@@ -343,8 +350,9 @@ impl RelationshipGraph {
             .collect()
     }
 
-    /// The presentation part, reached from the package root.
-    pub fn presentation(&self) -> Option<&str> {
+    /// The main document part, reached from the package root: a presentation
+    /// in a `.pptx`, `word/document.xml` in a `.docx`.
+    pub fn office_document(&self) -> Option<&str> {
         self.first_part_of_kind(PACKAGE_ROOT, "officeDocument")
     }
 
@@ -655,7 +663,7 @@ mod tests {
     #[test]
     fn a_parts_role_comes_from_the_relationship_that_reaches_it() {
         let graph = deck();
-        assert_eq!(graph.role_of("ppt/presentation.xml"), Role::Presentation);
+        assert_eq!(graph.role_of("ppt/presentation.xml"), Role::OfficeDocument);
         assert_eq!(graph.role_of("ppt/slides/slide1.xml"), Role::Slide);
         assert_eq!(
             graph.role_of("ppt/slideLayouts/slideLayout1.xml"),
@@ -709,7 +717,7 @@ mod tests {
 
     #[test]
     fn the_presentation_is_reached_from_the_package_root() {
-        assert_eq!(deck().presentation(), Some("ppt/presentation.xml"));
+        assert_eq!(deck().office_document(), Some("ppt/presentation.xml"));
     }
 
     #[test]
