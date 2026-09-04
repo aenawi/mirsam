@@ -16,7 +16,7 @@
 //! names here; nothing in [`crate::token`] has to learn about it.
 
 use crate::chart::ChartText;
-use crate::pptx::is_true;
+use crate::token::is_true;
 use crate::token::{
     self, child_or_insert, edit_tag, element_ranges, find_direct_child, get_attribute,
     insert_children, set_attribute,

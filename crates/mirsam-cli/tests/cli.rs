@@ -687,3 +687,108 @@ fn repair_text_output_reports_both_audits_and_what_changed() {
     }
     assert!(!out.stdout.contains("not applied"), "{}", out.stdout);
 }
+
+// ------------------------------------------------------- the second format
+
+/// Write a minimal Word package holding one paragraph of Arabic with the
+/// given `w:pPr`, and return its path.
+///
+/// Built here rather than committed as a fixture because what these cases
+/// assert is the CLI's wiring — which adapter an extension selects, and what
+/// each command does with the answer — and a binary in the tree would put the
+/// interesting part of that out of a reviewer's sight.
+fn docx(scratch: &Scratch, name: &str, p_pr: &str) -> String {
+    use std::io::Write;
+    let path = scratch.0.join(name);
+    let mut zip = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+    let options = zip::write::SimpleFileOptions::default();
+    zip.start_file("[Content_Types].xml", options).unwrap();
+    zip.write_all(
+        br#"<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>"#,
+    )
+    .unwrap();
+    zip.start_file("word/document.xml", options).unwrap();
+    write!(
+        zip,
+        concat!(
+            r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">"#,
+            "<w:body><w:p>{}<w:r><w:t>ارتفع الأداء بنسبة 25% في Q4 2026.</w:t></w:r></w:p></w:body>",
+            "</w:document>",
+        ),
+        p_pr
+    )
+    .unwrap();
+    zip.finish().unwrap();
+    path.to_string_lossy().into_owned()
+}
+
+#[test]
+fn a_word_document_is_audited_and_reports_as_docx() {
+    let scratch = Scratch::new("docx-audit");
+    let path = docx(
+        &scratch,
+        "broken.docx",
+        r#"<w:pPr><w:bidi w:val="0"/></w:pPr>"#,
+    );
+
+    let out = run(&["audit", &path, "--format", "json"]);
+    assert_eq!(out.code, exit::FINDINGS, "stderr:\n{}", out.stderr);
+    let json = parse_json(&out);
+    assert_eq!(json["format"], "docx");
+    assert!(rule_ids(&json["diagnostics"]).contains(&"direction-mismatch".to_string()));
+}
+
+#[test]
+fn a_correctly_marked_word_document_exits_zero() {
+    let scratch = Scratch::new("docx-clean");
+    let path = docx(
+        &scratch,
+        "clean.docx",
+        concat!(
+            r#"<w:pPr><w:bidi/><w:jc w:val="right"/>"#,
+            r#"<w:rPr><w:lang w:bidi="ar-SA"/><w:rFonts w:ascii="Calibri" w:cs="Dubai"/></w:rPr>"#,
+            "</w:pPr>",
+        ),
+    );
+    let out = run(&["audit", &path, "--strict"]);
+    assert_eq!(
+        out.code,
+        exit::OK,
+        "stdout:\n{}\nstderr:\n{}",
+        out.stdout,
+        out.stderr
+    );
+}
+
+#[test]
+fn repairing_a_readable_but_unwritable_format_says_so_rather_than_denying_it() {
+    // `docx` is not an unknown extension — `audit` reads it. Reporting it as
+    // one would be the tool contradicting itself between two commands, so the
+    // refusal names the real reason and stays a usage error.
+    let scratch = Scratch::new("docx-repair");
+    let input = docx(&scratch, "in.docx", "");
+    let out = run(&["repair", &input, &scratch.path("out.docx")]);
+
+    assert_eq!(out.code, exit::USAGE);
+    assert!(
+        out.stderr.contains("audited") && out.stderr.contains("not yet repaired"),
+        "stderr:\n{}",
+        out.stderr
+    );
+    // And nothing was written.
+    assert!(!Path::new(&scratch.path("out.docx")).exists());
+}
+
+#[test]
+fn an_unknown_extension_names_every_format_that_can_be_read() {
+    let scratch = Scratch::new("unknown");
+    let path = scratch.file("notes.md", b"# notes");
+    let out = run(&["audit", &path]);
+
+    assert_eq!(out.code, exit::USAGE);
+    assert!(
+        out.stderr.contains(".pptx") && out.stderr.contains(".docx"),
+        "the hint should list what this build reads:\n{}",
+        out.stderr
+    );
+}

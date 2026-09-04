@@ -152,7 +152,7 @@ crates/
     fix.rs         format-agnostic repairs
     ports.rs       DocumentReader / DocumentWriter
     rules/         the rule set
-  mirsam-ooxml/    adapter — PPTX today; DOCX and XLSX share the two modules
+  mirsam-ooxml/    adapter — PPTX and DOCX; XLSX will share the two modules
                    below that name no element: the package and the scaffold
     package.rs     ZIP access and the byte-preserving rewrite (raw entry copy)
     token.rs       the same guarantee inside a part: read to events, splice an
@@ -173,6 +173,9 @@ crates/
     chart.rs       chart text containers: the cached strings an axis, a
                    legend or a set of data labels draws, which are not
                    paragraphs and which no DrawingML pass can see
+    docx.rs        WordprocessingML vocabulary: paragraphs and the properties
+                   the rules judge. DocumentReader only — Word's writer is
+                   not built, and the split ports are what let it wait
   mirsam-cli/      driving adapter — argument parsing and rendering only
     tests/golden.rs  the golden corpus: every deck under tests/fixtures/
                    against its committed report of what the binary finds,

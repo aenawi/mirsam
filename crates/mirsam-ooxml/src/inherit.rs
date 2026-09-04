@@ -77,8 +77,9 @@ use quick_xml::{Reader, XmlVersion};
 use std::collections::BTreeMap;
 
 use crate::package::Package;
-use crate::pptx::{is_true, parse_alignment};
+use crate::pptx::parse_alignment;
 use crate::rels::{RelationshipGraph, Role};
+use crate::token::is_true;
 
 /// List levels a style source may state: `a:lvl1pPr` … `a:lvl9pPr`.
 const LEVELS: usize = 9;

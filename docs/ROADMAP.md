@@ -74,6 +74,12 @@ agrees with the text
 DOCX reuses the OOXML package layer; only the vocabulary differs
 (`w:bidi`, `w:jc`, `w:lang/@w:bidi`, `w:rFonts/@w:cs`).
 
+- **Landed:** the reader. `mirsam audit report.docx` works, and no line of
+  `mirsam-core` changed to make it. `w:jc` turned out to be direction-relative
+  in Word whatever the standard says, so `alignment-incoherent` is
+  structurally silent on DOCX — see [`PLAN.md`](PLAN.md) §3.2.
+- The writer. Until it exists `repair` refuses a `.docx` as a readable format
+  without one, rather than as an unknown extension.
 - Style-chain inheritance (`docDefaults` → style → direct formatting).
 - Tables: `w:bidiVisual` for genuinely RTL column order.
 - Numbering and fields.

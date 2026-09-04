@@ -5,6 +5,7 @@ use crate::inherit::{self, Placeholder, StyleIndex, Typeface};
 use crate::package::{Edits, Package};
 use crate::rels::RelationshipGraph;
 use crate::rewrite::{self, Inherited, PartPlan};
+use crate::token::is_true;
 use mirsam_core::error::{Error, Result};
 use mirsam_core::fix::Repair;
 use mirsam_core::ports::{DocumentReader, DocumentWriter};
@@ -27,12 +28,6 @@ pub(crate) fn parse_alignment(value: &str) -> Option<Alignment> {
         "dist" | "thaiDist" => Alignment::Distributed,
         _ => return None,
     })
-}
-
-/// An `ST_OnOff`-style boolean attribute, as both the scanner and the
-/// rewriter read it — one definition so the two cannot disagree.
-pub(crate) fn is_true(value: &str) -> bool {
-    matches!(value, "1" | "true" | "on")
 }
 
 /// The unit id this adapter issues for a paragraph: the part name and the

@@ -22,7 +22,9 @@
 //! and its byte-preserving rewrite, and [`token`] the token-stream editing
 //! inside a part. Everything else names elements, and an element name belongs
 //! to exactly one format: [`rewrite`] is DrawingML's repair vocabulary,
-//! [`pptx`] its reader, [`chart`] the chart parts a deck references.
+//! [`pptx`] its reader, [`chart`] the chart parts a deck references, and
+//! [`docx`] WordprocessingML's reader — which shares [`package`] and
+//! [`token`] with them and names not one DrawingML element.
 //!
 //! A part a repair does not touch survives byte for byte ([`package`]); a
 //! token a repair does not address survives byte for byte ([`token`]). The
@@ -31,6 +33,7 @@
 //! where that path happened to agree.
 
 pub mod chart;
+pub mod docx;
 pub mod inherit;
 pub mod package;
 pub mod pptx;
@@ -38,6 +41,7 @@ pub mod rels;
 pub mod rewrite;
 pub mod token;
 
+pub use docx::DocxDocument;
 pub use inherit::StyleIndex;
 pub use package::Package;
 pub use pptx::PptxDocument;

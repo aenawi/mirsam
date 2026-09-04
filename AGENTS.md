@@ -10,6 +10,10 @@ right-to-left, bidirectional and typography defects in documents. Single static
 binary: no Python, no Node, no Office, no runtime of any kind on the target
 machine.
 
+`audit` reads `.pptx` and `.docx`. `repair` writes `.pptx` only: a `.docx`
+is refused as a readable format without a writer, which is a usage error
+(exit `2`) and not a claim that the document was not understood.
+
 Inspired by Sultan Alsafran's MIT-licensed `arabic-presentations` skill. No
 shared code. See [`CREDITS.md`](CREDITS.md).
 
@@ -51,6 +55,13 @@ The list level in that path is the level the paragraph is actually at
 a theme part instead — `ppt/theme/theme1.xml fontScheme/minorFont/cs@typeface`
 — because a master writes `+mn-cs`, a reference, and the theme is where the
 typeface itself is written.
+
+**`alignment-incoherent` never fires on a `.docx`, and that is correct.**
+Word's `w:jc` is direction-relative whatever the standard says — `left` is the
+start edge of the paragraph, so a Word author has no way to write the hard
+left that rule reports. Arabic starting on the wrong edge in Word is a
+`w:bidi` defect, and `direction-mismatch` / `direction-unset` report it. Do
+not read the rule's silence on Word as coverage that is missing.
 
 Unit ids are adapter-issued and opaque: `<part>#p<n>` is a paragraph;
 `<part>#tbl<n>` a table, `<part>#cols<n>` a text body laid out in two or more

@@ -34,6 +34,24 @@ use mirsam_core::error::{Error, Result};
 use quick_xml::events::{BytesEnd, BytesStart, Event};
 use quick_xml::{Reader, Writer};
 
+// ------------------------------------------------------------ value lexemes
+
+/// Whether an `ST_OnOff` lexical value is true.
+///
+/// Shared rather than per-vocabulary because it names no element: `ST_OnOff`
+/// is defined once in ECMA-376 and every OOXML dialect spells its booleans
+/// the same way — DrawingML's `rtl="1"`, WordprocessingML's `w:val="true"`.
+/// One definition is also what stops a scanner and a rewriter from disagreeing
+/// about what a document says.
+///
+/// This reads a value that is *present*. Whether an absent one means true is
+/// a question about the element carrying it, not about the lexical space, and
+/// the two vocabularies answer it differently: WordprocessingML's `<w:bidi/>`
+/// is true, while a DrawingML attribute that is not there was never written.
+pub fn is_true(value: &str) -> bool {
+    matches!(value, "1" | "true" | "on")
+}
+
 // ------------------------------------------------------------ raw attributes
 
 /// One attribute's name and the byte range of its value inside a tag's content.
