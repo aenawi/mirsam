@@ -302,6 +302,24 @@ Working towards byte-preserving `repair` for PPTX. See
   not yet report (#8). The tests prove structural correctness; this is the
   record of what was actually seen.
 
+- **Invariant 2 is narrowed, ahead of 2.2:**
+  [ADR 0007](docs/adr/0007-an-inherited-default-is-not-a-choice.md). An
+  English template's slide master says `rtl="0" algn="l"` in all three text
+  styles, and both PowerPoint-authored corpus decks sit on that same master —
+  including the correctly authored one, which inherits none of it and writes
+  `rtl="1" algn="r"` on every Arabic paragraph itself. So a master's `rtl="0"`
+  is a template default nobody aimed at the text, not a design decision. Read
+  literally, "a rule that fires on `Inherited` is a bug" would make every
+  Arabic finding on `quarterly-report.pptx` vanish the moment M2 can resolve
+  the chain — the tool reporting *less* after learning to see more.
+  `Inherited` now counts as a choice only where it *agrees* with the text:
+  Arabic under `rtl="1"`, or under a layout that centres or right-aligns it,
+  stays silent; `rtl="0"` or `algn="l"` under Arabic is reported as an absent
+  value is, and names the part that supplied it. Decided by the maintainer on
+  three questions worked through the corpus. `AGENTS.md` and `PLAN.md`'s
+  standing rule 2 are restated to match. No code changed with the ADR; 2.2 is
+  what implements it.
+
 ## [0.1.0] — 2026-09-02 · "Steppe Eagle"
 
 Foundation release. Audit only, PowerPoint only — the architecture proven

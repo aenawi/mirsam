@@ -433,8 +433,20 @@ populating `Resolved::Inherited` instead of `Unset`.
 is written first and starts red. And, from #8: a right-to-left paragraph a
 layout centres reports no `alignment-unset` note, while one an English
 layout leaves on the left edge reports it as a finding rather than a note.
-What to conclude from a master whose own body style says `rtl="0"` is this
-item's ADR to write.
+
+What to conclude from a master whose own body style says `rtl="0"` is settled
+by [ADR 0007](adr/0007-an-inherited-default-is-not-a-choice.md), written and
+accepted ahead of the code: an inherited value is evidence of a choice only
+where it agrees with the text. An English template's untouched `rtl="0"` or
+`algn="l"` under Arabic keeps the finding it has today; an Arabic master's
+`rtl="1"`, and a layout that centres or right-aligns, silence it. Standing
+rule 2 below is restated to match, and `Evidence` gains an `inherited_from`
+naming the part that supplied the value.
+
+That fixes this item's golden-corpus acceptance in advance: the three
+RTL-mastered decks get quieter, `quarterly-report.pptx` keeps its count,
+`quarterly-report-correct.pptx` stays clean. Every committed report
+regenerates for the new evidence field; that diff must contain nothing else.
 
 ### 2.3 List levels and theme fonts `[~]`
 `lvl1pPr`…`lvl9pPr` by `a:pPr/@lvl`; `a:fontScheme` for the `cs` slot.
@@ -506,7 +518,11 @@ PDF implements `DocumentReader` **only**.
 ## Standing rules
 
 1. **The round-trip test is sacred.** No repair merges while it is red.
-2. **A rule that fires on `Resolved::Inherited` is a bug**, not a preference.
+2. **A rule that fires on formatting the author chose is a bug**, not a
+   preference. `Resolved::Inherited` is evidence of a choice only where it
+   agrees with the text; one that contradicts it is a template default and is
+   reported as an absent value is
+   ([ADR 0007](adr/0007-an-inherited-default-is-not-a-choice.md)).
 3. **Findings carry evidence.** A diagnostic a reviewer cannot verify without
    opening the app is not finished.
 4. **Report only what was verified.** `NOT RUN` is an honest result; inferred
