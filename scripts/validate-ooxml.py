@@ -22,8 +22,9 @@ Usage:
     uv run --with lxml scripts/validate-ooxml.py [deck.pptx ...]
 
 With no arguments, every `.pptx` under `tests/fixtures/` is checked; any
-other deck is checked by naming it. Exits 0 when every package is clean,
-1 otherwise.
+other deck is checked by naming it. `--self-test` checks the checker instead,
+over packages built in memory. Exits 0 when every package is clean, 1
+otherwise.
 """
 
 from __future__ import annotations
@@ -160,6 +161,15 @@ def check_container(archive: zipfile.ZipFile) -> list[str]:
         if "/" + name not in overrides and extension not in defaults:
             problems.append(f"no content type declared for {name}")
 
+    # A relationship resolves against *part names*, and the part name of an
+    # item is its decoded form: the part stored as `my%20image.png` is the part
+    # named `my image.png`. Decode both sides or neither — comparing a decoded
+    # target against the raw item names reports every percent-encoded part
+    # missing ([#21](https://github.com/aenawi/mirsam/issues/21)). This is the
+    # second time the encoding has caught something out; #9 was the first.
+    # `check_package` in `make-torture-fixture.py` resolves the same way.
+    parts = {urllib.parse.unquote(n) for n in names}
+
     for name in sorted(n for n in names if n.endswith(".rels")):
         source_dir = posixpath.dirname(posixpath.dirname(name))
         for relationship in etree.fromstring(archive.read(name)):
@@ -167,7 +177,7 @@ def check_container(archive: zipfile.ZipFile) -> list[str]:
                 continue
             target = urllib.parse.unquote(relationship.get("Target", ""))
             resolved = posixpath.normpath(posixpath.join(source_dir, target))
-            if resolved not in names:
+            if resolved not in parts:
                 problems.append(f"{name}: {target} points at a part that is not there")
 
     return problems
@@ -210,8 +220,72 @@ def validate(path: str) -> list[str]:
         return check_container(archive) + check_parts(archive)
 
 
+CONTENT_TYPES = (
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    f'<Types xmlns="{PKG}/content-types">'
+    '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+    '<Default Extension="xml" ContentType="application/xml"/>'
+    '<Default Extension="png" ContentType="image/png"/>'
+    "</Types>"
+)
+
+
+def _package(target: str, media: str | None) -> zipfile.ZipFile:
+    """A two-part package whose one relationship points at `target`."""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("[Content_Types].xml", CONTENT_TYPES)
+        archive.writestr("ppt/slides/slide1.xml", "<slide/>")
+        archive.writestr(
+            "ppt/slides/_rels/slide1.xml.rels",
+            f'<Relationships xmlns="{PKG}/relationships">'
+            f'<Relationship Id="rId1" Type="{PKG}/relationships/image"'
+            f' Target="{target}"/></Relationships>',
+        )
+        if media is not None:
+            archive.writestr(media, b"\x89PNG\r\n\x1a\n")
+    return zipfile.ZipFile(buffer)
+
+
+def self_test() -> list[str]:
+    """Prove `check_container` resolves encoded names without going blind.
+
+    The bug in #21 was one decoded side compared against one raw side. The
+    obvious repair — decode the item names — could just as easily have been
+    written as "stop reporting anything", so each case below names both what
+    must pass and what must still fail.
+    """
+    cases = [
+        # A percent-encoded part, referenced as it is stored. This is the deck
+        # the validator wrongly failed; it must be clean.
+        ("encoded target, part present", "../media/my%20image.png",
+         "ppt/media/my%20image.png", 0),
+        # The same encoded target with nothing behind it: still a defect.
+        ("encoded target, part absent", "../media/my%20image.png", None, 1),
+        # And the plain case the check has always caught.
+        ("plain target, part absent", "../media/nope.png", None, 1),
+    ]
+
+    failures = []
+    for label, target, media, expected in cases:
+        problems = [p for p in check_container(_package(target, media)) if ".rels:" in p]
+        if len(problems) != expected:
+            failures.append(
+                f"{label}: expected {expected} relationship problem(s),"
+                f" got {len(problems)}: {problems}"
+            )
+    return failures
+
+
 def main(argv: list[str]) -> int:
     paths = argv[1:]
+    if paths == ["--self-test"]:
+        failures = self_test()
+        for failure in failures:
+            print(f"FAIL self-test: {failure}")
+        if not failures:
+            print("ok   self-test: relationship resolution")
+        return 1 if failures else 0
     if not paths:
         fixtures = os.path.join(ROOT, "tests", "fixtures")
         paths = sorted(

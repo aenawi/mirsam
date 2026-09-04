@@ -81,6 +81,7 @@ validate-fixtures: ## Validate every corpus deck against the ECMA-376 schemas (n
 		echo "uv not installed; alternatively: pip install lxml && python3 scripts/validate-ooxml.py"; \
 		exit 1; \
 	}
+	@uv run --quiet --with lxml scripts/validate-ooxml.py --self-test
 	@uv run --quiet --with lxml scripts/validate-ooxml.py
 
 corpus: ## Regenerate the generated corpus decks (needs uv), then their reports

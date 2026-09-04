@@ -139,6 +139,17 @@ Working towards byte-preserving `repair` for PPTX. See
 
 ### Fixed
 
+- **`make validate-fixtures` reported a part that was there (#21).**
+  `check_container` unquoted a relationship target and then looked for the
+  result among the *raw* ZIP item names, so every percent-encoded part looked
+  missing — `torture.pptx` had been red since it gained one. A relationship
+  resolves against part names, and a part name is the decoded item name;
+  both sides are decoded now, as `check_package` in
+  `make-torture-fixture.py` already did. `scripts/validate-ooxml.py
+  --self-test` guards the repair with three in-memory packages — an encoded
+  target that resolves, and an encoded and a plain one that do not — so a
+  check that stops reporting anything fails as loudly as the bug did.
+  `make validate-fixtures` runs it before the corpus.
 - **The audit was silent on right-to-left paragraphs left on the left edge
   by their layout (#8).** Found by a person opening the repaired corpus deck
   beside its correctly authored twin: the only difference on every Arabic
