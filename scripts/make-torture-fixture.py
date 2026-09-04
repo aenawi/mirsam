@@ -17,7 +17,8 @@ ZIP-container variation that makes byte-preservation hard:
   * mc:AlternateContent, with mc:Ignorable referencing prefixes by name
   * an embedded chart, and the .xlsx workbook it links to (a ZIP inside a ZIP)
   * speaker notes
-  * a non-ASCII part name (ppt/media/صورة.png)
+  * a percent-encoded ZIP item name (ppt/media/my%20image.png), which a
+    rewriter that decodes names would silently rename
   * mixed compression: STORED and DEFLATED at three different levels
   * a distinct timestamp on every entry
   * XML quirks a DOM serialiser silently normalises: CRLF after the prolog,
@@ -394,7 +395,7 @@ SLIDE1_RELS = rels(
     ("rId1", f"{R}/slideLayout", "../slideLayouts/slideLayout1.xml"),
     ("rId2", f"{R}/chart", "../charts/chart1.xml"),
     ("rId3", f"{R}/notesSlide", "../notesSlides/notesSlide1.xml"),
-    ("rId4", f"{R}/image", "../media/%D8%B5%D9%88%D8%B1%D8%A9.png"),
+    ("rId4", f"{R}/image", "../media/my%20image.png"),
 )
 
 NOTES = PROLOG + (
@@ -607,9 +608,14 @@ ENTRIES = [
 ]
 
 BINARY_ENTRIES = [
-    # Non-ASCII part name: "صورة" is Arabic for "image". Forces the UTF-8
-    # general-purpose flag (bit 11) in the local header.
-    ("ppt/media/صورة.png", png_1x1(), STORED, 0, (2026, 9, 2, 8, 24, 0)),
+    # A percent-encoded item name. This used to be an Arabic name, صورة.png,
+    # until a 23-deck bisect on PowerPoint 2016 (#9) showed that PowerPoint
+    # does not resolve a relationship to any part whose name carries a
+    # non-ASCII octet — raw UTF-8 or percent-encoded, in the item name or
+    # the target, Arabic or Latin — and offers to repair the deck. An
+    # encoded space is accepted and keeps the hazard that matters to a
+    # rewriter: a name it must copy as bytes, not decode and re-encode.
+    ("ppt/media/my%20image.png", png_1x1(), STORED, 0, (2026, 9, 2, 8, 24, 0)),
     # A ZIP nested inside the ZIP. Recompressing this is both pointless and
     # detectable.
     ("ppt/embeddings/Microsoft_Excel_Sheet1.xlsx", embedded_xlsx(), STORED, 0, (2026, 9, 2, 8, 24, 2)),
@@ -733,7 +739,7 @@ BROKEN_ENTRIES = one_slide_deck(BROKEN_SLIDE, day=1)
 
 # -------------------------------------------------------------- the self-check
 
-def check_package(path):
+def check_package(path, *, allow_raw_item_names=False):
     """Assert the structural invariants an application checks on open.
 
     Not a schema validator — `scripts/validate-ooxml.py` is that, and it needs
@@ -749,6 +755,12 @@ def check_package(path):
         overrides = set(re.findall(r'<Override PartName="([^"]+)"', types))
 
         for name in sorted(names):
+            if not name.isascii() and not allow_raw_item_names:
+                problems.append(
+                    f"{name}: a non-ASCII item name; PowerPoint 2016 does not"
+                    " resolve a relationship to such a part in any encoding"
+                    " and offers to repair the deck (#9)"
+                )
             if name == "[Content_Types].xml":
                 continue
             ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
@@ -756,6 +768,7 @@ def check_package(path):
                 problems.append(f"no content type declared for {name}")
 
         related = set()
+        parts = {urllib.parse.unquote(n) for n in names}
         for name in sorted(n for n in names if n.endswith(".rels")):
             source_dir = posixpath.dirname(posixpath.dirname(name))
             body = z.read(name).decode("utf-8")
@@ -766,7 +779,7 @@ def check_package(path):
                 resolved = posixpath.normpath(
                     posixpath.join(source_dir, urllib.parse.unquote(target))
                 )
-                if resolved not in names:
+                if resolved not in parts:
                     problems.append(f"{name}: {target} points at a part that is not there")
 
         for name in sorted(n for n in names if n.endswith(".xml")):
@@ -802,7 +815,7 @@ def check_package(path):
         )
 
 
-def write_package(path, entries):
+def write_package(path, entries, **checks):
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     with zipfile.ZipFile(path, "w") as z:
         for name, payload, method, level, when in entries:
@@ -816,7 +829,7 @@ def write_package(path, entries):
         bad = z.testzip()
         assert bad is None, f"corrupt entry: {bad}"
         n = len(z.infolist())
-    check_package(path)
+    check_package(path, **checks)
     print(f"wrote {path}: {n} entries, {os.path.getsize(path)} bytes")
 
 

@@ -71,8 +71,9 @@ fn attribute_values(xml: &str, attribute: &str) -> Vec<String> {
     out
 }
 
-/// Percent-decode a relationship target. Non-ASCII part names are stored
-/// percent-encoded in `.rels`, and `ppt/media/صورة.png` is one of them.
+/// Percent-decode a relationship target or a ZIP item name, so the two
+/// compare as part names. `ppt/media/my%20image.png` in the torture deck
+/// is stored encoded on both sides.
 fn percent_decode(text: &str) -> String {
     let bytes = text.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
@@ -144,7 +145,12 @@ fn every_part_of_every_corpus_deck_is_declared_in_content_types() {
 fn every_relationship_of_every_corpus_deck_resolves() {
     for deck in decks() {
         let pkg = Package::open(&deck).unwrap();
-        let names = pkg.part_names().unwrap();
+        let names: Vec<String> = pkg
+            .part_names()
+            .unwrap()
+            .iter()
+            .map(|n| percent_decode(n))
+            .collect();
         for rels_part in pkg.parts_where(|n| n.ends_with(".rels")).unwrap() {
             let body = pkg.read_text(&rels_part).unwrap();
             // An external target names a URI, not a part.
@@ -161,6 +167,25 @@ fn every_relationship_of_every_corpus_deck_resolves() {
                     name_of(&deck)
                 );
             }
+        }
+    }
+}
+
+#[test]
+fn every_item_name_of_every_corpus_deck_is_ascii() {
+    // PowerPoint 2016 does not resolve a relationship to a part whose name
+    // carries a non-ASCII octet — raw or percent-encoded, Arabic or Latin —
+    // and offers to repair the deck. That was the whole of what made
+    // `torture.pptx` prompt (#9). A corpus deck must be one an application
+    // opens, so no part name here may leave ASCII.
+    for deck in decks() {
+        let pkg = Package::open(&deck).unwrap();
+        for name in pkg.part_names().unwrap() {
+            assert!(
+                name.is_ascii(),
+                "{}: item {name} is not percent-encoded ASCII",
+                name_of(&deck)
+            );
         }
     }
 }

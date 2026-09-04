@@ -187,8 +187,13 @@ fn the_acceptance_deck_carries_every_structure_the_plan_names() {
         "the chart's embedded workbook — a ZIP inside the ZIP — is missing"
     );
     assert!(
-        names.iter().any(|n| !n.is_ascii()),
-        "no non-ASCII part name; the UTF-8 filename flag goes untested"
+        names.iter().any(|n| n.contains('%')),
+        "no percent-encoded item name; a rewriter that decodes names goes untested"
+    );
+    assert!(
+        names.iter().all(|n| n.is_ascii()),
+        "a non-ASCII item name; PowerPoint 2016 does not open a package with \
+         one in any encoding (#9)"
     );
     assert!(
         pkg.read_text("ppt/slides/slide1.xml")
