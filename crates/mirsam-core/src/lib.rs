@@ -46,5 +46,6 @@ pub use fix::{Fix, Repair};
 pub use ports::{DocumentReader, DocumentWriter};
 pub use rules::{Engine, RepairOptions, Rule};
 pub use text::{
-    Alignment, Bullet, Direction, Location, Properties, Resolved, TextUnit, UnitId, UnitKind,
+    Alignment, Bullet, Direction, Location, Origin, Properties, Resolved, TextUnit, UnitId,
+    UnitKind,
 };

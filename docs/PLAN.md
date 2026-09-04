@@ -72,7 +72,11 @@ which the audit did not report —
 for what M2 has to resolve. Answered from the text alone by
 `alignment-unset` and `repair --align`
 ([ADR 0006](adr/0006-judge-from-the-text-not-the-template.md)); the
-layout-aware answer is 2.2.
+layout-aware answer is 2.2, which has since landed. That deck's paragraphs
+keep the template's left alignment because the master says `algn="l"`, and
+`alignment-unset` now says so and names the master. **The application check on
+that answer is `NOT RUN`:** nobody has opened a deck repaired since 2.2 to see
+that a centred title is left centred and a left-edge paragraph moves.
 
 ### 1.1 Round-trip harness `[x]`
 `mirsam-ooxml::package` opens a package once and rewrites it entry by entry,
@@ -390,9 +394,9 @@ the namespace declaration.
 any part, which parts it inherits from and in what order:
 `RelationshipGraph::inheritance_chain` and the `layout_of` / `master_of` /
 `theme_of` accessors over one walk. `PptxDocument::relationships()` is where
-2.2 reaches for it. Nothing in the audit path calls it yet, so no report
-changes and the golden corpus is untouched — this is the graph, not the
-resolution that walks it.
+2.2 reaches for it; `StyleIndex::from_graph` is what does. This item shipped
+alone, so no report changed and the golden corpus was untouched — this is the
+graph, not the resolution that walks it.
 
 **A part's role is read from the graph, not from its directory.** What a part
 *is* comes from the relationship type that points at it: the part
@@ -424,32 +428,79 @@ the graph never reads a directory name, so agreeing with the convention on
 every part of every deck is an independent check of the inference — and the
 test that fails first if it is ever quietly replaced by a name match.
 
-### 2.2 Property chain resolution `[ ]`
-Walk paragraph → placeholder (`p:ph/@type`,`@idx`) → layout → master → theme,
-populating `Resolved::Inherited` instead of `Unset`.
+### 2.2 Property chain resolution `[x]`
+`mirsam-ooxml::inherit` walks paragraph → shape list style → placeholder
+(`p:ph/@type`, `@idx`) on the layout → the same placeholder on the master →
+the master's named text style, populating `Resolved::Inherited` instead of
+`Unset`. A shape that is not a placeholder — a text box, a table cell, a
+chart's fallback drawing — takes the master's `otherStyle`; a notes slide
+takes the notes master's one `p:notesStyle` whatever its placeholder type.
+`Resolved::Inherited` carries an `Origin` naming the part and property that
+supplied the value, and `Evidence` an `inherited_from` rendering it, so a
+finding on an inherited value can be checked without opening the application.
+The resolution is the adapter's, not the core's: `mirsam-core` still performs
+no I/O and still receives units it can judge without knowing what a layout is.
 
-*Acceptance:* a deck with direction set only on the master reports zero
-`direction-unset` warnings — and the same deck reports them today, so the test
-is written first and starts red. And, from #8: a right-to-left paragraph a
-layout centres reports no `alignment-unset` note, while one an English
-layout leaves on the left edge reports it as a finding rather than a note.
+**Direction and alignment only.** [ADR 0007](adr/0007-an-inherited-default-is-not-a-choice.md)
+decides what to conclude from an inherited value by asking whether it agrees
+with the text, and states that test for those two properties; there is no
+decided answer for an inherited language tag, and resolving one would be
+inventing the semantics rather than implementing them. The font slots are
+worse than undecided — a real master writes `<a:cs typeface="+mn-cs"/>`, a
+reference into the theme's `a:fontScheme` — and so is list level: `a:pPr/@lvl`
+selecting between `lvl1pPr` and `lvl9pPr` is 2.3 by name. Level 1 is the level
+a paragraph that states no `@lvl` uses, which is every paragraph in the corpus.
 
-What to conclude from a master whose own body style says `rtl="0"` is settled
-by [ADR 0007](adr/0007-an-inherited-default-is-not-a-choice.md), written and
-accepted ahead of the code: an inherited value is evidence of a choice only
-where it agrees with the text. An English template's untouched `rtl="0"` or
-`algn="l"` under Arabic keeps the finding it has today; an Arabic master's
-`rtl="1"`, and a layout that centres or right-aligns, silence it. Standing
-rule 2 below is restated to match, and `Evidence` gains an `inherited_from`
-naming the part that supplied the value.
+*Acceptance:* met, on both halves. A deck with direction set only on the
+master reports zero `direction-unset` warnings, and a right-to-left paragraph
+a layout centres reports no `alignment-unset` note while one an English layout
+leaves on the left edge still does, naming the part that left it there
+(`tests/inherit.rs`, over hand-built packages). "Starts red" is kept rather
+than described: `the_rtl_mastered_decks_lose_their_paragraph_level_unset_findings`
+audits the same decks a second time with the chain deliberately not read and
+asserts the findings *are* there, so it cannot pass by the decks having had
+nothing to report.
 
-That fixes this item's golden-corpus acceptance in advance: the three
-RTL-mastered decks get quieter, `quarterly-report.pptx` keeps its count,
-`quarterly-report-correct.pptx` stays clean. Every committed report
-regenerates for the new evidence field; that diff must contain nothing else.
+*What the golden corpus measured, against what ADR 0007 predicted.* Three of
+its four predictions held and one did not, which is what makes them worth
+having written down:
 
-### 2.3 List levels and theme fonts `[~]`
-`lvl1pPr`…`lvl9pPr` by `a:pPr/@lvl`; `a:fontScheme` for the `cs` slot.
+| deck | predicted | measured |
+| --- | --- | --- |
+| `broken-arabic.pptx` | loses its paragraph `direction-unset` / `alignment-unset` | 2 and 2 → 0 and 0 ✓ |
+| `clean.pptx` | the same | had none to lose; still none ✓ |
+| `torture.pptx` | the same | 1 and 4 → 0 and 1 ✓ — the one left is in `ppt/charts/chart1.xml`, a part with no layout and no master, where `Unset` is the honest answer |
+| `quarterly-report.pptx` | keeps the count it has today | `direction-unset` 7 → 7 ✓ (same severity, new reason, master named); `alignment-unset` 17 → 13 ✗ |
+| `quarterly-report-correct.pptx` | stays clean | clean ✓ |
+
+The four that went are its centred titles, and they went for the reason
+[ADR 0007 §4](adr/0007-an-inherited-default-is-not-a-choice.md) gives in the
+same breath as the prediction: `algn="ctr"` reads correctly in either
+direction, and silencing it is what retires ADR 0006's cost note that
+`--align` pushes a centred title to the right edge. Reading §4's table and
+the Consequences' "must not get quieter" together, the table is the operative
+rule and the prediction overlooked that this master's `titleStyle` is centred.
+The repair diff shows the same thing from the other side: `repair --align` now
+writes `rtl="1"` where it used to write `rtl="1" algn="r"`.
+
+*One thing §3 costs.* `direction-mismatch` deliberately does *not* judge an
+inherited direction — `judged_direction` falls back to auto-detection rather
+than to `Resolved::effective` — because ADR 0007 §3 says the rule stays a
+finding about a direction the author wrote. Without that, five of
+`quarterly-report.pptx`'s seven `direction-unset` warnings become
+`direction-mismatch` errors, on the strength of an English template's
+untouched `rtl="0"`. Those paragraphs really do render in the wrong order, so
+the tool now says so at warning rather than error severity, naming the master.
+`--strict` still blocks on them.
+
+### 2.3 List levels and theme fonts `[ ]`
+`lvl1pPr`…`lvl9pPr` by `a:pPr/@lvl`; `a:fontScheme` for the `cs` slot. Both
+walk the chain 2.2 built: `inherit::Level` becomes nine levels rather than
+one, and resolving `+mn-cs` needs the theme part, which
+`RelationshipGraph::theme_of` already reaches. An inherited language tag
+belongs here too, once there is a decision about what an inherited `lang`
+that disagrees with the letters means — ADR 0007's agreement test is stated
+for direction and alignment only.
 
 ---
 

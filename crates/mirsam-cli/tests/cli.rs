@@ -346,16 +346,26 @@ fn repairing_the_m0_fixture_clears_every_fixable_finding_and_is_then_a_no_op() {
 
 #[test]
 fn repair_align_writes_the_start_edge_only_when_asked() {
-    // The M0 fixture's Arabic paragraphs carry no alignment of their own.
+    // `quarterly-report.pptx` sits on an English master whose `bodyStyle` and
+    // `otherStyle` say `algn="l"`, so its Arabic paragraphs are left on the
+    // edge a reader does not start from and state no alignment of their own.
     // Without the flag that is a note — reported, never blocking, never
     // written. With it, the start edge is written and the note is gone.
+    //
+    // Not `broken-arabic.pptx`, which since M2 has nothing to report here: it
+    // sits on an `algn="r"` master, and a paragraph that inherits a coherent
+    // alignment is the layout doing its job (ADR 0007 §4).
     let scratch = Scratch::new("align");
 
     let out = run(&[
         "repair",
-        &fixture("broken-arabic.pptx"),
+        &fixture("quarterly-report.pptx"),
         &scratch.path("plain.pptx"),
         "--convert-bullets",
+        // Everything else this deck can be repaired for, so that what remains
+        // under `--strict` below is notes and nothing else.
+        "--font",
+        "Dubai",
         "--format",
         "json",
     ]);
@@ -378,13 +388,19 @@ fn repair_align_writes_the_start_edge_only_when_asked() {
             .all(|d| d["severity"] == "note" && d["fixable"] == false),
         "{notes:#?}"
     );
+    // Scoped to the units this rule is about: the same deck carries
+    // `alignment-incoherent` findings, whose repair writes an alignment
+    // unconditionally and always has.
+    let noted: Vec<&str> = notes.iter().map(|d| d["unit"].as_str().unwrap()).collect();
     assert!(
         !value["repairs"]["applied"]
             .as_array()
             .unwrap()
             .iter()
-            .any(|r| r["fix"]["kind"] == "set_alignment"),
-        "an alignment was written without --align"
+            .any(|r| r["fix"]["kind"] == "set_alignment"
+                && noted.contains(&r["unit"].as_str().unwrap())),
+        "an alignment was written on a noted paragraph without --align: {}",
+        value["repairs"]["applied"]
     );
     // A note never blocks, strict or not.
     assert_eq!(
@@ -394,9 +410,11 @@ fn repair_align_writes_the_start_edge_only_when_asked() {
 
     let out = run(&[
         "repair",
-        &fixture("broken-arabic.pptx"),
+        &fixture("quarterly-report.pptx"),
         &scratch.path("aligned.pptx"),
         "--convert-bullets",
+        "--font",
+        "Dubai",
         "--align",
         "--format",
         "json",
@@ -645,7 +663,10 @@ fn repair_text_output_reports_both_audits_and_what_changed() {
     assert_eq!(out.code, exit::OK, "stderr:\n{}", out.stderr);
     for needle in [
         "mirsam repair",
-        "applied 7 repair(s)",
+        // Five, not the seven before M2: the two title paragraphs inherit
+        // `rtl="1" algn="r"` from this deck's master and need no direction or
+        // alignment written on them.
+        "applied 5 repair(s)",
         "ppt/slides/slide1.xml:paragraph-2:Title 1",
         "remove 1 explicit bidi control(s)",
         "set direction rtl",
@@ -654,7 +675,7 @@ fn repair_text_output_reports_both_audits_and_what_changed() {
         // The two-column body is repaired beside the paragraphs, and is
         // named by its shape rather than by a paragraph number.
         "ppt/slides/slide1.xml:Columns 2",
-        "before  errors=1 warnings=6",
+        "before  errors=1 warnings=4",
         "after   errors=0 warnings=0",
         "PASS",
     ] {

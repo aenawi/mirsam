@@ -38,6 +38,14 @@ programmatically, or render the escaped form as `mirsam explain` does.
 
 `fixable: true` means a mechanical repair exists.
 
+`evidence.inherited_from` names the part and property that supplied a value
+the unit did not state itself — `ppt/slideMasters/slideMaster1.xml
+bodyStyle/lvl1pPr@rtl`. It is present exactly when the finding is about an
+inherited value, which is a defect in the deck's template rather than in the
+paragraph. The repair still writes to the paragraph the finding names: setting
+`rtl="1"` on a master would change every paragraph in the deck, including text
+that is correctly left-to-right.
+
 Unit ids are adapter-issued and opaque: `<part>#p<n>` is a paragraph;
 `<part>#tbl<n>` a table, `<part>#cols<n>` a text body laid out in two or more
 columns, and `<part>#catax<n>` / `#legend<n>` / `#dlbls<n>` a chart's category

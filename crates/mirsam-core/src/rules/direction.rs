@@ -7,14 +7,32 @@ use crate::fix::Fix;
 use crate::script;
 use crate::text::{Alignment, Direction, Resolved, TextUnit, UnitKind};
 
-/// What the renderer will actually use: the declared direction if any,
-/// otherwise UAX#9's first-strong auto-detection.
-fn effective_direction(unit: &TextUnit) -> Direction {
-    unit.props
-        .direction
-        .effective()
-        .copied()
-        .unwrap_or_else(|| bidi::auto_direction(&unit.text))
+/// The direction these rules judge: the one written on the paragraph, or —
+/// where none is — UAX#9's first-strong auto-detection.
+///
+/// Deliberately *not* `Resolved::effective`, which would hand back an
+/// inherited value too. Resolving the chain says what the reader will see; it
+/// does not say that anyone wrote a direction here, and an English template's
+/// untouched `rtl="0"` is not a claim about the Arabic under it. Feeding it to
+/// `direction-mismatch` would turn a deck's warnings into errors on the
+/// strength of a template default. A contradicting inherited value is
+/// `direction-unset`'s finding, at the severity an absent one carries
+/// (ADR 0007 §3).
+fn judged_direction(unit: &TextUnit) -> Direction {
+    match unit.props.direction {
+        Resolved::Explicit(direction) => direction,
+        _ => bidi::auto_direction(&unit.text),
+    }
+}
+
+/// A value taken from a stand-in ancestor, for the tests below: what matters
+/// to a rule is that it was not written on the unit, not which part said it.
+#[cfg(test)]
+fn inherited<T>(value: T) -> Resolved<T> {
+    Resolved::Inherited(
+        value,
+        crate::text::Origin::new("ppt/slideMasters/slideMaster1.xml", "bodyStyle/lvl1pPr"),
+    )
 }
 
 /// The declared direction disagrees with the text's own.
@@ -45,12 +63,17 @@ impl Rule for DirectionMismatch {
             return Vec::new();
         }
         let expected = bidi::dominant_direction(&unit.text);
-        let actual = effective_direction(unit);
+        let actual = judged_direction(unit);
         let evidence = || Evidence {
             logical: Some(unit.text.clone()),
             visual_declared: Some(bidi::resolve(&unit.text, actual).visual),
             visual_expected: Some(bidi::resolve(&unit.text, expected).visual),
             offenders: Vec::new(),
+            // The direction this rule judges is one the author wrote or the
+            // renderer's own auto-detection. Neither has a part to name, and
+            // naming one the rule did not consult would be worse than naming
+            // none.
+            inherited_from: None,
         };
 
         if bidi::order_differs(&unit.text, actual, expected) {
@@ -98,11 +121,19 @@ impl Rule for DirectionMismatch {
     }
 }
 
-/// Arabic text with no direction declared anywhere in the inheritance chain.
+/// Arabic text with no base direction of its own.
 ///
-/// A warning, not an error: the text may well render correctly today via
-/// auto-detection. It is fragile rather than broken, and the distinction is
-/// worth preserving in the report.
+/// Two cases, one finding. The paragraph declares nothing and nothing above it
+/// does either, so the renderer auto-detects — fragile rather than broken, and
+/// a warning. Or the chain does supply a direction, but one that *contradicts*
+/// the letters: an English template's untouched `rtl="0"` under Arabic, which
+/// is the absence of a decision wearing the same clothes as one. Inheritance
+/// resolves the value; it does not establish that anyone chose it
+/// (ADR 0007 §1), so that case is the same warning, and its evidence names the
+/// part that supplied the value so a reader can check the claim.
+///
+/// An inherited direction that *agrees* with the text is the layout doing its
+/// job, and is silent. That is the milestone's acceptance (ADR 0007 §4).
 pub struct DirectionUnset;
 
 impl Rule for DirectionUnset {
@@ -111,18 +142,47 @@ impl Rule for DirectionUnset {
     }
 
     fn description(&self) -> &'static str {
-        "Arabic text relies on renderer auto-detection because no base direction is declared"
+        "Arabic text has no base direction of its own, and none is inherited that agrees with it"
     }
 
     fn check(&self, unit: &TextUnit) -> Vec<Diagnostic> {
-        if !script::has_arabic(&unit.text) || !unit.props.direction.is_unset() {
+        // A direction the author wrote is `direction-mismatch`'s business,
+        // whether it agrees with the text or not.
+        if !script::has_arabic(&unit.text) || unit.props.direction.is_explicit() {
             return Vec::new();
         }
-        // Already reported, with evidence, by DirectionMismatch.
         let expected = bidi::dominant_direction(&unit.text);
-        if bidi::order_differs(&unit.text, bidi::auto_direction(&unit.text), expected) {
+        // An inherited value consistent with the text is a choice; nothing to
+        // report, and the whole point of resolving the chain.
+        if unit.props.direction.effective() == Some(&expected) {
             return Vec::new();
         }
+        // Already reported, with both renderings as evidence, by
+        // DirectionMismatch: with nothing written here it judges the
+        // auto-detected direction, which is what an unset paragraph gets and
+        // what an inherited one gets too (ADR 0007 §3).
+        if bidi::order_differs(&unit.text, judged_direction(unit), expected) {
+            return Vec::new();
+        }
+
+        let (message, evidence) = match (
+            unit.props.direction.effective(),
+            unit.props.direction.origin(),
+        ) {
+            (Some(inherited), Some(origin)) => (
+                format!(
+                    "no base direction of its own; inherits {inherited}, but this reads as {expected}"
+                ),
+                Evidence {
+                    inherited_from: Some(origin.to_string()),
+                    ..Default::default()
+                },
+            ),
+            _ => (
+                "no base direction declared; correct today only by auto-detection".to_string(),
+                Evidence::default(),
+            ),
+        };
 
         vec![
             Diagnostic::new(
@@ -130,22 +190,29 @@ impl Rule for DirectionUnset {
                 Severity::Warning,
                 &unit.id,
                 &unit.location,
-                "no base direction declared; correct today only by auto-detection",
+                message,
             )
+            .with_evidence(evidence)
             .fixable(),
         ]
     }
 
     fn fix(&self, unit: &TextUnit) -> Option<Fix> {
+        // On the paragraph the finding names, never on the master that
+        // supplied the contradicting value: setting `rtl="1"` there would
+        // change every paragraph in the deck (ADR 0007 §6).
         Some(Fix::SetDirection(bidi::dominant_direction(&unit.text)))
     }
 }
 
-/// A hard left alignment on right-to-left text.
+/// A hard left alignment written on right-to-left text.
 ///
 /// Centre, justify and the direction-relative alignments are all legitimate and
-/// are deliberately left alone; so is any alignment merely *inherited*, which
-/// is the author's layout choice rather than a defect.
+/// are deliberately left alone. So is an *inherited* left alignment, which is
+/// not this rule's finding but `alignment-unset`'s: the severity differs
+/// because writing `algn="l"` on Arabic is a mistake someone made, while
+/// inheriting it is a template default nobody aimed at the text
+/// (ADR 0007 §3).
 pub struct AlignmentIncoherent;
 
 impl Rule for AlignmentIncoherent {
@@ -164,8 +231,8 @@ impl Rule for AlignmentIncoherent {
         if bidi::dominant_direction(&unit.text) != Direction::Rtl {
             return Vec::new();
         }
-        // Only an *explicit* left alignment is a finding. An inherited one
-        // belongs to the layout and is none of this tool's business.
+        // Only a left alignment the author *wrote* is this finding. An
+        // inherited one is `alignment-unset`'s, at note severity.
         let Resolved::Explicit(alignment) = unit.props.alignment else {
             return Vec::new();
         };
@@ -197,17 +264,24 @@ impl Rule for AlignmentIncoherent {
     }
 }
 
-/// Right-to-left text with no alignment of its own.
+/// Right-to-left text with no alignment of its own, and none inherited that
+/// reads correctly.
 ///
-/// The paragraph takes its alignment from a layout the adapter cannot yet
-/// read (M2). On a left-to-right template that is the left edge — the very
-/// thing `alignment-incoherent` reports when it is written on the paragraph
-/// — and on a centred title it is the design. The tool cannot tell which
-/// from inside the paragraph, so this is a note: it never blocks, and it is
-/// repaired only when the caller asks with `RepairOptions::align`. Judged
-/// from the text alone, by decision (ADR 0006). It fires on `Unset`, never on
-/// `Inherited`, so invariant 2 holds: once M2 resolves the chain, a layout
-/// that centres or right-aligns the paragraph silences it.
+/// Where the chain supplies nothing, the renderer's own default decides, and
+/// on a left-to-right template that is the left edge — the very thing
+/// `alignment-incoherent` reports when it is written on the paragraph. Where
+/// the chain supplies `algn="l"`, the reader really does start on the edge
+/// they do not read from, and that is reported for the same reason: an
+/// inherited default is not the author's choice (ADR 0007 §1).
+///
+/// A centred or right-aligned inherited value is silent. A layout that centres
+/// a title has made a design decision that reads correctly in either
+/// direction, and this is the case that earns the distinction — it is what
+/// retires ADR 0006's cost note that `--align` pushes such a title to the
+/// right edge.
+///
+/// A note either way: it never blocks, and it is repaired only when the caller
+/// asks with `RepairOptions::align`.
 pub struct AlignmentUnset {
     /// Whether the caller asked for the repair.
     pub align: bool,
@@ -219,27 +293,46 @@ impl Rule for AlignmentUnset {
     }
 
     fn description(&self) -> &'static str {
-        "Right-to-left text has no alignment of its own and takes one from a layout the tool cannot yet read"
+        "Right-to-left text has no alignment of its own, and none is inherited that reads correctly"
     }
 
     fn check(&self, unit: &TextUnit) -> Vec<Diagnostic> {
         if !script::has_arabic(&unit.text)
             || bidi::dominant_direction(&unit.text) != Direction::Rtl
-            || !unit.props.alignment.is_unset()
+            // An alignment the author wrote is `alignment-incoherent`'s business.
+            || unit.props.alignment.is_explicit()
         {
             return Vec::new();
         }
-        let diagnostic = Diagnostic::new(
-            self.id(),
-            Severity::Note,
-            &unit.id,
-            &unit.location,
-            "no alignment declared; a left-to-right layout places this on the left edge",
-        )
-        .with_evidence(Evidence {
-            logical: Some(unit.text.clone()),
-            ..Default::default()
-        });
+        // Only a hard `Left` contradicts right-to-left text; centre, justify
+        // and the direction-relative alignments all read correctly.
+        if unit
+            .props
+            .alignment
+            .effective()
+            .is_some_and(|a| a.is_rtl_coherent())
+        {
+            return Vec::new();
+        }
+
+        let (message, inherited_from) = match unit.props.alignment.origin() {
+            Some(origin) => (
+                "no alignment of its own; the alignment it inherits is left, \
+                 the edge a right-to-left reader does not start from",
+                Some(origin.to_string()),
+            ),
+            None => (
+                "no alignment declared; a left-to-right layout places this on the left edge",
+                None,
+            ),
+        };
+        let diagnostic =
+            Diagnostic::new(self.id(), Severity::Note, &unit.id, &unit.location, message)
+                .with_evidence(Evidence {
+                    logical: Some(unit.text.clone()),
+                    inherited_from,
+                    ..Default::default()
+                });
         vec![if self.align {
             diagnostic.fixable()
         } else {
@@ -314,8 +407,11 @@ impl Rule for ContainerDirection {
         let (subject, reads, consequence) = wording(unit.kind);
         let expected = bidi::dominant_direction(&unit.text);
         let message = match unit.props.direction {
-            // The container's design, never a finding.
-            Resolved::Inherited(_) => return Vec::new(),
+            // The container's design, never a finding. A container has no
+            // inheritance chain of the shape 2.2 resolves — a table's `rtl`
+            // and a body's `rtlCol` are stated on the container or not at all
+            // — so this arm is unaffected by it (ADR 0007, consequences).
+            Resolved::Inherited(..) => return Vec::new(),
             Resolved::Explicit(declared) if declared == expected => return Vec::new(),
             // Left-to-right is what an undeclared container gets, and is right.
             Resolved::Unset if expected == Direction::Ltr => return Vec::new(),
@@ -438,14 +534,14 @@ mod container_direction_tests {
     fn a_correct_inherited_or_english_container_is_silent() {
         for u in [
             table(ARABIC, Resolved::Explicit(Direction::Rtl)),
-            table(ARABIC, Resolved::Inherited(Direction::Ltr)),
+            table(ARABIC, inherited(Direction::Ltr)),
             table("Metric\nQ3\nQ4", Resolved::Unset),
             table(
                 "Metric\nThird quarter (قطاع الطاقة)\nFourth quarter",
                 Resolved::Unset,
             ),
             columns(ARABIC, Resolved::Explicit(Direction::Rtl)),
-            columns(ARABIC, Resolved::Inherited(Direction::Ltr)),
+            columns(ARABIC, inherited(Direction::Ltr)),
             columns("Two columns of English prose", Resolved::Unset),
         ] {
             assert!(ContainerDirection.check(&u).is_empty(), "{u:#?}");
@@ -522,9 +618,9 @@ mod direction_tier_tests {
 
     #[test]
     fn the_warning_tier_needs_a_direction_the_author_wrote() {
-        // Absent is direction-unset's finding; inherited is the container's
-        // design and never a finding of this rule.
-        for direction in [Resolved::Unset, Resolved::Inherited(Direction::Ltr)] {
+        // Absent is direction-unset's finding, and so is inherited: an
+        // inherited value is not one anyone wrote here.
+        for direction in [Resolved::Unset, inherited(Direction::Ltr)] {
             assert!(
                 DirectionMismatch
                     .check(&unit("التقرير الفصلي", direction))
@@ -536,6 +632,67 @@ mod direction_tier_tests {
                 .check(&unit("التقرير الفصلي", Resolved::Explicit(Direction::Rtl)))
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn an_inherited_contradiction_does_not_escalate_a_warning_into_an_error() {
+        // ADR 0007 §3. This text reorders differently under the two
+        // directions, so judging it by the master's `rtl="0"` would make it
+        // an error. The finding stays `direction-unset`'s warning, at the
+        // severity an absent direction carries, and it names the part.
+        let text = "ارتفع الأداء بنسبة 25% في Q4 2026.";
+        let u = unit(text, inherited(Direction::Ltr));
+        assert!(DirectionMismatch.check(&u).is_empty(), "{u:#?}");
+
+        let found = DirectionUnset.check(&u);
+        assert_eq!(found.len(), 1, "{found:#?}");
+        assert_eq!(found[0].severity, Severity::Warning);
+        assert_eq!(
+            found[0].evidence.inherited_from.as_deref(),
+            Some("ppt/slideMasters/slideMaster1.xml bodyStyle/lvl1pPr")
+        );
+        // Written on the paragraph the finding names, never on the master
+        // that supplied the value (ADR 0007 §6).
+        assert_eq!(
+            DirectionUnset.fix(&u),
+            Some(Fix::SetDirection(Direction::Rtl))
+        );
+
+        // The same text with the direction actually written is still an error.
+        let written = unit(text, Resolved::Explicit(Direction::Ltr));
+        assert_eq!(
+            DirectionMismatch.check(&written)[0].severity,
+            Severity::Error
+        );
+    }
+
+    #[test]
+    fn an_inherited_direction_that_agrees_with_the_text_is_silent() {
+        // The case invariant 2 was written to protect: Arabic under an Arabic
+        // master, which no rule may report.
+        let u = unit("التقرير الفصلي", inherited(Direction::Rtl));
+        assert!(DirectionUnset.check(&u).is_empty(), "{u:#?}");
+        assert!(DirectionMismatch.check(&u).is_empty(), "{u:#?}");
+
+        // And the same for English under an English master.
+        let english = unit("Quarterly report", inherited(Direction::Ltr));
+        assert!(DirectionUnset.check(&english).is_empty());
+    }
+
+    #[test]
+    fn nothing_declared_anywhere_still_reads_as_auto_detection() {
+        // The message an unset paragraph carries does not change with M2, and
+        // it names no part, because none supplied a value.
+        let found = DirectionUnset.check(&unit("التقرير الفصلي", Resolved::Unset));
+        assert_eq!(found.len(), 1, "{found:#?}");
+        assert!(
+            found[0]
+                .message
+                .contains("correct today only by auto-detection"),
+            "{:?}",
+            found[0].message
+        );
+        assert_eq!(found[0].evidence.inherited_from, None);
     }
 
     #[test]
@@ -580,12 +737,11 @@ mod alignment_unset_tests {
     }
 
     #[test]
-    fn an_alignment_the_author_wrote_or_inherited_is_not_this_finding() {
+    fn an_alignment_the_author_wrote_is_not_this_finding() {
         let rule = AlignmentUnset { align: true };
         for alignment in [
             Resolved::Explicit(Alignment::Center),
             Resolved::Explicit(Alignment::Left), // alignment-incoherent's
-            Resolved::Inherited(Alignment::Left), // invariant 2
         ] {
             assert!(
                 rule.check(&unit("التقرير الفصلي", alignment.clone()))
@@ -593,6 +749,49 @@ mod alignment_unset_tests {
                 "{alignment:?}"
             );
         }
+    }
+
+    #[test]
+    fn an_inherited_alignment_that_reads_correctly_is_silent() {
+        // ADR 0007 §4. A layout that centres or right-aligns has made a
+        // decision that reads correctly right-to-left, and silencing it is
+        // what retires ADR 0006's cost note about `--align` pushing a centred
+        // title to the right edge.
+        let rule = AlignmentUnset { align: true };
+        for alignment in [
+            Alignment::Center,
+            Alignment::Right,
+            Alignment::Start,
+            Alignment::Justify,
+        ] {
+            assert!(
+                rule.check(&unit("التقرير الفصلي", inherited(alignment)))
+                    .is_empty(),
+                "{alignment:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_inherited_left_alignment_is_reported_and_names_its_source() {
+        // An English template's untouched `algn="l"` under Arabic puts the
+        // text on the edge a reader does not start from. Same note severity
+        // as an absent alignment (ADR 0007 §3), and the part is named so the
+        // claim can be checked without opening the application.
+        let rule = AlignmentUnset { align: true };
+        let u = unit("التقرير الفصلي", inherited(Alignment::Left));
+        let found = rule.check(&u);
+        assert_eq!(found.len(), 1, "{found:#?}");
+        assert_eq!(found[0].severity, Severity::Note);
+        assert_eq!(
+            found[0].evidence.inherited_from.as_deref(),
+            Some("ppt/slideMasters/slideMaster1.xml bodyStyle/lvl1pPr")
+        );
+        assert_eq!(rule.fix(&u), Some(Fix::SetAlignment(Alignment::Start)));
+
+        // Still a note, and still not repaired unless the caller asks.
+        let found = AlignmentUnset { align: false }.check(&u);
+        assert!(!found[0].fixable);
     }
 
     #[test]

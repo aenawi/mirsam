@@ -4,6 +4,7 @@
     "diagnostics": [
       {
         "evidence": {
+          "inherited_from": null,
           "logical": "• بند أول‏",
           "offenders": [
             "RIGHT-TO-LEFT MARK"
@@ -24,6 +25,7 @@
       },
       {
         "evidence": {
+          "inherited_from": null,
           "logical": "العمود الأول من النص المتصل.\nالعمود الثاني من النص المتصل.",
           "offenders": [],
           "visual_declared": null,
@@ -42,42 +44,7 @@
       },
       {
         "evidence": {
-          "logical": null,
-          "offenders": [],
-          "visual_declared": null,
-          "visual_expected": null
-        },
-        "fixable": true,
-        "location": {
-          "container": "Title 1",
-          "paragraph": 1,
-          "part": "ppt/slides/slide1.xml"
-        },
-        "message": "no base direction declared; correct today only by auto-detection",
-        "rule": "direction-unset",
-        "severity": "warning",
-        "unit": "ppt/slides/slide1.xml#p1"
-      },
-      {
-        "evidence": {
-          "logical": null,
-          "offenders": [],
-          "visual_declared": null,
-          "visual_expected": null
-        },
-        "fixable": true,
-        "location": {
-          "container": "Title 1",
-          "paragraph": 2,
-          "part": "ppt/slides/slide1.xml"
-        },
-        "message": "no base direction declared; correct today only by auto-detection",
-        "rule": "direction-unset",
-        "severity": "warning",
-        "unit": "ppt/slides/slide1.xml#p2"
-      },
-      {
-        "evidence": {
+          "inherited_from": null,
           "logical": null,
           "offenders": [],
           "visual_declared": null,
@@ -96,6 +63,7 @@
       },
       {
         "evidence": {
+          "inherited_from": null,
           "logical": null,
           "offenders": [],
           "visual_declared": null,
@@ -114,6 +82,7 @@
       },
       {
         "evidence": {
+          "inherited_from": null,
           "logical": null,
           "offenders": [],
           "visual_declared": null,
@@ -129,42 +98,6 @@
         "rule": "literal-bullet",
         "severity": "warning",
         "unit": "ppt/slides/slide1.xml#p2"
-      },
-      {
-        "evidence": {
-          "logical": "ارتفع الأداء 25% في Q4",
-          "offenders": [],
-          "visual_declared": null,
-          "visual_expected": null
-        },
-        "fixable": false,
-        "location": {
-          "container": "Title 1",
-          "paragraph": 1,
-          "part": "ppt/slides/slide1.xml"
-        },
-        "message": "no alignment declared; a left-to-right layout places this on the left edge",
-        "rule": "alignment-unset",
-        "severity": "note",
-        "unit": "ppt/slides/slide1.xml#p1"
-      },
-      {
-        "evidence": {
-          "logical": "• بند أول‏",
-          "offenders": [],
-          "visual_declared": null,
-          "visual_expected": null
-        },
-        "fixable": false,
-        "location": {
-          "container": "Title 1",
-          "paragraph": 2,
-          "part": "ppt/slides/slide1.xml"
-        },
-        "message": "no alignment declared; a left-to-right layout places this on the left edge",
-        "rule": "alignment-unset",
-        "severity": "note",
-        "unit": "ppt/slides/slide1.xml#p2"
       }
     ],
     "file": "broken-arabic.pptx",
@@ -174,17 +107,16 @@
       "arabic_units": 5,
       "errors": 1,
       "mixed_units": 1,
-      "notes": 2,
+      "notes": 0,
       "units_scanned": 5,
-      "warnings": 6
+      "warnings": 4
     }
   },
   "changed_parts": {
     "ppt/slides/slide1.xml": [
-      "+<a:pPr rtl=\"1\" algn=\"r\"/>",
       "-<a:rPr lang=\"en-US\"/>",
       "+<a:rPr lang=\"ar-SA\"/>",
-      "+<a:pPr rtl=\"1\" algn=\"r\" marR=\"342900\" indent=\"-342900\">",
+      "+<a:pPr marR=\"342900\" indent=\"-342900\">",
       "+<a:buChar char=\"•\"/>",
       "+</a:pPr>",
       "-<a:rPr lang=\"en-US\"/>",
@@ -218,6 +150,7 @@
       "diagnostics": [
         {
           "evidence": {
+            "inherited_from": null,
             "logical": "• بند أول‏",
             "offenders": [
               "RIGHT-TO-LEFT MARK"
@@ -238,6 +171,7 @@
         },
         {
           "evidence": {
+            "inherited_from": null,
             "logical": "العمود الأول من النص المتصل.\nالعمود الثاني من النص المتصل.",
             "offenders": [],
             "visual_declared": null,
@@ -256,42 +190,7 @@
         },
         {
           "evidence": {
-            "logical": null,
-            "offenders": [],
-            "visual_declared": null,
-            "visual_expected": null
-          },
-          "fixable": true,
-          "location": {
-            "container": "Title 1",
-            "paragraph": 1,
-            "part": "ppt/slides/slide1.xml"
-          },
-          "message": "no base direction declared; correct today only by auto-detection",
-          "rule": "direction-unset",
-          "severity": "warning",
-          "unit": "ppt/slides/slide1.xml#p1"
-        },
-        {
-          "evidence": {
-            "logical": null,
-            "offenders": [],
-            "visual_declared": null,
-            "visual_expected": null
-          },
-          "fixable": true,
-          "location": {
-            "container": "Title 1",
-            "paragraph": 2,
-            "part": "ppt/slides/slide1.xml"
-          },
-          "message": "no base direction declared; correct today only by auto-detection",
-          "rule": "direction-unset",
-          "severity": "warning",
-          "unit": "ppt/slides/slide1.xml#p2"
-        },
-        {
-          "evidence": {
+            "inherited_from": null,
             "logical": null,
             "offenders": [],
             "visual_declared": null,
@@ -310,6 +209,7 @@
         },
         {
           "evidence": {
+            "inherited_from": null,
             "logical": null,
             "offenders": [],
             "visual_declared": null,
@@ -328,6 +228,7 @@
         },
         {
           "evidence": {
+            "inherited_from": null,
             "logical": null,
             "offenders": [],
             "visual_declared": null,
@@ -343,51 +244,15 @@
           "rule": "literal-bullet",
           "severity": "warning",
           "unit": "ppt/slides/slide1.xml#p2"
-        },
-        {
-          "evidence": {
-            "logical": "ارتفع الأداء 25% في Q4",
-            "offenders": [],
-            "visual_declared": null,
-            "visual_expected": null
-          },
-          "fixable": true,
-          "location": {
-            "container": "Title 1",
-            "paragraph": 1,
-            "part": "ppt/slides/slide1.xml"
-          },
-          "message": "no alignment declared; a left-to-right layout places this on the left edge",
-          "rule": "alignment-unset",
-          "severity": "note",
-          "unit": "ppt/slides/slide1.xml#p1"
-        },
-        {
-          "evidence": {
-            "logical": "• بند أول‏",
-            "offenders": [],
-            "visual_declared": null,
-            "visual_expected": null
-          },
-          "fixable": true,
-          "location": {
-            "container": "Title 1",
-            "paragraph": 2,
-            "part": "ppt/slides/slide1.xml"
-          },
-          "message": "no alignment declared; a left-to-right layout places this on the left edge",
-          "rule": "alignment-unset",
-          "severity": "note",
-          "unit": "ppt/slides/slide1.xml#p2"
         }
       ],
       "summary": {
         "arabic_units": 5,
         "errors": 1,
         "mixed_units": 1,
-        "notes": 2,
+        "notes": 0,
         "units_scanned": 5,
-        "warnings": 6
+        "warnings": 4
       }
     },
     "blocking": false,
@@ -404,20 +269,6 @@
       "applied": [
         {
           "fix": {
-            "kind": "set_direction",
-            "value": "rtl"
-          },
-          "unit": "ppt/slides/slide1.xml#p1"
-        },
-        {
-          "fix": {
-            "kind": "set_alignment",
-            "value": "start"
-          },
-          "unit": "ppt/slides/slide1.xml#p1"
-        },
-        {
-          "fix": {
             "kind": "set_language",
             "value": "ar-SA"
           },
@@ -429,20 +280,6 @@
             "value": [
               17
             ]
-          },
-          "unit": "ppt/slides/slide1.xml#p2"
-        },
-        {
-          "fix": {
-            "kind": "set_direction",
-            "value": "rtl"
-          },
-          "unit": "ppt/slides/slide1.xml#p2"
-        },
-        {
-          "fix": {
-            "kind": "set_alignment",
-            "value": "start"
           },
           "unit": "ppt/slides/slide1.xml#p2"
         },
