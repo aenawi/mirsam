@@ -377,9 +377,11 @@ impl StyleSheet {
                 }
 
                 Event::End(_) => {
-                    // Well-formedness is quick-xml's to enforce, so a pop here
-                    // always answers the start that pushed it.
-                    if stack.pop().as_deref() == Some("w:style") {
+                    // Popped unconditionally, and before anything is decided:
+                    // well-formedness is quick-xml's to enforce, so this always
+                    // answers the start that pushed it.
+                    let closed = stack.pop();
+                    if closed.as_deref() == Some("w:style") {
                         sheet.commit(open.take());
                     }
                 }
