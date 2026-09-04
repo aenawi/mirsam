@@ -5,20 +5,56 @@
 
 use std::fmt;
 
+/// Where an inherited value came from: the part that stated it, and the
+/// property within that part that did.
+///
+/// A finding on an inherited value has to name its source, or a reviewer
+/// cannot check the claim without opening the application (invariant 6, and
+/// ADR 0007 §5). `ppt/slideMasters/slideMaster1.xml bodyStyle/lvl1pPr@rtl` is
+/// one look.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+pub struct Origin {
+    /// The part that stated the value: `ppt/slideLayouts/slideLayout1.xml`.
+    pub part: String,
+    /// The property path within it: `titleStyle/lvl1pPr@algn`.
+    pub property: String,
+}
+
+impl Origin {
+    pub fn new(part: impl Into<String>, property: impl Into<String>) -> Self {
+        Self {
+            part: part.into(),
+            property: property.into(),
+        }
+    }
+}
+
+impl fmt::Display for Origin {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} {}", self.part, self.property)
+    }
+}
+
 /// A document property that may be stated outright, inherited from an ancestor
 /// (a PowerPoint layout/master, a CSS cascade, a Word style), or genuinely absent.
 ///
 /// Modelling inheritance explicitly is what keeps the engine from reporting an
 /// inherited-and-correct value as a missing one — the single largest source of
 /// false positives in attribute-only Arabic linters.
+///
+/// Resolving a value is not the same as establishing that anyone chose it: an
+/// English template's untouched `rtl="0"` under Arabic is a default nobody
+/// aimed at the text. So an inherited value carries its [`Origin`], and a rule
+/// fires on it only where it *contradicts* the text (ADR 0007).
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(tag = "state", content = "value"))]
 pub enum Resolved<T> {
     /// Set directly on this unit.
     Explicit(T),
-    /// Not set here, but supplied by an ancestor. Correct, and must not be "fixed".
-    Inherited(T),
+    /// Not set here, but supplied by the named ancestor.
+    Inherited(T, Origin),
     /// Not set anywhere in the chain. The renderer falls back to its own default.
     Unset,
 }
@@ -27,8 +63,17 @@ impl<T> Resolved<T> {
     /// The effective value, whether stated here or inherited.
     pub fn effective(&self) -> Option<&T> {
         match self {
-            Self::Explicit(v) | Self::Inherited(v) => Some(v),
+            Self::Explicit(v) | Self::Inherited(v, _) => Some(v),
             Self::Unset => None,
+        }
+    }
+
+    /// Where an inherited value came from; `None` for one stated here or
+    /// absent everywhere.
+    pub fn origin(&self) -> Option<&Origin> {
+        match self {
+            Self::Inherited(_, origin) => Some(origin),
+            _ => None,
         }
     }
 
@@ -38,6 +83,10 @@ impl<T> Resolved<T> {
 
     pub fn is_explicit(&self) -> bool {
         matches!(self, Self::Explicit(_))
+    }
+
+    pub fn is_inherited(&self) -> bool {
+        matches!(self, Self::Inherited(..))
     }
 }
 

@@ -49,10 +49,16 @@ resolves paragraph → placeholder → layout → master → theme.
 - Theme font scheme for the complex-script slot.
 
 **Done when** a deck whose direction is set only on the slide master reports
-zero `direction-unset` warnings.
+zero `direction-unset` warnings. **Met** by
+[PLAN](PLAN.md) 2.2, on the corpus and on hand-built packages; the two
+remaining bullets above are 2.3, and the milestone ships when they do.
 
 This is where the `Resolved<T>` design pays for itself, and where a linter that
-lacks it starts producing noise users learn to ignore.
+lacks it starts producing noise users learn to ignore. It is also where the
+design needed a correction: resolving a value says what the reader will see, not
+that anyone chose it, so an inherited value silences a finding only where it
+agrees with the text
+([ADR 0007](adr/0007-an-inherited-default-is-not-a-choice.md)).
 
 ---
 

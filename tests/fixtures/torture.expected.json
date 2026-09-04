@@ -4,6 +4,7 @@
     "diagnostics": [
       {
         "evidence": {
+          "inherited_from": null,
           "logical": "• بند أول‏",
           "offenders": [
             "RIGHT-TO-LEFT MARK"
@@ -24,6 +25,7 @@
       },
       {
         "evidence": {
+          "inherited_from": null,
           "logical": "ارتفع الأداء بنسبة 25% في Q4 2026.",
           "offenders": [],
           "visual_declared": "يف %25 ةبسنب ءادألا عفترا Q4 2026.",
@@ -42,6 +44,7 @@
       },
       {
         "evidence": {
+          "inherited_from": null,
           "logical": null,
           "offenders": [],
           "visual_declared": null,
@@ -60,6 +63,7 @@
       },
       {
         "evidence": {
+          "inherited_from": null,
           "logical": "الربع الأول\nالربع الثاني\nالربع الثالث\nالربع الرابع",
           "offenders": [],
           "visual_declared": null,
@@ -78,24 +82,7 @@
       },
       {
         "evidence": {
-          "logical": null,
-          "offenders": [],
-          "visual_declared": null,
-          "visual_expected": null
-        },
-        "fixable": true,
-        "location": {
-          "container": "Chart Fallback",
-          "paragraph": 2,
-          "part": "ppt/slides/slide1.xml"
-        },
-        "message": "no base direction declared; correct today only by auto-detection",
-        "rule": "direction-unset",
-        "severity": "warning",
-        "unit": "ppt/slides/slide1.xml#p2"
-      },
-      {
-        "evidence": {
+          "inherited_from": null,
           "logical": null,
           "offenders": [],
           "visual_declared": null,
@@ -114,6 +101,7 @@
       },
       {
         "evidence": {
+          "inherited_from": null,
           "logical": null,
           "offenders": [],
           "visual_declared": null,
@@ -132,6 +120,7 @@
       },
       {
         "evidence": {
+          "inherited_from": null,
           "logical": null,
           "offenders": [],
           "visual_declared": null,
@@ -150,6 +139,7 @@
       },
       {
         "evidence": {
+          "inherited_from": null,
           "logical": null,
           "offenders": [],
           "visual_declared": null,
@@ -168,6 +158,7 @@
       },
       {
         "evidence": {
+          "inherited_from": null,
           "logical": "الإيرادات حسب الربع",
           "offenders": [],
           "visual_declared": null,
@@ -183,60 +174,6 @@
         "rule": "alignment-unset",
         "severity": "note",
         "unit": "ppt/charts/chart1.xml#p1"
-      },
-      {
-        "evidence": {
-          "logical": "ملاحظات المتحدث: راجع الأرقام قبل العرض.",
-          "offenders": [],
-          "visual_declared": null,
-          "visual_expected": null
-        },
-        "fixable": false,
-        "location": {
-          "container": "Notes Placeholder 1",
-          "paragraph": 1,
-          "part": "ppt/notesSlides/notesSlide1.xml"
-        },
-        "message": "no alignment declared; a left-to-right layout places this on the left edge",
-        "rule": "alignment-unset",
-        "severity": "note",
-        "unit": "ppt/notesSlides/notesSlide1.xml#p1"
-      },
-      {
-        "evidence": {
-          "logical": "رسم بياني",
-          "offenders": [],
-          "visual_declared": null,
-          "visual_expected": null
-        },
-        "fixable": false,
-        "location": {
-          "container": "Chart Fallback",
-          "paragraph": 2,
-          "part": "ppt/slides/slide1.xml"
-        },
-        "message": "no alignment declared; a left-to-right layout places this on the left edge",
-        "rule": "alignment-unset",
-        "severity": "note",
-        "unit": "ppt/slides/slide1.xml#p2"
-      },
-      {
-        "evidence": {
-          "logical": "• بند أول‏",
-          "offenders": [],
-          "visual_declared": null,
-          "visual_expected": null
-        },
-        "fixable": false,
-        "location": {
-          "container": "Body 3",
-          "paragraph": 3,
-          "part": "ppt/slides/slide1.xml"
-        },
-        "message": "no alignment declared; a left-to-right layout places this on the left edge",
-        "rule": "alignment-unset",
-        "severity": "note",
-        "unit": "ppt/slides/slide1.xml#p3"
       }
     ],
     "file": "torture.pptx",
@@ -246,9 +183,9 @@
       "arabic_units": 6,
       "errors": 2,
       "mixed_units": 1,
-      "notes": 4,
+      "notes": 1,
       "units_scanned": 6,
-      "warnings": 7
+      "warnings": 6
     }
   },
   "changed_parts": {
@@ -264,18 +201,13 @@
       "+</a:p>",
       "+</c:txPr>"
     ],
-    "ppt/notesSlides/notesSlide1.xml": [
-      "-<a:pPr rtl=\"1\"/>",
-      "+<a:pPr rtl=\"1\" algn=\"r\"/>"
-    ],
     "ppt/slides/slide1.xml": [
       "-<a:pPr rtl=\"0\" algn='l'/>",
       "+<a:pPr rtl=\"1\" algn='r'/>",
       "-<a:rPr lang=\"en-US\" dirty=\"0\"/>",
       "+<a:rPr lang=\"ar-SA\" dirty=\"0\"/>",
-      "+<a:pPr rtl=\"1\" algn=\"r\"/>",
       "+<a:rPr lang=\"ar-SA\"/>",
-      "+<a:pPr algn=\"r\" marR=\"342900\" indent=\"-342900\">",
+      "+<a:pPr marR=\"342900\" indent=\"-342900\">",
       "+<a:buChar char=\"•\"/>",
       "+</a:pPr>",
       "-<a:rPr lang=\"en-US\"/>",
@@ -307,6 +239,7 @@
       "diagnostics": [
         {
           "evidence": {
+            "inherited_from": null,
             "logical": "• بند أول‏",
             "offenders": [
               "RIGHT-TO-LEFT MARK"
@@ -327,6 +260,7 @@
         },
         {
           "evidence": {
+            "inherited_from": null,
             "logical": "ارتفع الأداء بنسبة 25% في Q4 2026.",
             "offenders": [],
             "visual_declared": "يف %25 ةبسنب ءادألا عفترا Q4 2026.",
@@ -345,6 +279,7 @@
         },
         {
           "evidence": {
+            "inherited_from": null,
             "logical": null,
             "offenders": [],
             "visual_declared": null,
@@ -363,6 +298,7 @@
         },
         {
           "evidence": {
+            "inherited_from": null,
             "logical": "الربع الأول\nالربع الثاني\nالربع الثالث\nالربع الرابع",
             "offenders": [],
             "visual_declared": null,
@@ -381,24 +317,7 @@
         },
         {
           "evidence": {
-            "logical": null,
-            "offenders": [],
-            "visual_declared": null,
-            "visual_expected": null
-          },
-          "fixable": true,
-          "location": {
-            "container": "Chart Fallback",
-            "paragraph": 2,
-            "part": "ppt/slides/slide1.xml"
-          },
-          "message": "no base direction declared; correct today only by auto-detection",
-          "rule": "direction-unset",
-          "severity": "warning",
-          "unit": "ppt/slides/slide1.xml#p2"
-        },
-        {
-          "evidence": {
+            "inherited_from": null,
             "logical": null,
             "offenders": [],
             "visual_declared": null,
@@ -417,6 +336,7 @@
         },
         {
           "evidence": {
+            "inherited_from": null,
             "logical": null,
             "offenders": [],
             "visual_declared": null,
@@ -435,6 +355,7 @@
         },
         {
           "evidence": {
+            "inherited_from": null,
             "logical": null,
             "offenders": [],
             "visual_declared": null,
@@ -453,6 +374,7 @@
         },
         {
           "evidence": {
+            "inherited_from": null,
             "logical": null,
             "offenders": [],
             "visual_declared": null,
@@ -471,6 +393,7 @@
         },
         {
           "evidence": {
+            "inherited_from": null,
             "logical": "الإيرادات حسب الربع",
             "offenders": [],
             "visual_declared": null,
@@ -486,69 +409,15 @@
           "rule": "alignment-unset",
           "severity": "note",
           "unit": "ppt/charts/chart1.xml#p1"
-        },
-        {
-          "evidence": {
-            "logical": "ملاحظات المتحدث: راجع الأرقام قبل العرض.",
-            "offenders": [],
-            "visual_declared": null,
-            "visual_expected": null
-          },
-          "fixable": true,
-          "location": {
-            "container": "Notes Placeholder 1",
-            "paragraph": 1,
-            "part": "ppt/notesSlides/notesSlide1.xml"
-          },
-          "message": "no alignment declared; a left-to-right layout places this on the left edge",
-          "rule": "alignment-unset",
-          "severity": "note",
-          "unit": "ppt/notesSlides/notesSlide1.xml#p1"
-        },
-        {
-          "evidence": {
-            "logical": "رسم بياني",
-            "offenders": [],
-            "visual_declared": null,
-            "visual_expected": null
-          },
-          "fixable": true,
-          "location": {
-            "container": "Chart Fallback",
-            "paragraph": 2,
-            "part": "ppt/slides/slide1.xml"
-          },
-          "message": "no alignment declared; a left-to-right layout places this on the left edge",
-          "rule": "alignment-unset",
-          "severity": "note",
-          "unit": "ppt/slides/slide1.xml#p2"
-        },
-        {
-          "evidence": {
-            "logical": "• بند أول‏",
-            "offenders": [],
-            "visual_declared": null,
-            "visual_expected": null
-          },
-          "fixable": true,
-          "location": {
-            "container": "Body 3",
-            "paragraph": 3,
-            "part": "ppt/slides/slide1.xml"
-          },
-          "message": "no alignment declared; a left-to-right layout places this on the left edge",
-          "rule": "alignment-unset",
-          "severity": "note",
-          "unit": "ppt/slides/slide1.xml#p3"
         }
       ],
       "summary": {
         "arabic_units": 6,
         "errors": 2,
         "mixed_units": 1,
-        "notes": 4,
+        "notes": 1,
         "units_scanned": 6,
-        "warnings": 7
+        "warnings": 6
       }
     },
     "blocking": false,
@@ -579,13 +448,6 @@
         },
         {
           "fix": {
-            "kind": "set_alignment",
-            "value": "start"
-          },
-          "unit": "ppt/notesSlides/notesSlide1.xml#p1"
-        },
-        {
-          "fix": {
             "kind": "set_direction",
             "value": "rtl"
           },
@@ -604,20 +466,6 @@
             "value": "ar-SA"
           },
           "unit": "ppt/slides/slide1.xml#p1"
-        },
-        {
-          "fix": {
-            "kind": "set_direction",
-            "value": "rtl"
-          },
-          "unit": "ppt/slides/slide1.xml#p2"
-        },
-        {
-          "fix": {
-            "kind": "set_alignment",
-            "value": "start"
-          },
-          "unit": "ppt/slides/slide1.xml#p2"
         },
         {
           "fix": {
@@ -632,13 +480,6 @@
             "value": [
               17
             ]
-          },
-          "unit": "ppt/slides/slide1.xml#p3"
-        },
-        {
-          "fix": {
-            "kind": "set_alignment",
-            "value": "start"
           },
           "unit": "ppt/slides/slide1.xml#p3"
         },

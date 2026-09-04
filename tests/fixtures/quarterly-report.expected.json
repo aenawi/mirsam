@@ -4,6 +4,7 @@
     "diagnostics": [
       {
         "evidence": {
+          "inherited_from": null,
           "logical": "تم إطلاق تطبيق Mirsam‏ في الإمارات",
           "offenders": [
             "RIGHT-TO-LEFT MARK"
@@ -24,6 +25,7 @@
       },
       {
         "evidence": {
+          "inherited_from": null,
           "logical": "GPS يعتمد عليه النظام في تتبّع الشحنات",
           "offenders": [],
           "visual_declared": "GPS تانحشلا عّبتت يف ماظنلا هيلع دمتعي",
@@ -42,6 +44,7 @@
       },
       {
         "evidence": {
+          "inherited_from": null,
           "logical": "الملخص التنفيذي: ﺍﻟﺘﻘﺮﻳﺮ ﺍﻟﻔﺼﻠﻲ",
           "offenders": [
             "U+FE8D",
@@ -71,6 +74,7 @@
       },
       {
         "evidence": {
+          "inherited_from": null,
           "logical": null,
           "offenders": [],
           "visual_declared": null,
@@ -89,6 +93,7 @@
       },
       {
         "evidence": {
+          "inherited_from": null,
           "logical": null,
           "offenders": [],
           "visual_declared": null,
@@ -107,6 +112,7 @@
       },
       {
         "evidence": {
+          "inherited_from": null,
           "logical": null,
           "offenders": [],
           "visual_declared": null,
@@ -125,6 +131,7 @@
       },
       {
         "evidence": {
+          "inherited_from": null,
           "logical": null,
           "offenders": [],
           "visual_declared": null,
@@ -143,6 +150,7 @@
       },
       {
         "evidence": {
+          "inherited_from": null,
           "logical": "المؤشر\nالربع الثالث\nالربع الرابع\nالإيرادات (مليون درهم)\n120\n142\nعدد العملاء\n1,850\n2,300\nرضا العملاء NPS\n41\n48",
           "offenders": [],
           "visual_declared": null,
@@ -161,6 +169,7 @@
       },
       {
         "evidence": {
+          "inherited_from": null,
           "logical": "التقرير الفصلي للأداء المؤسسي",
           "offenders": [],
           "visual_declared": "يسسؤملا ءادألل يلصفلا ريرقتلا",
@@ -179,6 +188,7 @@
       },
       {
         "evidence": {
+          "inherited_from": "ppt/slideMasters/slideMaster1.xml bodyStyle/lvl1pPr@rtl",
           "logical": null,
           "offenders": [],
           "visual_declared": null,
@@ -190,13 +200,14 @@
           "paragraph": 2,
           "part": "ppt/slides/slide1.xml"
         },
-        "message": "no base direction declared; correct today only by auto-detection",
+        "message": "no base direction of its own; inherits ltr, but this reads as rtl",
         "rule": "direction-unset",
         "severity": "warning",
         "unit": "ppt/slides/slide1.xml#p2"
       },
       {
         "evidence": {
+          "inherited_from": "ppt/slideMasters/slideMaster1.xml titleStyle/lvl1pPr@rtl",
           "logical": null,
           "offenders": [],
           "visual_declared": null,
@@ -208,13 +219,14 @@
           "paragraph": 1,
           "part": "ppt/slides/slide2.xml"
         },
-        "message": "no base direction declared; correct today only by auto-detection",
+        "message": "no base direction of its own; inherits ltr, but this reads as rtl",
         "rule": "direction-unset",
         "severity": "warning",
         "unit": "ppt/slides/slide2.xml#p1"
       },
       {
         "evidence": {
+          "inherited_from": "ppt/slideMasters/slideMaster1.xml bodyStyle/lvl1pPr@rtl",
           "logical": null,
           "offenders": [],
           "visual_declared": null,
@@ -226,13 +238,14 @@
           "paragraph": 2,
           "part": "ppt/slides/slide2.xml"
         },
-        "message": "no base direction declared; correct today only by auto-detection",
+        "message": "no base direction of its own; inherits ltr, but this reads as rtl",
         "rule": "direction-unset",
         "severity": "warning",
         "unit": "ppt/slides/slide2.xml#p2"
       },
       {
         "evidence": {
+          "inherited_from": "ppt/slideMasters/slideMaster1.xml bodyStyle/lvl1pPr@rtl",
           "logical": null,
           "offenders": [],
           "visual_declared": null,
@@ -244,13 +257,14 @@
           "paragraph": 3,
           "part": "ppt/slides/slide2.xml"
         },
-        "message": "no base direction declared; correct today only by auto-detection",
+        "message": "no base direction of its own; inherits ltr, but this reads as rtl",
         "rule": "direction-unset",
         "severity": "warning",
         "unit": "ppt/slides/slide2.xml#p3"
       },
       {
         "evidence": {
+          "inherited_from": "ppt/slideMasters/slideMaster1.xml bodyStyle/lvl1pPr@rtl",
           "logical": null,
           "offenders": [],
           "visual_declared": null,
@@ -262,13 +276,14 @@
           "paragraph": 4,
           "part": "ppt/slides/slide2.xml"
         },
-        "message": "no base direction declared; correct today only by auto-detection",
+        "message": "no base direction of its own; inherits ltr, but this reads as rtl",
         "rule": "direction-unset",
         "severity": "warning",
         "unit": "ppt/slides/slide2.xml#p4"
       },
       {
         "evidence": {
+          "inherited_from": "ppt/slideMasters/slideMaster1.xml bodyStyle/lvl1pPr@rtl",
           "logical": null,
           "offenders": [],
           "visual_declared": null,
@@ -280,13 +295,14 @@
           "paragraph": 5,
           "part": "ppt/slides/slide2.xml"
         },
-        "message": "no base direction declared; correct today only by auto-detection",
+        "message": "no base direction of its own; inherits ltr, but this reads as rtl",
         "rule": "direction-unset",
         "severity": "warning",
         "unit": "ppt/slides/slide2.xml#p5"
       },
       {
         "evidence": {
+          "inherited_from": "ppt/slideMasters/slideMaster1.xml bodyStyle/lvl1pPr@rtl",
           "logical": null,
           "offenders": [],
           "visual_declared": null,
@@ -298,13 +314,14 @@
           "paragraph": 6,
           "part": "ppt/slides/slide2.xml"
         },
-        "message": "no base direction declared; correct today only by auto-detection",
+        "message": "no base direction of its own; inherits ltr, but this reads as rtl",
         "rule": "direction-unset",
         "severity": "warning",
         "unit": "ppt/slides/slide2.xml#p6"
       },
       {
         "evidence": {
+          "inherited_from": null,
           "logical": null,
           "offenders": [],
           "visual_declared": null,
@@ -323,6 +340,7 @@
       },
       {
         "evidence": {
+          "inherited_from": null,
           "logical": null,
           "offenders": [],
           "visual_declared": null,
@@ -341,6 +359,7 @@
       },
       {
         "evidence": {
+          "inherited_from": null,
           "logical": null,
           "offenders": [],
           "visual_declared": null,
@@ -359,6 +378,7 @@
       },
       {
         "evidence": {
+          "inherited_from": null,
           "logical": null,
           "offenders": [],
           "visual_declared": null,
@@ -377,6 +397,7 @@
       },
       {
         "evidence": {
+          "inherited_from": null,
           "logical": null,
           "offenders": [],
           "visual_declared": null,
@@ -395,6 +416,7 @@
       },
       {
         "evidence": {
+          "inherited_from": null,
           "logical": null,
           "offenders": [],
           "visual_declared": null,
@@ -413,6 +435,7 @@
       },
       {
         "evidence": {
+          "inherited_from": "ppt/notesMasters/notesMaster1.xml notesStyle/lvl1pPr@algn",
           "logical": "ملاحظات المتحدث: ركّز على نمو الإيرادات قبل الانتقال إلى التكاليف.",
           "offenders": [],
           "visual_declared": null,
@@ -424,67 +447,14 @@
           "paragraph": 1,
           "part": "ppt/notesSlides/notesSlide1.xml"
         },
-        "message": "no alignment declared; a left-to-right layout places this on the left edge",
+        "message": "no alignment of its own; the alignment it inherits is left, the edge a right-to-left reader does not start from",
         "rule": "alignment-unset",
         "severity": "note",
         "unit": "ppt/notesSlides/notesSlide1.xml#p1"
       },
       {
         "evidence": {
-          "logical": "التقرير الفصلي للأداء المؤسسي",
-          "offenders": [],
-          "visual_declared": null,
-          "visual_expected": null
-        },
-        "fixable": false,
-        "location": {
-          "container": "Title 1",
-          "paragraph": 1,
-          "part": "ppt/slides/slide1.xml"
-        },
-        "message": "no alignment declared; a left-to-right layout places this on the left edge",
-        "rule": "alignment-unset",
-        "severity": "note",
-        "unit": "ppt/slides/slide1.xml#p1"
-      },
-      {
-        "evidence": {
-          "logical": "إدارة التخطيط الاستراتيجي | Q4 2026",
-          "offenders": [],
-          "visual_declared": null,
-          "visual_expected": null
-        },
-        "fixable": false,
-        "location": {
-          "container": "Subtitle 2",
-          "paragraph": 2,
-          "part": "ppt/slides/slide1.xml"
-        },
-        "message": "no alignment declared; a left-to-right layout places this on the left edge",
-        "rule": "alignment-unset",
-        "severity": "note",
-        "unit": "ppt/slides/slide1.xml#p2"
-      },
-      {
-        "evidence": {
-          "logical": "أبرز النتائج",
-          "offenders": [],
-          "visual_declared": null,
-          "visual_expected": null
-        },
-        "fixable": false,
-        "location": {
-          "container": "Title 1",
-          "paragraph": 1,
-          "part": "ppt/slides/slide2.xml"
-        },
-        "message": "no alignment declared; a left-to-right layout places this on the left edge",
-        "rule": "alignment-unset",
-        "severity": "note",
-        "unit": "ppt/slides/slide2.xml#p1"
-      },
-      {
-        "evidence": {
+          "inherited_from": "ppt/slideMasters/slideMaster1.xml bodyStyle/lvl1pPr@algn",
           "logical": "نمت الإيرادات بنسبة 18% مقارنة بالربع السابق",
           "offenders": [],
           "visual_declared": null,
@@ -496,13 +466,14 @@
           "paragraph": 2,
           "part": "ppt/slides/slide2.xml"
         },
-        "message": "no alignment declared; a left-to-right layout places this on the left edge",
+        "message": "no alignment of its own; the alignment it inherits is left, the edge a right-to-left reader does not start from",
         "rule": "alignment-unset",
         "severity": "note",
         "unit": "ppt/slides/slide2.xml#p2"
       },
       {
         "evidence": {
+          "inherited_from": "ppt/slideMasters/slideMaster1.xml bodyStyle/lvl1pPr@algn",
           "logical": "وارتفع هامش الربح إلى 32%",
           "offenders": [],
           "visual_declared": null,
@@ -514,13 +485,14 @@
           "paragraph": 3,
           "part": "ppt/slides/slide2.xml"
         },
-        "message": "no alignment declared; a left-to-right layout places this on the left edge",
+        "message": "no alignment of its own; the alignment it inherits is left, the edge a right-to-left reader does not start from",
         "rule": "alignment-unset",
         "severity": "note",
         "unit": "ppt/slides/slide2.xml#p3"
       },
       {
         "evidence": {
+          "inherited_from": "ppt/slideMasters/slideMaster1.xml bodyStyle/lvl1pPr@algn",
           "logical": "انخفضت التكاليف التشغيلية بفضل مبادرة ERP الجديدة",
           "offenders": [],
           "visual_declared": null,
@@ -532,13 +504,14 @@
           "paragraph": 4,
           "part": "ppt/slides/slide2.xml"
         },
-        "message": "no alignment declared; a left-to-right layout places this on the left edge",
+        "message": "no alignment of its own; the alignment it inherits is left, the edge a right-to-left reader does not start from",
         "rule": "alignment-unset",
         "severity": "note",
         "unit": "ppt/slides/slide2.xml#p4"
       },
       {
         "evidence": {
+          "inherited_from": "ppt/slideMasters/slideMaster1.xml bodyStyle/lvl1pPr@algn",
           "logical": "• توسّع الفريق إلى 45 موظفاً",
           "offenders": [],
           "visual_declared": null,
@@ -550,13 +523,14 @@
           "paragraph": 5,
           "part": "ppt/slides/slide2.xml"
         },
-        "message": "no alignment declared; a left-to-right layout places this on the left edge",
+        "message": "no alignment of its own; the alignment it inherits is left, the edge a right-to-left reader does not start from",
         "rule": "alignment-unset",
         "severity": "note",
         "unit": "ppt/slides/slide2.xml#p5"
       },
       {
         "evidence": {
+          "inherited_from": "ppt/slideMasters/slideMaster1.xml bodyStyle/lvl1pPr@algn",
           "logical": "تم إطلاق تطبيق Mirsam‏ في الإمارات",
           "offenders": [],
           "visual_declared": null,
@@ -568,31 +542,14 @@
           "paragraph": 6,
           "part": "ppt/slides/slide2.xml"
         },
-        "message": "no alignment declared; a left-to-right layout places this on the left edge",
+        "message": "no alignment of its own; the alignment it inherits is left, the edge a right-to-left reader does not start from",
         "rule": "alignment-unset",
         "severity": "note",
         "unit": "ppt/slides/slide2.xml#p6"
       },
       {
         "evidence": {
-          "logical": "مؤشرات الأداء الرئيسية",
-          "offenders": [],
-          "visual_declared": null,
-          "visual_expected": null
-        },
-        "fixable": false,
-        "location": {
-          "container": "Title 1",
-          "paragraph": 1,
-          "part": "ppt/slides/slide3.xml"
-        },
-        "message": "no alignment declared; a left-to-right layout places this on the left edge",
-        "rule": "alignment-unset",
-        "severity": "note",
-        "unit": "ppt/slides/slide3.xml#p1"
-      },
-      {
-        "evidence": {
+          "inherited_from": "ppt/slideMasters/slideMaster1.xml otherStyle/lvl1pPr@algn",
           "logical": "المؤشر",
           "offenders": [],
           "visual_declared": null,
@@ -604,13 +561,14 @@
           "paragraph": 2,
           "part": "ppt/slides/slide3.xml"
         },
-        "message": "no alignment declared; a left-to-right layout places this on the left edge",
+        "message": "no alignment of its own; the alignment it inherits is left, the edge a right-to-left reader does not start from",
         "rule": "alignment-unset",
         "severity": "note",
         "unit": "ppt/slides/slide3.xml#p2"
       },
       {
         "evidence": {
+          "inherited_from": "ppt/slideMasters/slideMaster1.xml otherStyle/lvl1pPr@algn",
           "logical": "الربع الثالث",
           "offenders": [],
           "visual_declared": null,
@@ -622,13 +580,14 @@
           "paragraph": 3,
           "part": "ppt/slides/slide3.xml"
         },
-        "message": "no alignment declared; a left-to-right layout places this on the left edge",
+        "message": "no alignment of its own; the alignment it inherits is left, the edge a right-to-left reader does not start from",
         "rule": "alignment-unset",
         "severity": "note",
         "unit": "ppt/slides/slide3.xml#p3"
       },
       {
         "evidence": {
+          "inherited_from": "ppt/slideMasters/slideMaster1.xml otherStyle/lvl1pPr@algn",
           "logical": "الربع الرابع",
           "offenders": [],
           "visual_declared": null,
@@ -640,13 +599,14 @@
           "paragraph": 4,
           "part": "ppt/slides/slide3.xml"
         },
-        "message": "no alignment declared; a left-to-right layout places this on the left edge",
+        "message": "no alignment of its own; the alignment it inherits is left, the edge a right-to-left reader does not start from",
         "rule": "alignment-unset",
         "severity": "note",
         "unit": "ppt/slides/slide3.xml#p4"
       },
       {
         "evidence": {
+          "inherited_from": "ppt/slideMasters/slideMaster1.xml otherStyle/lvl1pPr@algn",
           "logical": "الإيرادات (مليون درهم)",
           "offenders": [],
           "visual_declared": null,
@@ -658,13 +618,14 @@
           "paragraph": 5,
           "part": "ppt/slides/slide3.xml"
         },
-        "message": "no alignment declared; a left-to-right layout places this on the left edge",
+        "message": "no alignment of its own; the alignment it inherits is left, the edge a right-to-left reader does not start from",
         "rule": "alignment-unset",
         "severity": "note",
         "unit": "ppt/slides/slide3.xml#p5"
       },
       {
         "evidence": {
+          "inherited_from": "ppt/slideMasters/slideMaster1.xml otherStyle/lvl1pPr@algn",
           "logical": "عدد العملاء",
           "offenders": [],
           "visual_declared": null,
@@ -676,13 +637,14 @@
           "paragraph": 8,
           "part": "ppt/slides/slide3.xml"
         },
-        "message": "no alignment declared; a left-to-right layout places this on the left edge",
+        "message": "no alignment of its own; the alignment it inherits is left, the edge a right-to-left reader does not start from",
         "rule": "alignment-unset",
         "severity": "note",
         "unit": "ppt/slides/slide3.xml#p8"
       },
       {
         "evidence": {
+          "inherited_from": "ppt/slideMasters/slideMaster1.xml otherStyle/lvl1pPr@algn",
           "logical": "الملخص التنفيذي: ﺍﻟﺘﻘﺮﻳﺮ ﺍﻟﻔﺼﻠﻲ",
           "offenders": [],
           "visual_declared": null,
@@ -694,13 +656,14 @@
           "paragraph": 2,
           "part": "ppt/slides/slide4.xml"
         },
-        "message": "no alignment declared; a left-to-right layout places this on the left edge",
+        "message": "no alignment of its own; the alignment it inherits is left, the edge a right-to-left reader does not start from",
         "rule": "alignment-unset",
         "severity": "note",
         "unit": "ppt/slides/slide4.xml#p2"
       },
       {
         "evidence": {
+          "inherited_from": "ppt/slideMasters/slideMaster1.xml otherStyle/lvl1pPr@algn",
           "logical": "المصدر: النظام المالي الموحّد",
           "offenders": [],
           "visual_declared": null,
@@ -712,7 +675,7 @@
           "paragraph": 3,
           "part": "ppt/slides/slide4.xml"
         },
-        "message": "no alignment declared; a left-to-right layout places this on the left edge",
+        "message": "no alignment of its own; the alignment it inherits is left, the edge a right-to-left reader does not start from",
         "rule": "alignment-unset",
         "severity": "note",
         "unit": "ppt/slides/slide4.xml#p3"
@@ -725,7 +688,7 @@
       "arabic_units": 24,
       "errors": 3,
       "mixed_units": 9,
-      "notes": 17,
+      "notes": 13,
       "units_scanned": 126,
       "warnings": 19
     }
@@ -737,17 +700,17 @@
     ],
     "ppt/slides/slide1.xml": [
       "-<a:pPr rtl=\"0\"/>",
-      "+<a:pPr rtl=\"1\" algn=\"r\"/>",
+      "+<a:pPr rtl=\"1\"/>",
       "-<a:rPr lang=\"en-US\" dirty=\"0\"/>",
       "+<a:rPr lang=\"ar-SA\" dirty=\"0\"/>",
       "-<a:pPr/>",
-      "+<a:pPr rtl=\"1\" algn=\"r\"/>",
+      "+<a:pPr rtl=\"1\"/>",
       "-<a:rPr lang=\"en-US\" dirty=\"0\"/>",
       "+<a:rPr lang=\"ar-SA\" dirty=\"0\"/>"
     ],
     "ppt/slides/slide2.xml": [
       "-<a:pPr/>",
-      "+<a:pPr rtl=\"1\" algn=\"r\"/>",
+      "+<a:pPr rtl=\"1\"/>",
       "-<a:pPr/>",
       "+<a:pPr rtl=\"1\" algn=\"r\"/>",
       "-<a:rPr lang=\"en-US\" dirty=\"0\"/>",
@@ -768,8 +731,6 @@
       "+<a:t>تم إطلاق تطبيق Mirsam في الإمارات"
     ],
     "ppt/slides/slide3.xml": [
-      "-<a:pPr rtl=\"1\"/>",
-      "+<a:pPr rtl=\"1\" algn=\"r\"/>",
       "-<a:tblPr firstRow=\"1\" bandRow=\"1\">",
       "+<a:tblPr firstRow=\"1\" bandRow=\"1\" rtl=\"1\">",
       "-<a:pPr rtl=\"1\"/>",
@@ -825,6 +786,7 @@
       "diagnostics": [
         {
           "evidence": {
+            "inherited_from": null,
             "logical": "تم إطلاق تطبيق Mirsam‏ في الإمارات",
             "offenders": [
               "RIGHT-TO-LEFT MARK"
@@ -845,6 +807,7 @@
         },
         {
           "evidence": {
+            "inherited_from": null,
             "logical": "GPS يعتمد عليه النظام في تتبّع الشحنات",
             "offenders": [],
             "visual_declared": "GPS تانحشلا عّبتت يف ماظنلا هيلع دمتعي",
@@ -863,6 +826,7 @@
         },
         {
           "evidence": {
+            "inherited_from": null,
             "logical": "الملخص التنفيذي: ﺍﻟﺘﻘﺮﻳﺮ ﺍﻟﻔﺼﻠﻲ",
             "offenders": [
               "U+FE8D",
@@ -892,6 +856,7 @@
         },
         {
           "evidence": {
+            "inherited_from": null,
             "logical": null,
             "offenders": [],
             "visual_declared": null,
@@ -910,6 +875,7 @@
         },
         {
           "evidence": {
+            "inherited_from": null,
             "logical": null,
             "offenders": [],
             "visual_declared": null,
@@ -928,6 +894,7 @@
         },
         {
           "evidence": {
+            "inherited_from": null,
             "logical": null,
             "offenders": [],
             "visual_declared": null,
@@ -946,6 +913,7 @@
         },
         {
           "evidence": {
+            "inherited_from": null,
             "logical": null,
             "offenders": [],
             "visual_declared": null,
@@ -964,6 +932,7 @@
         },
         {
           "evidence": {
+            "inherited_from": null,
             "logical": "المؤشر\nالربع الثالث\nالربع الرابع\nالإيرادات (مليون درهم)\n120\n142\nعدد العملاء\n1,850\n2,300\nرضا العملاء NPS\n41\n48",
             "offenders": [],
             "visual_declared": null,
@@ -982,6 +951,7 @@
         },
         {
           "evidence": {
+            "inherited_from": null,
             "logical": "التقرير الفصلي للأداء المؤسسي",
             "offenders": [],
             "visual_declared": "يسسؤملا ءادألل يلصفلا ريرقتلا",
@@ -1000,6 +970,7 @@
         },
         {
           "evidence": {
+            "inherited_from": "ppt/slideMasters/slideMaster1.xml bodyStyle/lvl1pPr@rtl",
             "logical": null,
             "offenders": [],
             "visual_declared": null,
@@ -1011,13 +982,14 @@
             "paragraph": 2,
             "part": "ppt/slides/slide1.xml"
           },
-          "message": "no base direction declared; correct today only by auto-detection",
+          "message": "no base direction of its own; inherits ltr, but this reads as rtl",
           "rule": "direction-unset",
           "severity": "warning",
           "unit": "ppt/slides/slide1.xml#p2"
         },
         {
           "evidence": {
+            "inherited_from": "ppt/slideMasters/slideMaster1.xml titleStyle/lvl1pPr@rtl",
             "logical": null,
             "offenders": [],
             "visual_declared": null,
@@ -1029,13 +1001,14 @@
             "paragraph": 1,
             "part": "ppt/slides/slide2.xml"
           },
-          "message": "no base direction declared; correct today only by auto-detection",
+          "message": "no base direction of its own; inherits ltr, but this reads as rtl",
           "rule": "direction-unset",
           "severity": "warning",
           "unit": "ppt/slides/slide2.xml#p1"
         },
         {
           "evidence": {
+            "inherited_from": "ppt/slideMasters/slideMaster1.xml bodyStyle/lvl1pPr@rtl",
             "logical": null,
             "offenders": [],
             "visual_declared": null,
@@ -1047,13 +1020,14 @@
             "paragraph": 2,
             "part": "ppt/slides/slide2.xml"
           },
-          "message": "no base direction declared; correct today only by auto-detection",
+          "message": "no base direction of its own; inherits ltr, but this reads as rtl",
           "rule": "direction-unset",
           "severity": "warning",
           "unit": "ppt/slides/slide2.xml#p2"
         },
         {
           "evidence": {
+            "inherited_from": "ppt/slideMasters/slideMaster1.xml bodyStyle/lvl1pPr@rtl",
             "logical": null,
             "offenders": [],
             "visual_declared": null,
@@ -1065,13 +1039,14 @@
             "paragraph": 3,
             "part": "ppt/slides/slide2.xml"
           },
-          "message": "no base direction declared; correct today only by auto-detection",
+          "message": "no base direction of its own; inherits ltr, but this reads as rtl",
           "rule": "direction-unset",
           "severity": "warning",
           "unit": "ppt/slides/slide2.xml#p3"
         },
         {
           "evidence": {
+            "inherited_from": "ppt/slideMasters/slideMaster1.xml bodyStyle/lvl1pPr@rtl",
             "logical": null,
             "offenders": [],
             "visual_declared": null,
@@ -1083,13 +1058,14 @@
             "paragraph": 4,
             "part": "ppt/slides/slide2.xml"
           },
-          "message": "no base direction declared; correct today only by auto-detection",
+          "message": "no base direction of its own; inherits ltr, but this reads as rtl",
           "rule": "direction-unset",
           "severity": "warning",
           "unit": "ppt/slides/slide2.xml#p4"
         },
         {
           "evidence": {
+            "inherited_from": "ppt/slideMasters/slideMaster1.xml bodyStyle/lvl1pPr@rtl",
             "logical": null,
             "offenders": [],
             "visual_declared": null,
@@ -1101,13 +1077,14 @@
             "paragraph": 5,
             "part": "ppt/slides/slide2.xml"
           },
-          "message": "no base direction declared; correct today only by auto-detection",
+          "message": "no base direction of its own; inherits ltr, but this reads as rtl",
           "rule": "direction-unset",
           "severity": "warning",
           "unit": "ppt/slides/slide2.xml#p5"
         },
         {
           "evidence": {
+            "inherited_from": "ppt/slideMasters/slideMaster1.xml bodyStyle/lvl1pPr@rtl",
             "logical": null,
             "offenders": [],
             "visual_declared": null,
@@ -1119,13 +1096,14 @@
             "paragraph": 6,
             "part": "ppt/slides/slide2.xml"
           },
-          "message": "no base direction declared; correct today only by auto-detection",
+          "message": "no base direction of its own; inherits ltr, but this reads as rtl",
           "rule": "direction-unset",
           "severity": "warning",
           "unit": "ppt/slides/slide2.xml#p6"
         },
         {
           "evidence": {
+            "inherited_from": null,
             "logical": null,
             "offenders": [],
             "visual_declared": null,
@@ -1144,6 +1122,7 @@
         },
         {
           "evidence": {
+            "inherited_from": null,
             "logical": null,
             "offenders": [],
             "visual_declared": null,
@@ -1162,6 +1141,7 @@
         },
         {
           "evidence": {
+            "inherited_from": null,
             "logical": null,
             "offenders": [],
             "visual_declared": null,
@@ -1180,6 +1160,7 @@
         },
         {
           "evidence": {
+            "inherited_from": null,
             "logical": null,
             "offenders": [],
             "visual_declared": null,
@@ -1198,6 +1179,7 @@
         },
         {
           "evidence": {
+            "inherited_from": null,
             "logical": null,
             "offenders": [],
             "visual_declared": null,
@@ -1216,6 +1198,7 @@
         },
         {
           "evidence": {
+            "inherited_from": null,
             "logical": null,
             "offenders": [],
             "visual_declared": null,
@@ -1234,6 +1217,7 @@
         },
         {
           "evidence": {
+            "inherited_from": "ppt/notesMasters/notesMaster1.xml notesStyle/lvl1pPr@algn",
             "logical": "ملاحظات المتحدث: ركّز على نمو الإيرادات قبل الانتقال إلى التكاليف.",
             "offenders": [],
             "visual_declared": null,
@@ -1245,67 +1229,14 @@
             "paragraph": 1,
             "part": "ppt/notesSlides/notesSlide1.xml"
           },
-          "message": "no alignment declared; a left-to-right layout places this on the left edge",
+          "message": "no alignment of its own; the alignment it inherits is left, the edge a right-to-left reader does not start from",
           "rule": "alignment-unset",
           "severity": "note",
           "unit": "ppt/notesSlides/notesSlide1.xml#p1"
         },
         {
           "evidence": {
-            "logical": "التقرير الفصلي للأداء المؤسسي",
-            "offenders": [],
-            "visual_declared": null,
-            "visual_expected": null
-          },
-          "fixable": true,
-          "location": {
-            "container": "Title 1",
-            "paragraph": 1,
-            "part": "ppt/slides/slide1.xml"
-          },
-          "message": "no alignment declared; a left-to-right layout places this on the left edge",
-          "rule": "alignment-unset",
-          "severity": "note",
-          "unit": "ppt/slides/slide1.xml#p1"
-        },
-        {
-          "evidence": {
-            "logical": "إدارة التخطيط الاستراتيجي | Q4 2026",
-            "offenders": [],
-            "visual_declared": null,
-            "visual_expected": null
-          },
-          "fixable": true,
-          "location": {
-            "container": "Subtitle 2",
-            "paragraph": 2,
-            "part": "ppt/slides/slide1.xml"
-          },
-          "message": "no alignment declared; a left-to-right layout places this on the left edge",
-          "rule": "alignment-unset",
-          "severity": "note",
-          "unit": "ppt/slides/slide1.xml#p2"
-        },
-        {
-          "evidence": {
-            "logical": "أبرز النتائج",
-            "offenders": [],
-            "visual_declared": null,
-            "visual_expected": null
-          },
-          "fixable": true,
-          "location": {
-            "container": "Title 1",
-            "paragraph": 1,
-            "part": "ppt/slides/slide2.xml"
-          },
-          "message": "no alignment declared; a left-to-right layout places this on the left edge",
-          "rule": "alignment-unset",
-          "severity": "note",
-          "unit": "ppt/slides/slide2.xml#p1"
-        },
-        {
-          "evidence": {
+            "inherited_from": "ppt/slideMasters/slideMaster1.xml bodyStyle/lvl1pPr@algn",
             "logical": "نمت الإيرادات بنسبة 18% مقارنة بالربع السابق",
             "offenders": [],
             "visual_declared": null,
@@ -1317,13 +1248,14 @@
             "paragraph": 2,
             "part": "ppt/slides/slide2.xml"
           },
-          "message": "no alignment declared; a left-to-right layout places this on the left edge",
+          "message": "no alignment of its own; the alignment it inherits is left, the edge a right-to-left reader does not start from",
           "rule": "alignment-unset",
           "severity": "note",
           "unit": "ppt/slides/slide2.xml#p2"
         },
         {
           "evidence": {
+            "inherited_from": "ppt/slideMasters/slideMaster1.xml bodyStyle/lvl1pPr@algn",
             "logical": "وارتفع هامش الربح إلى 32%",
             "offenders": [],
             "visual_declared": null,
@@ -1335,13 +1267,14 @@
             "paragraph": 3,
             "part": "ppt/slides/slide2.xml"
           },
-          "message": "no alignment declared; a left-to-right layout places this on the left edge",
+          "message": "no alignment of its own; the alignment it inherits is left, the edge a right-to-left reader does not start from",
           "rule": "alignment-unset",
           "severity": "note",
           "unit": "ppt/slides/slide2.xml#p3"
         },
         {
           "evidence": {
+            "inherited_from": "ppt/slideMasters/slideMaster1.xml bodyStyle/lvl1pPr@algn",
             "logical": "انخفضت التكاليف التشغيلية بفضل مبادرة ERP الجديدة",
             "offenders": [],
             "visual_declared": null,
@@ -1353,13 +1286,14 @@
             "paragraph": 4,
             "part": "ppt/slides/slide2.xml"
           },
-          "message": "no alignment declared; a left-to-right layout places this on the left edge",
+          "message": "no alignment of its own; the alignment it inherits is left, the edge a right-to-left reader does not start from",
           "rule": "alignment-unset",
           "severity": "note",
           "unit": "ppt/slides/slide2.xml#p4"
         },
         {
           "evidence": {
+            "inherited_from": "ppt/slideMasters/slideMaster1.xml bodyStyle/lvl1pPr@algn",
             "logical": "• توسّع الفريق إلى 45 موظفاً",
             "offenders": [],
             "visual_declared": null,
@@ -1371,13 +1305,14 @@
             "paragraph": 5,
             "part": "ppt/slides/slide2.xml"
           },
-          "message": "no alignment declared; a left-to-right layout places this on the left edge",
+          "message": "no alignment of its own; the alignment it inherits is left, the edge a right-to-left reader does not start from",
           "rule": "alignment-unset",
           "severity": "note",
           "unit": "ppt/slides/slide2.xml#p5"
         },
         {
           "evidence": {
+            "inherited_from": "ppt/slideMasters/slideMaster1.xml bodyStyle/lvl1pPr@algn",
             "logical": "تم إطلاق تطبيق Mirsam‏ في الإمارات",
             "offenders": [],
             "visual_declared": null,
@@ -1389,31 +1324,14 @@
             "paragraph": 6,
             "part": "ppt/slides/slide2.xml"
           },
-          "message": "no alignment declared; a left-to-right layout places this on the left edge",
+          "message": "no alignment of its own; the alignment it inherits is left, the edge a right-to-left reader does not start from",
           "rule": "alignment-unset",
           "severity": "note",
           "unit": "ppt/slides/slide2.xml#p6"
         },
         {
           "evidence": {
-            "logical": "مؤشرات الأداء الرئيسية",
-            "offenders": [],
-            "visual_declared": null,
-            "visual_expected": null
-          },
-          "fixable": true,
-          "location": {
-            "container": "Title 1",
-            "paragraph": 1,
-            "part": "ppt/slides/slide3.xml"
-          },
-          "message": "no alignment declared; a left-to-right layout places this on the left edge",
-          "rule": "alignment-unset",
-          "severity": "note",
-          "unit": "ppt/slides/slide3.xml#p1"
-        },
-        {
-          "evidence": {
+            "inherited_from": "ppt/slideMasters/slideMaster1.xml otherStyle/lvl1pPr@algn",
             "logical": "المؤشر",
             "offenders": [],
             "visual_declared": null,
@@ -1425,13 +1343,14 @@
             "paragraph": 2,
             "part": "ppt/slides/slide3.xml"
           },
-          "message": "no alignment declared; a left-to-right layout places this on the left edge",
+          "message": "no alignment of its own; the alignment it inherits is left, the edge a right-to-left reader does not start from",
           "rule": "alignment-unset",
           "severity": "note",
           "unit": "ppt/slides/slide3.xml#p2"
         },
         {
           "evidence": {
+            "inherited_from": "ppt/slideMasters/slideMaster1.xml otherStyle/lvl1pPr@algn",
             "logical": "الربع الثالث",
             "offenders": [],
             "visual_declared": null,
@@ -1443,13 +1362,14 @@
             "paragraph": 3,
             "part": "ppt/slides/slide3.xml"
           },
-          "message": "no alignment declared; a left-to-right layout places this on the left edge",
+          "message": "no alignment of its own; the alignment it inherits is left, the edge a right-to-left reader does not start from",
           "rule": "alignment-unset",
           "severity": "note",
           "unit": "ppt/slides/slide3.xml#p3"
         },
         {
           "evidence": {
+            "inherited_from": "ppt/slideMasters/slideMaster1.xml otherStyle/lvl1pPr@algn",
             "logical": "الربع الرابع",
             "offenders": [],
             "visual_declared": null,
@@ -1461,13 +1381,14 @@
             "paragraph": 4,
             "part": "ppt/slides/slide3.xml"
           },
-          "message": "no alignment declared; a left-to-right layout places this on the left edge",
+          "message": "no alignment of its own; the alignment it inherits is left, the edge a right-to-left reader does not start from",
           "rule": "alignment-unset",
           "severity": "note",
           "unit": "ppt/slides/slide3.xml#p4"
         },
         {
           "evidence": {
+            "inherited_from": "ppt/slideMasters/slideMaster1.xml otherStyle/lvl1pPr@algn",
             "logical": "الإيرادات (مليون درهم)",
             "offenders": [],
             "visual_declared": null,
@@ -1479,13 +1400,14 @@
             "paragraph": 5,
             "part": "ppt/slides/slide3.xml"
           },
-          "message": "no alignment declared; a left-to-right layout places this on the left edge",
+          "message": "no alignment of its own; the alignment it inherits is left, the edge a right-to-left reader does not start from",
           "rule": "alignment-unset",
           "severity": "note",
           "unit": "ppt/slides/slide3.xml#p5"
         },
         {
           "evidence": {
+            "inherited_from": "ppt/slideMasters/slideMaster1.xml otherStyle/lvl1pPr@algn",
             "logical": "عدد العملاء",
             "offenders": [],
             "visual_declared": null,
@@ -1497,13 +1419,14 @@
             "paragraph": 8,
             "part": "ppt/slides/slide3.xml"
           },
-          "message": "no alignment declared; a left-to-right layout places this on the left edge",
+          "message": "no alignment of its own; the alignment it inherits is left, the edge a right-to-left reader does not start from",
           "rule": "alignment-unset",
           "severity": "note",
           "unit": "ppt/slides/slide3.xml#p8"
         },
         {
           "evidence": {
+            "inherited_from": "ppt/slideMasters/slideMaster1.xml otherStyle/lvl1pPr@algn",
             "logical": "الملخص التنفيذي: ﺍﻟﺘﻘﺮﻳﺮ ﺍﻟﻔﺼﻠﻲ",
             "offenders": [],
             "visual_declared": null,
@@ -1515,13 +1438,14 @@
             "paragraph": 2,
             "part": "ppt/slides/slide4.xml"
           },
-          "message": "no alignment declared; a left-to-right layout places this on the left edge",
+          "message": "no alignment of its own; the alignment it inherits is left, the edge a right-to-left reader does not start from",
           "rule": "alignment-unset",
           "severity": "note",
           "unit": "ppt/slides/slide4.xml#p2"
         },
         {
           "evidence": {
+            "inherited_from": "ppt/slideMasters/slideMaster1.xml otherStyle/lvl1pPr@algn",
             "logical": "المصدر: النظام المالي الموحّد",
             "offenders": [],
             "visual_declared": null,
@@ -1533,7 +1457,7 @@
             "paragraph": 3,
             "part": "ppt/slides/slide4.xml"
           },
-          "message": "no alignment declared; a left-to-right layout places this on the left edge",
+          "message": "no alignment of its own; the alignment it inherits is left, the edge a right-to-left reader does not start from",
           "rule": "alignment-unset",
           "severity": "note",
           "unit": "ppt/slides/slide4.xml#p3"
@@ -1543,7 +1467,7 @@
         "arabic_units": 24,
         "errors": 3,
         "mixed_units": 9,
-        "notes": 17,
+        "notes": 13,
         "units_scanned": 126,
         "warnings": 19
       }
@@ -1576,13 +1500,6 @@
         },
         {
           "fix": {
-            "kind": "set_alignment",
-            "value": "start"
-          },
-          "unit": "ppt/slides/slide1.xml#p1"
-        },
-        {
-          "fix": {
             "kind": "set_language",
             "value": "ar-SA"
           },
@@ -1597,13 +1514,6 @@
         },
         {
           "fix": {
-            "kind": "set_alignment",
-            "value": "start"
-          },
-          "unit": "ppt/slides/slide1.xml#p2"
-        },
-        {
-          "fix": {
             "kind": "set_language",
             "value": "ar-SA"
           },
@@ -1613,13 +1523,6 @@
           "fix": {
             "kind": "set_direction",
             "value": "rtl"
-          },
-          "unit": "ppt/slides/slide2.xml#p1"
-        },
-        {
-          "fix": {
-            "kind": "set_alignment",
-            "value": "start"
           },
           "unit": "ppt/slides/slide2.xml#p1"
         },
@@ -1717,13 +1620,6 @@
             "value": "start"
           },
           "unit": "ppt/slides/slide2.xml#p6"
-        },
-        {
-          "fix": {
-            "kind": "set_alignment",
-            "value": "start"
-          },
-          "unit": "ppt/slides/slide3.xml#p1"
         },
         {
           "fix": {

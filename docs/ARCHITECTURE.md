@@ -53,9 +53,9 @@ server, an HTTP service or a library caller would reuse the same engine.
 
 ```rust
 enum Resolved<T> {
-    Explicit(T),   // stated on this unit
-    Inherited(T),  // supplied by a layout, master, style or cascade
-    Unset,         // nothing anywhere; the renderer picks
+    Explicit(T),           // stated on this unit
+    Inherited(T, Origin),  // supplied by the named layout, master or cascade
+    Unset,                 // nothing anywhere; the renderer picks
 }
 ```
 
@@ -65,8 +65,25 @@ every placeholder that inherits centred alignment from its layout as a defect.
 That false positive is what drives users to disable the tool.
 
 Adapters are responsible for resolving the inheritance chain. Rules are
-responsible for distinguishing the three states. A rule that fires on
-`Inherited` is a bug.
+responsible for distinguishing the three states.
+
+Resolving a value is not the same as establishing that anyone chose it, which
+is the distinction [ADR 0007](adr/0007-an-inherited-default-is-not-a-choice.md)
+draws: **an inherited value is evidence of a choice only where it agrees with
+the text.** Arabic under an `rtl="1"` master is the layout doing its job and is
+never reported — the case the three-state model exists to protect. Arabic under
+an English template's untouched `rtl="0"` is the absence of a decision wearing
+the same clothes as one, and is reported exactly as an absent value is. The
+condition is narrow and mechanical: does the inherited value match
+`bidi::dominant_direction`, the same comparison the rules already make on
+`Explicit`.
+
+`Origin` is what makes such a finding arguable. It names the part and property
+that supplied the value — `ppt/slideMasters/slideMaster1.xml
+bodyStyle/lvl1pPr@rtl` — and surfaces as `evidence.inherited_from`, so a
+reviewer can check "the master says left-to-right" without opening PowerPoint.
+The repair still writes to the unit the finding names; editing the master would
+change every paragraph in the deck.
 
 ## Proving rather than asserting
 
@@ -140,6 +157,9 @@ crates/
     rels.rs        the OPC relationship graph: which part a part inherits
                    from — slide → layout → master → theme, with each part's
                    role read from the relationships pointing at it
+    inherit.rs     the properties along that chain: placeholder list styles
+                   and a master's named text styles, resolved into
+                   Resolved::Inherited with the part that supplied each value
     rewrite.rs     token-stream repair: change what a Fix names, nothing else
     pptx.rs        DrawingML vocabulary: paragraphs, properties, bullets;
                    DocumentReader and DocumentWriter

@@ -110,9 +110,11 @@ Three repairs are decisions the text cannot make for you, so they are flags:
 finding is reported, not repaired); `--convert-bullets` replaces a typed
 `•` with a native list (opt-in, because it edits the text itself); and
 `--align` writes a start-edge alignment onto right-to-left paragraphs that
-have none of their own (opt-in, because what they inherit may be a layout's
-design, such as a centred title — without the flag that is reported as a
-note, which never blocks). `--lang` changes the tag written from `ar-SA`;
+inherit one that leaves them on the left edge (opt-in, because the edge a
+paragraph starts on is a design decision; without the flag that is reported
+as a note, which never blocks). A paragraph whose layout centres or
+right-aligns it is not reported and not touched. `--lang` changes the tag
+written from `ar-SA`;
 `--force` replaces an existing output. Repairing a repaired file is a no-op
 that reproduces it byte for byte.
 

@@ -156,6 +156,65 @@ Working towards byte-preserving `repair` for PPTX. See
   to do with a resolved target is read that part. A cycle terminates the walk
   instead of hanging.
 
+- **`mirsam-ooxml::inherit`** — property chain resolution, the second half of
+  the inheritance milestone and the answer to #8. A paragraph that states no
+  direction or alignment of its own now takes one from the list style on its
+  shape, from the matching placeholder on its slide layout, from the same
+  placeholder on the master, and last from the master's `titleStyle`,
+  `bodyStyle` or `otherStyle` — `notesStyle` on a notes slide. A shape that is
+  not a placeholder at all takes `otherStyle`; the placeholder match follows
+  `@idx` first, with an absent `@idx` meaning index zero and `@type`
+  defaulting to `body` as the schema defaults it.
+
+  Resolution happens in the adapter, so `mirsam-core` still performs no I/O.
+  Only direction and alignment are resolved: ADR 0007's "does it agree with
+  the text" test is stated for those two, list levels beyond `lvl1pPr` are
+  2.3, and a master's font slots are theme *references* (`+mn-cs`) that cannot
+  be resolved without the theme, which is 2.3 as well.
+
+### Changed
+
+- **An inherited value that agrees with the text now silences its finding, and
+  one that contradicts it keeps it** ([ADR 0007](docs/adr/0007-an-inherited-default-is-not-a-choice.md)).
+  Arabic under an `rtl="1"` master is the layout doing its job and is no
+  longer reported; Arabic under an English template's untouched `rtl="0"` is a
+  default nobody aimed at the text and is reported exactly as an absent one
+  is, at the same severity. `alignment-unset` reads the same way: a layout
+  that centres or right-aligns is silent, `algn="l"` under right-to-left text
+  is not. That retires ADR 0006's cost note — `repair --align` no longer
+  proposes pushing a centred title to the right edge.
+
+  In the corpus: the three RTL-mastered decks lost every paragraph-level
+  `direction-unset` and `alignment-unset` finding they had;
+  `quarterly-report.pptx` kept all seven `direction-unset` warnings with the
+  reason changed, and lost the four `alignment-unset` notes on its centred
+  titles; `quarterly-report-correct.pptx` is still clean. Every committed
+  report regenerated.
+
+- **`Evidence` gains `inherited_from`**, naming the part and property that
+  supplied a value the unit did not state —
+  `ppt/slideMasters/slideMaster1.xml bodyStyle/lvl1pPr@rtl`. A finding on an
+  inherited value is not checkable without it. The field is additive and
+  `null` on every finding about a value the unit stated itself, so the JSON
+  report gains a key and loses none.
+
+- **`Resolved::Inherited` carries an `Origin`.** `Inherited(T)` is now
+  `Inherited(T, Origin)`, where `Origin` is the part and property that
+  supplied the value. Source-breaking for anything constructing or matching
+  the variant; `Resolved::effective`, `is_unset` and `is_explicit` are
+  unchanged, and `origin()` and `is_inherited()` are new.
+
+- **`direction-mismatch` does not judge an inherited direction.** It reports a
+  direction the author wrote, or — where none is written — what the renderer
+  would auto-detect, as it always has. Feeding it the resolved chain instead
+  would turn five of `quarterly-report.pptx`'s warnings into errors on the
+  strength of a template default; those paragraphs are reported by
+  `direction-unset` at warning severity, naming the master (ADR 0007 §3).
+
+- `pptx::scan_xml` resolves nothing, because a caller holding one part has no
+  package and so no chain. `pptx::scan_xml_with` takes a `StyleIndex` for
+  callers that do.
+
 ### Fixed
 
 - **`make validate-fixtures` reported a part that was there (#21).**

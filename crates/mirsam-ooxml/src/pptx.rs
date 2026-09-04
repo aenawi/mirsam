@@ -1,6 +1,7 @@
 //! PowerPoint (PPTX) adapter.
 
 use crate::chart::{self, ChartText};
+use crate::inherit::{Placeholder, StyleIndex};
 use crate::package::{Edits, Package};
 use crate::rels::RelationshipGraph;
 use crate::rewrite::{self, Inherited, PartPlan};
@@ -8,7 +9,8 @@ use mirsam_core::error::{Error, Result};
 use mirsam_core::fix::Repair;
 use mirsam_core::ports::{DocumentReader, DocumentWriter};
 use mirsam_core::text::{
-    Alignment, Bullet, Direction, Location, Properties, Resolved, TextUnit, UnitId, UnitKind,
+    Alignment, Bullet, Direction, Location, Origin, Properties, Resolved, TextUnit, UnitId,
+    UnitKind,
 };
 use quick_xml::events::Event;
 use quick_xml::{Reader, XmlVersion};
@@ -16,7 +18,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 /// Alignment values DrawingML understands.
-fn parse_alignment(value: &str) -> Option<Alignment> {
+pub(crate) fn parse_alignment(value: &str) -> Option<Alignment> {
     Some(match value {
         "l" => Alignment::Left,
         "r" => Alignment::Right,
@@ -162,6 +164,9 @@ struct ParagraphBuilder {
     text: String,
     props: Properties,
     shape: Option<String>,
+    /// The placeholder its shape declares, which decides what the paragraph
+    /// inherits from the layout and master above it.
+    placeholder: Option<Placeholder>,
 }
 
 impl ParagraphBuilder {
@@ -208,11 +213,16 @@ impl PptxDocument {
 
     /// The package's relationship graph: which part each part inherits from.
     ///
-    /// Read on demand rather than cached with the document, because nothing in
-    /// the audit path needs it yet — 2.2 resolves properties along it — and a
-    /// field every `open` pays for is a cost `mirsam explain` should not carry.
+    /// Read on demand rather than cached with the document: a scan reads it
+    /// once through [`StyleIndex`], and a field every `open` pays for is a
+    /// cost `mirsam explain` should not carry.
     pub fn relationships(&self) -> Result<RelationshipGraph> {
         RelationshipGraph::read(&self.package)
+    }
+
+    /// The style sources above each part, read from the package once.
+    pub fn styles(&self) -> Result<StyleIndex> {
+        StyleIndex::read(&self.package)
     }
 
     /// Parts this adapter reads: PowerPoint's own XML, excluding relationships.
@@ -227,15 +237,17 @@ impl PptxDocument {
     /// Parse one `ppt/**/*.xml` part into text units.
     ///
     /// Direction, alignment and language are recorded as `Explicit` only when
-    /// the paragraph itself carries them. Resolving the layout/master
-    /// inheritance chain — which turns many `Unset`s into `Inherited` — is
-    /// milestone M2; until then the engine deliberately reports an absent
-    /// property as a warning rather than an error.
-    fn scan_part(part: &str, xml: &str) -> Result<Vec<TextUnit>> {
+    /// the paragraph itself carries them. What it leaves unset is filled in
+    /// from `styles`, the layout/master chain resolved by [`crate::inherit`],
+    /// as `Inherited` naming the part that supplied it. Without an index —
+    /// [`scan_xml`], and any caller holding one part and no package — the
+    /// chain is simply absent, and an unresolved property stays `Unset`.
+    fn scan_part(part: &str, xml: &str, styles: Option<&StyleIndex>) -> Result<Vec<TextUnit>> {
         let mut reader = Reader::from_str(xml);
         let mut units = Vec::new();
         let mut current: Option<ParagraphBuilder> = None;
         let mut shape: Option<String> = None;
+        let mut placeholder: Option<Placeholder> = None;
         let mut body_rtl: Option<bool> = None;
         let mut in_text = false;
         let mut paragraph_index = 0usize;
@@ -310,16 +322,22 @@ impl PptxDocument {
                                 t.direction = Resolved::Explicit(direction_of(&value));
                             }
                         }
+                        "p:ph" => placeholder = Some(Placeholder::read(&e)),
                         "a:p" => {
                             paragraph_index += 1;
                             let mut builder = ParagraphBuilder {
                                 shape: shape.clone(),
+                                placeholder: placeholder.clone(),
                                 ..Default::default()
                             };
                             // A right-to-left text body is inherited context
-                            // for every paragraph inside it.
+                            // for every paragraph inside it, and is nearer
+                            // than anything the chain above the part says.
                             if body_rtl == Some(true) {
-                                builder.props.direction = Resolved::Inherited(Direction::Rtl);
+                                builder.props.direction = Resolved::Inherited(
+                                    Direction::Rtl,
+                                    Origin::new(part, "bodyPr@rtlCol"),
+                                );
                             }
                             current = Some(builder);
                         }
@@ -429,7 +447,7 @@ impl PptxDocument {
                 Ok(Event::End(e)) => match e.name().as_ref() {
                     "a:t" => in_text = false,
                     "a:p" => {
-                        if let Some(b) = current.take()
+                        if let Some(mut b) = current.take()
                             && !b.text.trim().is_empty()
                         {
                             // An enclosed paragraph is its container's text
@@ -442,6 +460,11 @@ impl PptxDocument {
                             if let Some(c) = columns.as_mut() {
                                 c.push(&b.text);
                             }
+                            // Whatever the paragraph did not say, said by the
+                            // nearest part above it that does.
+                            if let Some(styles) = styles {
+                                styles.resolve(part, b.placeholder.as_ref(), &mut b.props);
+                            }
                             units.push(b.finish(part, paragraph_index));
                         }
                     }
@@ -452,7 +475,10 @@ impl PptxDocument {
                                 .and_then(|t| t.finish(part, UnitKind::Table, table_id)),
                         );
                     }
-                    "p:sp" | "p:graphicFrame" | "p:pic" | "p:cxnSp" => shape = None,
+                    "p:sp" | "p:graphicFrame" | "p:pic" | "p:cxnSp" => {
+                        shape = None;
+                        placeholder = None;
+                    }
                     "p:txBody" | "a:txBody" | "c:txPr" => {
                         units.extend(
                             columns
@@ -477,6 +503,7 @@ impl DocumentReader for PptxDocument {
     }
 
     fn scan(&mut self) -> Result<Vec<TextUnit>> {
+        let styles = self.styles()?;
         let mut units = Vec::new();
         for part in self.text_parts()? {
             let xml = self.package.read_text(&part)?;
@@ -485,7 +512,7 @@ impl DocumentReader for PptxDocument {
             // the containers whose strings are not paragraphs at all. The
             // chart pass reads only as far as the root element of a part that
             // is not a chart.
-            units.extend(Self::scan_part(&part, &xml)?);
+            units.extend(Self::scan_part(&part, &xml, Some(&styles))?);
             units.extend(chart::scan(&part, &xml)?);
         }
         Ok(units)
@@ -520,6 +547,10 @@ impl DocumentWriter for PptxDocument {
 
         let mut staged = Edits::new();
         let mut applied = 0usize;
+        // Read once for the whole batch: every part's chain is the same chain
+        // the audit resolved, and a repair never edits a layout or a master
+        // (ADR 0007 §6), so it cannot go stale between parts.
+        let styles = self.styles()?;
         for (part, plan) in by_part {
             // A part edited by an earlier call is edited again from its staged
             // bytes, so repairs applied in two rounds compose rather than the
@@ -530,13 +561,15 @@ impl DocumentWriter for PptxDocument {
                 None => self.package.read_text(part)?,
             };
 
-            // What each paragraph inherits from its container, resolved by
-            // the same scanner that produced the units the rules judged. The
-            // rewriter cannot see a container from inside a paragraph.
-            let inherited: Inherited = Self::scan_part(part, &xml)?
+            // What each paragraph inherits — from its container, and from the
+            // layout and master above the part — resolved by the same scanner
+            // that produced the units the rules judged. The rewriter cannot
+            // see either from inside a paragraph, and a direction-relative
+            // alignment cannot be lowered onto DrawingML without it.
+            let inherited: Inherited = Self::scan_part(part, &xml, Some(&styles))?
                 .into_iter()
                 .filter_map(|unit| {
-                    let Resolved::Inherited(direction) = unit.props.direction else {
+                    let Resolved::Inherited(direction, _) = unit.props.direction else {
                         return None;
                     };
                     match parse_unit_id(&unit.id) {
@@ -562,9 +595,17 @@ impl DocumentWriter for PptxDocument {
 }
 
 /// Parse an in-memory part into every unit this adapter produces for it.
-/// Exposed for tests and for callers that already hold the XML.
+///
+/// Exposed for tests and for callers that already hold the XML. There is no
+/// package here and so no chain: a property the paragraph does not state comes
+/// back `Unset`, not `Inherited`. Use [`scan_xml_with`] to resolve one.
 pub fn scan_xml(part: &str, xml: &str) -> Result<Vec<TextUnit>> {
-    let mut units = PptxDocument::scan_part(part, xml)?;
+    scan_xml_with(part, xml, None)
+}
+
+/// The same, resolving each paragraph against a chain the caller has built.
+pub fn scan_xml_with(part: &str, xml: &str, styles: Option<&StyleIndex>) -> Result<Vec<TextUnit>> {
+    let mut units = PptxDocument::scan_part(part, xml, styles)?;
     units.extend(chart::scan(part, xml)?);
     Ok(units)
 }

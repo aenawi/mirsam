@@ -145,6 +145,23 @@ what to conclude once the value is found.
   the count it has today; `quarterly-report-correct.pptx` states everything
   explicitly and must stay clean. **NOT RUN** — 2.2 does not exist yet, and
   these are the predictions the decision commits to, not measurements.
+
+  **Measured, 2026-09-04, when 2.2 landed.** Four of the five held. The
+  RTL-mastered decks lost every paragraph-level finding they had, except one
+  in `torture.pptx` on a chart part — which has no layout and no master, so
+  `Unset` there is the honest answer rather than a miss.
+  `quarterly-report-correct.pptx` stayed clean.
+  `quarterly-report.pptx` kept all seven `direction-unset` warnings at the
+  same severity, with the reason changed and the master named, which is what
+  §3 was chosen for. Its `alignment-unset` notes went from 17 to 13, so the
+  prediction that it "must keep the count it has today" was wrong for
+  alignment. The four that went are its centred titles, silenced by §4's own
+  table — `algn="ctr"` reads correctly in either direction — which the
+  prediction overlooked because it reasoned from this master's `bodyStyle`
+  (`algn="l"`) and not its `titleStyle` (`algn="ctr"`). §4 is the operative
+  rule and the outcome it gives is the one intended: retiring ADR 0006's cost
+  note is stated two sentences above the prediction that contradicts it. The
+  full table is in [`PLAN.md`](../PLAN.md) §2.2.
 - Container findings (`container-direction`) are unaffected: a table's or a
   chart axis's direction has no inheritance chain of this shape, and ADR 0006
   judges it from the text it lays out.

@@ -34,15 +34,17 @@ fn reads_explicit_paragraph_direction() {
 
 #[test]
 fn body_direction_is_inherited_not_explicit() {
-    // The distinction matters: an inherited value is the author's layout
-    // choice and must never be reported as missing.
+    // The distinction matters: an inherited value is not one the author wrote
+    // on this paragraph, and the rules judge it differently. It carries the
+    // part and attribute that supplied it, so a finding on it can be checked.
     let xml = slide(r#"<a:bodyPr rtlCol="1"/><a:p><a:r><a:t>مرحبا</a:t></a:r></a:p>"#);
     let units = scan_xml("s.xml", &xml).unwrap();
-    assert_eq!(
-        units[0].props.direction,
-        Resolved::Inherited(Direction::Rtl)
-    );
+    assert_eq!(units[0].props.direction.effective(), Some(&Direction::Rtl));
     assert!(!units[0].props.direction.is_explicit());
+    assert_eq!(
+        units[0].props.direction.origin().map(ToString::to_string),
+        Some("s.xml bodyPr@rtlCol".to_string())
+    );
 }
 
 #[test]

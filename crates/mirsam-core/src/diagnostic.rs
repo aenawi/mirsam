@@ -51,6 +51,15 @@ pub struct Evidence {
     pub visual_expected: Option<String>,
     /// Offending characters, by name.
     pub offenders: Vec<String>,
+    /// The part and property that supplied the value this finding is about,
+    /// when the unit did not state it itself:
+    /// `ppt/slideMasters/slideMaster1.xml bodyStyle/lvl1pPr@rtl`.
+    ///
+    /// A finding on an inherited value is unverifiable without it — "the
+    /// master says left-to-right" is not checkable unless the tool names the
+    /// master (ADR 0007 §5). Carried here rather than written into `message`,
+    /// because consumers are told not to parse the human output.
+    pub inherited_from: Option<String>,
 }
 
 #[derive(Debug, Clone)]

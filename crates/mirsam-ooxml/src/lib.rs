@@ -16,11 +16,13 @@
 //! explicitly asked to change.
 
 pub mod chart;
+pub mod inherit;
 pub mod package;
 pub mod pptx;
 pub mod rels;
 pub mod rewrite;
 
+pub use inherit::StyleIndex;
 pub use package::Package;
 pub use pptx::PptxDocument;
 pub use rels::RelationshipGraph;
