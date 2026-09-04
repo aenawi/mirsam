@@ -40,11 +40,17 @@ programmatically, or render the escaped form as `mirsam explain` does.
 
 `evidence.inherited_from` names the part and property that supplied a value
 the unit did not state itself — `ppt/slideMasters/slideMaster1.xml
-bodyStyle/lvl1pPr@rtl`. It is present exactly when the finding is about an
+bodyStyle/lvl2pPr@rtl`. It is present exactly when the finding is about an
 inherited value, which is a defect in the deck's template rather than in the
 paragraph. The repair still writes to the paragraph the finding names: setting
 `rtl="1"` on a master would change every paragraph in the deck, including text
 that is correctly left-to-right.
+
+The list level in that path is the level the paragraph is actually at
+(`a:pPr/@lvl`, zero-based, so `lvl="1"` cites `lvl2pPr`). A font slot may name
+a theme part instead — `ppt/theme/theme1.xml fontScheme/minorFont/cs@typeface`
+— because a master writes `+mn-cs`, a reference, and the theme is where the
+typeface itself is written.
 
 Unit ids are adapter-issued and opaque: `<part>#p<n>` is a paragraph;
 `<part>#tbl<n>` a table, `<part>#cols<n>` a text body laid out in two or more
@@ -124,6 +130,11 @@ prompt", which is the M1 application check.
    default nobody aimed at the text — an English master's `rtl="0" algn="l"`
    under Arabic — and is reported exactly as an absent one is.
    [ADR 0007](docs/adr/0007-an-inherited-default-is-not-a-choice.md).
+   The agreement test is stated for direction and alignment. It has nothing to
+   decide for the complex-script font slot, whose rule asks only whether *a*
+   font is named, and so nothing there is resolved that could make the tool
+   louder; the Latin slot is not inherited at all, because that would
+   manufacture `complex-font-missing`'s precondition on text nobody styled.
 3. **Repairs are byte-preserving.** Everything a `Fix` does not address passes
    through untouched. The round-trip test guards this; it must stay green.
 4. **Never insert bidi control characters.** Direction belongs to the

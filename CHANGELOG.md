@@ -167,10 +167,36 @@ Working towards byte-preserving `repair` for PPTX. See
   defaulting to `body` as the schema defaults it.
 
   Resolution happens in the adapter, so `mirsam-core` still performs no I/O.
-  Only direction and alignment are resolved: ADR 0007's "does it agree with
-  the text" test is stated for those two, list levels beyond `lvl1pPr` are
-  2.3, and a master's font slots are theme *references* (`+mn-cs`) that cannot
-  be resolved without the theme, which is 2.3 as well.
+
+- **Nine list levels, selected by `a:pPr/@lvl`.** Every style source states its
+  properties once per level, `a:lvl1pPr` through `a:lvl9pPr`, and a paragraph
+  now reads the level it is actually at rather than always the first — at each
+  hop of the walk, not only at the master. `@lvl` is zero-based, so `lvl="1"`
+  reads `lvl2pPr`, and evidence cites the level it read:
+  `ppt/slideMasters/slideMaster1.xml bodyStyle/lvl2pPr@rtl`. A level a source
+  does not state is not answered by that source's first level — PowerPoint's
+  own fallback there is its application default — so the walk carries on
+  instead of reporting a value no reader will see.
+
+- **The complex-script font slot resolves, through the theme where it has to.**
+  A master naming a typeface in `a:lvlNpPr/a:defRPr/a:cs` now supplies it to
+  the paragraphs below, and a real master names a *reference* — `+mn-cs`, into
+  the theme's `a:fontScheme` — which `mirsam-ooxml::inherit::FontScheme`
+  reads through `RelationshipGraph::theme_of`. A finding names the theme
+  rather than the master that pointed at it, because the theme is where the
+  typeface a reader will see can be checked in one look.
+
+  A reference the theme answers with `<a:cs typeface=""/>` — which is what the
+  stock Office theme states — resolves to nothing rather than to the empty
+  string, so `quarterly-report.pptx` keeps all four of its
+  `complex-font-missing` warnings. The Latin slot is deliberately not
+  inherited: `complex-font-missing` fires only where a Latin font is chosen,
+  and inheriting a template's `+mn-lt` would manufacture that precondition on
+  every Arabic paragraph in every deck.
+
+  An inherited `lang` is still unresolved, and deliberately: ADR 0007's
+  agreement test is stated for direction and alignment, and there is no
+  decided answer for an inherited language tag that disagrees with the letters.
 
 ### Changed
 
@@ -214,6 +240,16 @@ Working towards byte-preserving `repair` for PPTX. See
 - `pptx::scan_xml` resolves nothing, because a caller holding one part has no
   package and so no chain. `pptx::scan_xml_with` takes a `StyleIndex` for
   callers that do.
+
+- **A theme reference is no longer reported as a typeface.** A run writing
+  `<a:cs typeface="+mn-cs"/>` used to put `complex_font: "+mn-cs"` in the
+  report, naming a font nobody has. It now resolves through the theme, or —
+  where there is no theme to read, as in `pptx::scan_xml` — stays `Unset`.
+
+- `tests/fixtures/torture.pptx` writes its master's complex-script slot both
+  ways a real deck does: `+mj-cs` in `titleStyle` and `+mn-cs` in `bodyStyle`,
+  the literal `Dubai` in `otherStyle`. A byte change with no report change, so
+  the corpus exercises the theme reference rather than only the literal name.
 
 ### Fixed
 
