@@ -18,7 +18,9 @@
 pub mod chart;
 pub mod package;
 pub mod pptx;
+pub mod rels;
 pub mod rewrite;
 
 pub use package::Package;
 pub use pptx::PptxDocument;
+pub use rels::RelationshipGraph;

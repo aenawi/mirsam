@@ -137,6 +137,9 @@ crates/
     rules/         the rule set
   mirsam-ooxml/    adapter — PPTX today; DOCX and XLSX share the package layer
     package.rs     ZIP access and the byte-preserving rewrite (raw entry copy)
+    rels.rs        the OPC relationship graph: which part a part inherits
+                   from — slide → layout → master → theme, with each part's
+                   role read from the relationships pointing at it
     rewrite.rs     token-stream repair: change what a Fix names, nothing else
     pptx.rs        DrawingML vocabulary: paragraphs, properties, bullets;
                    DocumentReader and DocumentWriter

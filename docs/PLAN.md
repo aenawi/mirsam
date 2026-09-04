@@ -385,10 +385,46 @@ the namespace declaration.
 
 ## M2 — Inheritance `[ ]`
 
-### 2.1 Package relationship graph `[ ]`
-Parse `_rels/*.rels`; resolve slide → layout → master.
+### 2.1 Package relationship graph `[x]`
+`mirsam-ooxml::rels` reads every `_rels/*.rels` in a package and answers, for
+any part, which parts it inherits from and in what order:
+`RelationshipGraph::inheritance_chain` and the `layout_of` / `master_of` /
+`theme_of` accessors over one walk. `PptxDocument::relationships()` is where
+2.2 reaches for it. Nothing in the audit path calls it yet, so no report
+changes and the golden corpus is untouched — this is the graph, not the
+resolution that walks it.
 
-### 2.2 Property chain resolution `[~]`
+**A part's role is read from the graph, not from its directory.** What a part
+*is* comes from the relationship type that points at it: the part
+`presentation.xml` reaches with a `slide` relationship is a slide, wherever it
+is stored. Matching `ppt/slides/` instead would be a convention OPC does not
+require, and it cannot settle the one ambiguity that matters — a slide master
+relates to its layouts *and* its theme, so "follow the first relationship
+upward" walks a master back down into a layout. Knowing the role first makes
+each hop exact. Relationship types are matched against the full standard
+namespace, not by their last segment, so a Microsoft-namespaced extension of
+the same name is never mistaken for a standard one.
+
+**Targets resolve to stored item names.** A resolved target is handed back in
+the form the ZIP actually stores, because the only useful thing to do with it
+is read that part; the percent-decoded form is tried only when the encoded one
+is absent. The torture deck's `ppt/media/my%20image.png` is encoded on both
+sides and is what a resolver that decoded names would break.
+
+*Acceptance:* met. Twelve unit tests over synthetic packages cover target
+resolution (relative, `..`, `.`, package-absolute), external targets, a
+foreign namespace, a missing attribute, both encodings, a dangling target, and
+a relationship cycle — which terminates the walk rather than looping. Seven
+tests over the corpus prove it against real decks: every slide in all five
+reaches a layout, a master and a theme, each readable from the package; every
+notes slide reaches its notes master; every resolved target is a part
+`read_bytes` accepts, with the percent-encoded case asserted non-vacuous. The
+load-bearing one is `the_role_read_from_the_graph_is_the_role_the_layout_convention_implies`:
+the graph never reads a directory name, so agreeing with the convention on
+every part of every deck is an independent check of the inference — and the
+test that fails first if it is ever quietly replaced by a name match.
+
+### 2.2 Property chain resolution `[ ]`
 Walk paragraph → placeholder (`p:ph/@type`,`@idx`) → layout → master → theme,
 populating `Resolved::Inherited` instead of `Unset`.
 
