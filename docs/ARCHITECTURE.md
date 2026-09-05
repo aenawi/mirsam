@@ -37,6 +37,7 @@ Neither knows the other's vocabulary.
 | Port | Direction | Implemented by |
 |---|---|---|
 | `DocumentReader` | driven | every format adapter |
+| `DocumentReader::unread_sources` | driven | adapters whose document can point outside itself ([ADR 0009](adr/0009-a-source-the-adapter-could-not-read-is-part-of-the-report.md)) |
 | `DocumentWriter` | driven | only formats that can be faithfully edited |
 | `FontSource` | driven | `mirsam-fonts` |
 | CLI | driving | `mirsam-cli` |
@@ -130,7 +131,7 @@ See [`adr/0002-rust-and-token-preserving-xml.md`](adr/0002-rust-and-token-preser
 - **O** — a new check is a `Rule` impl plus one line in the registry. A new
   format is a new crate. Neither modifies existing code.
 - **L** — every adapter satisfies one conformance suite
-  (`crates/mirsam-ooxml/tests/conformance.rs`), so the engine can hold any
+  (`crates/mirsam-conformance/tests/conformance.rs`), so the engine can hold any
   `DocumentReader` without special-casing. Each case states a situation once in
   the shared model's vocabulary and runs it against every adapter; no case that
   asserts what the tool reports names an element, an attribute or a format.
@@ -204,6 +205,27 @@ crates/
                    Resolved the same way inherit.rs resolves PowerPoint's,
                    and sharing its theme reader, because a fontScheme is
                    DrawingML wherever it is stored
+  mirsam-html/     adapter — the web. The first format that is not a package,
+                   and the first whose direction is usually not in the document
+    dom.rs         the tree html5ever builds, into a sink this crate owns.
+                   Needed because `dir` is inherited along *ancestors*, and
+                   HTML's tree construction moves them: <p>a<p>b is two
+                   siblings, and text between <table> and its first <tr> is
+                   foster-parented out of the table
+    css.rs         the part of the cascade that decides direction — selector
+                   matching, specificity, !important, the inherited
+                   properties — and nothing else. At-rules are skipped whole:
+                   a declaration inside @media applies under a viewport this
+                   tool does not have
+    html.rs        the vocabulary: a paragraph is a block box with text in it,
+                   a <table> is a container, dir enters the cascade at the
+                   origin a browser gives it, and dir="auto" is Unset because
+                   "the renderer picks" is what auto asks for. DocumentReader
+                   only
+  mirsam-conformance/  no library code at all: the crate exists so one suite
+                   can depend on every adapter at once. Living inside
+                   mirsam-ooxml, it would have made that crate depend on its
+                   peers — the hexagon leaking through the test tree
   mirsam-fonts/    adapter — which file on this machine draws the typeface a
                    document names. The one piece of the shaping and coverage
                    checks that is about the world rather than about Arabic
@@ -214,7 +236,7 @@ crates/
                    directory and a few kilobytes, not half a gigabyte of
                    outlines — with ttf-parser decoding the records
   mirsam-cli/      driving adapter — argument parsing and rendering only
-    tests/golden.rs  the golden corpus: every .pptx and .docx under
+    tests/golden.rs  the golden corpus: every .pptx, .docx and .html under
                    tests/fixtures/ against its committed report of what the
                    binary finds, repairs and writes — or, for a format it
                    reads but cannot write, of the refusal it gives instead

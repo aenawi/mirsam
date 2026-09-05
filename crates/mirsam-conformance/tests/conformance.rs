@@ -36,6 +36,7 @@
 use mirsam_core::{
     Alignment, Bullet, Direction, DocumentReader, Engine, Resolved, Severity, TextUnit, UnitKind,
 };
+use mirsam_html::HtmlDocument;
 use mirsam_ooxml::{DocxDocument, Package, PptxDocument};
 use std::collections::BTreeSet;
 use std::fs::{self, File};
@@ -240,27 +241,45 @@ impl Document {
 /// against the list this project decided on.
 struct Inexpressible(&'static str);
 
+/// A document of some format, written to disk.
+struct Written {
+    path: PathBuf,
+    /// The parts it holds, spelled as a unit's `location.part` spells them.
+    /// A format that is one file holds one part: the file.
+    parts: Vec<String>,
+}
+
 /// One document format, as this suite needs to use it: something that can
-/// write a package stating a [`Document`], and open it again as a
+/// write a document stating a [`Document`], and open it again as a
 /// [`DocumentReader`].
+///
+/// Note that [`write`] and not "the parts of a package" is the operation.
+/// Two of the three formats here are ZIP packages and one is a single file,
+/// and a suite whose vocabulary trait assumed the first would be a suite that
+/// could only ever hold OOXML adapters to the contract.
+///
+/// [`write`]: Vocabulary::write
 trait Vocabulary: Sync {
     /// The name the adapter reports for itself.
     fn format(&self) -> &'static str;
 
-    /// The file extension a package of this format carries.
+    /// The file extension a document of this format carries.
     fn extension(&self) -> &'static str;
 
-    /// The parts of a package stating `doc`, or the reason this format cannot
-    /// state it.
-    fn parts(&self, doc: &Document) -> Result<Vec<(String, String)>, Inexpressible>;
+    /// Write a document stating `doc` into `dir`, or refuse with the reason
+    /// this format cannot state it.
+    fn write(&self, dir: &Path, doc: &Document) -> Result<Written, Inexpressible>;
 
     fn open(&self, path: &Path) -> mirsam_core::Result<Box<dyn DocumentReader>>;
+
+    /// The parts an existing document on disk holds, for the corpus check.
+    fn parts_of(&self, path: &Path) -> Vec<String>;
 }
 
 /// Every adapter this build has. A case runs against all of them; adding a
 /// format here is how a new adapter is held to the same contract.
 fn vocabularies() -> Vec<Box<dyn Vocabulary>> {
-    vec![Box::new(Pptx), Box::new(Docx)]
+    vec![Box::new(Pptx), Box::new(Docx), Box::new(Html)]
 }
 
 // ------------------------------------------------------------ PresentationML
@@ -379,15 +398,7 @@ impl Pptx {
     }
 }
 
-impl Vocabulary for Pptx {
-    fn format(&self) -> &'static str {
-        "pptx"
-    }
-
-    fn extension(&self) -> &'static str {
-        "pptx"
-    }
-
+impl Packaged for Pptx {
     fn parts(&self, doc: &Document) -> Result<Vec<(String, String)>, Inexpressible> {
         let mut shapes = String::new();
         if !doc.paragraphs.is_empty() {
@@ -460,6 +471,24 @@ impl Vocabulary for Pptx {
             ),
             ("ppt/slideMasters/slideMaster1.xml".into(), master),
         ])
+    }
+}
+
+impl Vocabulary for Pptx {
+    fn format(&self) -> &'static str {
+        "pptx"
+    }
+
+    fn extension(&self) -> &'static str {
+        "pptx"
+    }
+
+    fn write(&self, dir: &Path, doc: &Document) -> Result<Written, Inexpressible> {
+        Ok(zip_package(dir, self.extension(), &self.parts(doc)?))
+    }
+
+    fn parts_of(&self, path: &Path) -> Vec<String> {
+        package_parts(path)
     }
 
     fn open(&self, path: &Path) -> mirsam_core::Result<Box<dyn DocumentReader>> {
@@ -581,15 +610,7 @@ impl Docx {
     }
 }
 
-impl Vocabulary for Docx {
-    fn format(&self) -> &'static str {
-        "docx"
-    }
-
-    fn extension(&self) -> &'static str {
-        "docx"
-    }
-
+impl Packaged for Docx {
     fn parts(&self, doc: &Document) -> Result<Vec<(String, String)>, Inexpressible> {
         let mut body = String::new();
         for paragraph in &doc.paragraphs {
@@ -622,13 +643,263 @@ impl Vocabulary for Docx {
             ("word/styles.xml".into(), Self::styles(&doc.chain)?),
         ])
     }
+}
+
+impl Vocabulary for Docx {
+    fn format(&self) -> &'static str {
+        "docx"
+    }
+
+    fn extension(&self) -> &'static str {
+        "docx"
+    }
+
+    fn write(&self, dir: &Path, doc: &Document) -> Result<Written, Inexpressible> {
+        Ok(zip_package(dir, self.extension(), &self.parts(doc)?))
+    }
+
+    fn parts_of(&self, path: &Path) -> Vec<String> {
+        package_parts(path)
+    }
 
     fn open(&self, path: &Path) -> mirsam_core::Result<Box<dyn DocumentReader>> {
         Ok(Box::new(DocxDocument::open(path)?))
     }
 }
 
+// ------------------------------------------------------------------- HTML
+
+struct Html;
+
+impl Html {
+    /// The `style` declarations a paragraph's marking needs, if any.
+    ///
+    /// CSS states a *physical* left and right as well as a direction-relative
+    /// start and end, so HTML is the one format here that refuses neither
+    /// alignment. What it has no spelling for is `distributed`: CSS's
+    /// `text-align` has no value that stretches every line to the full
+    /// measure, the nearest thing being a `text-justify` that is not the same
+    /// property and is not the same instruction.
+    fn text_align(alignment: Alignment) -> Result<&'static str, Inexpressible> {
+        Ok(match alignment {
+            Alignment::Left => "left",
+            Alignment::Right => "right",
+            Alignment::Center => "center",
+            Alignment::Justify => "justify",
+            Alignment::Start => "start",
+            Alignment::End => "end",
+            Alignment::Distributed => {
+                return Err(Inexpressible(
+                    "CSS text-align has no distributed value; the nearest is \
+                     text-justify, which is a different property",
+                ));
+            }
+        })
+    }
+
+    /// The one font stack CSS gives an element, or the reason a pair of slots
+    /// cannot be stated.
+    ///
+    /// OOXML gives a run a Latin slot and a complex-script slot. CSS gives it
+    /// one `font-family`, which answers for every script on the element, so a
+    /// document that fills one slot and leaves the other empty — or fills them
+    /// with different typefaces — is a document the web cannot write.
+    fn font_family(p: &Paragraph) -> Result<Option<&'static str>, Inexpressible> {
+        match (p.latin_font, p.complex_font) {
+            (None, None) => Ok(None),
+            // The complex slot alone: one stack answers for the Arabic, which
+            // is the whole of what that slot was for.
+            (None, Some(family)) => Ok(Some(family)),
+            (Some(latin), Some(complex)) if latin == complex => Ok(Some(latin)),
+            _ => Err(Inexpressible(
+                "CSS has one font-family per element, which answers for every \
+                 script; it cannot fill a Latin slot and leave the complex-script \
+                 one empty, nor state two different typefaces",
+            )),
+        }
+    }
+
+    /// A block element carrying one paragraph's text and marking.
+    fn block(tag: &str, p: &Paragraph) -> Result<String, Inexpressible> {
+        let mut attributes = String::new();
+        if let Some(direction) = p.direction {
+            attributes.push_str(&format!(
+                r#" dir="{}""#,
+                if direction == Direction::Rtl {
+                    "rtl"
+                } else {
+                    "ltr"
+                }
+            ));
+        }
+        if let Some(tag) = p.language {
+            attributes.push_str(&format!(r#" lang="{tag}""#));
+        }
+
+        let mut style = String::new();
+        if let Some(alignment) = p.alignment {
+            style.push_str(&format!("text-align:{};", Self::text_align(alignment)?));
+        }
+        if let Some(family) = Self::font_family(p)? {
+            style.push_str(&format!("font-family:{family};"));
+        }
+        if !style.is_empty() {
+            attributes.push_str(&format!(r#" style="{style}""#));
+        }
+
+        Ok(format!("<{tag}{attributes}>{}</{tag}>", escape(p.text)))
+    }
+
+    fn paragraph(p: &Paragraph) -> Result<String, Inexpressible> {
+        // A list marker the format produces itself is `<li>` inside a list,
+        // which is the web's only native one.
+        if p.bullet {
+            return Ok(format!("<ul>{}</ul>", Self::block("li", p)?));
+        }
+        Self::block("p", p)
+    }
+
+    fn table(t: &Table) -> Result<String, Inexpressible> {
+        let mut attributes = String::new();
+        if let Some(direction) = t.direction {
+            attributes.push_str(&format!(
+                r#" dir="{}""#,
+                if direction == Direction::Rtl {
+                    "rtl"
+                } else {
+                    "ltr"
+                }
+            ));
+        }
+        let mut cells = String::new();
+        for text in t.cells {
+            let paragraph = Paragraph {
+                text,
+                ..t.cell.clone()
+            };
+            // The cell *is* the block that holds the text, so the paragraph's
+            // marking goes on the `<td>` rather than on something inside it.
+            cells.push_str(&Self::block("td", &paragraph)?);
+        }
+        Ok(format!("<table{attributes}><tr>{cells}</tr></table>"))
+    }
+
+    /// What the chain above the text states: in HTML, an ancestor element.
+    ///
+    /// The web's cascade has no separate part to put it in — no master, no
+    /// `styles.xml` — so the ancestor is where a value the paragraph does not
+    /// state comes from, and `<body>` is the ancestor every paragraph has.
+    fn body_attributes(chain: &Chain) -> Result<String, Inexpressible> {
+        let mut attributes = String::new();
+        if let Some(direction) = chain.direction {
+            attributes.push_str(&format!(
+                r#" dir="{}""#,
+                if direction == Direction::Rtl {
+                    "rtl"
+                } else {
+                    "ltr"
+                }
+            ));
+        }
+        if let Some(alignment) = chain.alignment {
+            attributes.push_str(&format!(
+                r#" style="text-align:{};""#,
+                Self::text_align(alignment)?
+            ));
+        }
+        Ok(attributes)
+    }
+}
+
+impl Vocabulary for Html {
+    fn format(&self) -> &'static str {
+        "html"
+    }
+
+    fn extension(&self) -> &'static str {
+        "html"
+    }
+
+    fn write(&self, dir: &Path, doc: &Document) -> Result<Written, Inexpressible> {
+        let mut body = String::new();
+        for paragraph in &doc.paragraphs {
+            body.push_str(&Self::paragraph(paragraph)?);
+        }
+        for table in &doc.tables {
+            body.push_str(&Self::table(table)?);
+        }
+
+        // No `<title>`: it is text a reader sees, so the adapter reports it as
+        // a unit, and a suite that added one to every document would be
+        // stating a paragraph no case asked for.
+        let html = format!(
+            "<!doctype html><html><head><meta charset=\"utf-8\"></head>\
+             <body{}>{body}</body></html>",
+            Self::body_attributes(&doc.chain)?
+        );
+
+        let path = dir.join(format!("document.{}", self.extension()));
+        fs::write(&path, html).expect("writing the document");
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .expect("the file has a name")
+            .to_string();
+        Ok(Written {
+            path,
+            parts: vec![name],
+        })
+    }
+
+    fn parts_of(&self, path: &Path) -> Vec<String> {
+        // One file, one part, named as a unit's location names it.
+        path.file_name()
+            .and_then(|name| name.to_str())
+            .map(|name| vec![name.to_string()])
+            .unwrap_or_default()
+    }
+
+    fn open(&self, path: &Path) -> mirsam_core::Result<Box<dyn DocumentReader>> {
+        Ok(Box::new(HtmlDocument::open(path)?))
+    }
+}
+
 // ------------------------------------------------------------ package writing
+
+/// A format that is a ZIP of XML parts — which both OOXML formats are, and
+/// HTML is not.
+///
+/// Kept separate from [`Vocabulary`] so that the suite's idea of "a document"
+/// is a file on disk rather than a package, and a single-file format needs no
+/// exception to join it.
+trait Packaged {
+    /// The parts of a package stating `doc`, or the reason this format cannot
+    /// state it.
+    fn parts(&self, doc: &Document) -> Result<Vec<(String, String)>, Inexpressible>;
+}
+
+/// Write parts into a ZIP named for the format.
+fn zip_package(dir: &Path, extension: &str, parts: &[(String, String)]) -> Written {
+    let path = dir.join(format!("document.{extension}"));
+    let mut zip = ZipWriter::new(File::create(&path).expect("creating the package"));
+    let options = SimpleFileOptions::default();
+    for (name, body) in parts {
+        zip.start_file(name.as_str(), options).expect("a part");
+        zip.write_all(body.as_bytes()).expect("writing a part");
+    }
+    zip.finish().expect("finishing the package");
+    Written {
+        path,
+        parts: parts.iter().map(|(name, _)| name.clone()).collect(),
+    }
+}
+
+/// The parts an OOXML package on disk holds.
+fn package_parts(path: &Path) -> Vec<String> {
+    Package::open(path)
+        .and_then(|package| package.part_names())
+        .unwrap_or_default()
+}
 
 /// The relationship namespace every type below is a member of.
 const OFFICE: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -769,25 +1040,14 @@ impl Reading {
 fn read(doc: &Document) -> Vec<Reading> {
     let mut readings = Vec::new();
     for vocabulary in vocabularies() {
-        let Ok(parts) = vocabulary.parts(doc) else {
+        let scratch = Scratch::new();
+        let Ok(written) = vocabulary.write(&scratch.0, doc) else {
             continue;
         };
-        let scratch = Scratch::new();
-        let path = scratch
-            .0
-            .join(format!("document.{}", vocabulary.extension()));
-
-        let mut zip = ZipWriter::new(File::create(&path).unwrap());
-        let options = SimpleFileOptions::default();
-        for (name, body) in &parts {
-            zip.start_file(name.as_str(), options).unwrap();
-            zip.write_all(body.as_bytes()).unwrap();
-        }
-        zip.finish().unwrap();
 
         let mut document = vocabulary
-            .open(&path)
-            .unwrap_or_else(|e| panic!("{}: the package did not open: {e}", vocabulary.format()));
+            .open(&written.path)
+            .unwrap_or_else(|e| panic!("{}: the document did not open: {e}", vocabulary.format()));
         assert_eq!(
             document.format(),
             vocabulary.format(),
@@ -800,7 +1060,7 @@ fn read(doc: &Document) -> Vec<Reading> {
         readings.push(Reading {
             format: vocabulary.format(),
             units,
-            parts: parts.into_iter().map(|(name, _)| name).collect(),
+            parts: written.parts,
             _scratch: scratch,
         });
     }
@@ -832,9 +1092,12 @@ fn read_all(doc: &Document) -> Vec<Reading> {
 fn refusals(doc: &Document) -> Vec<(&'static str, &'static str)> {
     vocabularies()
         .iter()
-        .filter_map(|v| match v.parts(doc) {
-            Err(Inexpressible(reason)) => Some((v.format(), reason)),
-            Ok(_) => None,
+        .filter_map(|v| {
+            let scratch = Scratch::new();
+            match v.write(&scratch.0, doc) {
+                Err(Inexpressible(reason)) => Some((v.format(), reason)),
+                Ok(_) => None,
+            }
         })
         .collect()
 }
@@ -1360,44 +1623,76 @@ fn arabic_justified_by_its_font_is_reported_by_nobody() {
 }
 
 #[test]
-fn a_latin_font_with_an_empty_arabic_slot_is_reported_in_every_format() {
+fn a_latin_font_with_an_empty_arabic_slot_is_reported_by_every_format_that_can_state_it() {
     // The commonest silent defect there is: the Arabic renders in whatever the
     // application substitutes, which is not the typeface anybody chose.
+    //
+    // HTML is left out, and that is the format's answer rather than the
+    // adapter's. CSS gives an element one `font-family` for every script, so
+    // there is no pair of slots to fill unevenly and no defect here to write.
     let doc = Document::one(
         Paragraph::correct_arabic()
             .without_complex_font()
             .latin_font("Calibri"),
     );
-    assert_eq!(agree_on(&doc), ["complex-font-missing"]);
+    let readings = read(&doc);
+    assert_eq!(
+        readings.iter().map(|r| r.format).collect::<Vec<_>>(),
+        ["pptx", "docx"],
+        "the two formats with two font slots state it, and the one with a \
+         single stack cannot"
+    );
+    for reading in &readings {
+        assert_eq!(
+            reading.rules(),
+            ["complex-font-missing"],
+            "{}",
+            reading.format
+        );
+    }
 }
 
 // ------------------------------------------------------------- the refusals
 
 #[test]
 fn every_refusal_is_one_the_design_intended() {
-    // The list of situations a format genuinely cannot state. It is short, both
-    // entries are the same fact seen from either side — one format's alignment
-    // is physical and the other's is direction-relative — and it is committed
-    // here so that a format which quietly stopped expressing something else
-    // fails rather than passes.
+    // The list of situations a format genuinely cannot state. Every entry is a
+    // property of a file format rather than of an adapter, and the list is
+    // committed here so that a format which quietly stopped expressing
+    // something else fails rather than passes.
     let physical = Document::one(Paragraph::of(ARABIC).alignment(Alignment::Left));
     let relative = Document::one(Paragraph::of(ARABIC).alignment(Alignment::Start));
+    let distributed = Document::one(Paragraph::of(ARABIC).alignment(Alignment::Distributed));
+    let one_slot_filled = Document::one(Paragraph::of(ARABIC).latin_font("Calibri"));
+
+    let refusing = |doc: &Document| {
+        refusals(doc)
+            .iter()
+            .map(|(format, _)| *format)
+            .collect::<Vec<_>>()
+    };
 
     assert_eq!(
-        refusals(&physical)
-            .iter()
-            .map(|(f, _)| *f)
-            .collect::<Vec<_>>(),
+        refusing(&physical),
         ["docx"],
-        "a physical edge is PowerPoint's to state and Word's to refuse"
+        "a physical edge is Word's alone to refuse: its w:jc is direction-relative"
     );
     assert_eq!(
-        refusals(&relative)
-            .iter()
-            .map(|(f, _)| *f)
-            .collect::<Vec<_>>(),
+        refusing(&relative),
         ["pptx"],
-        "a direction-relative edge is Word's to state and PowerPoint's to refuse"
+        "a direction-relative edge is PowerPoint's alone to refuse: a:pPr/@algn \
+         names physical edges"
+    );
+    assert_eq!(
+        refusing(&distributed),
+        ["html"],
+        "distributed text is the one alignment CSS has no value for"
+    );
+    assert_eq!(
+        refusing(&one_slot_filled),
+        ["html"],
+        "CSS has one font stack per element, so a filled Latin slot beside an \
+         empty complex-script one is not a document the web can write"
     );
 
     // Everything else every format states.
@@ -1406,9 +1701,7 @@ fn every_refusal_is_one_the_design_intended() {
         Document::one(Paragraph::correct_arabic()),
         Document::one(Paragraph::of(ARABIC).alignment(Alignment::Center)),
         Document::one(Paragraph::of(ARABIC).alignment(Alignment::Justify)),
-        Document::one(Paragraph::of(ARABIC).alignment(Alignment::Distributed)),
         Document::one(Paragraph::of(ARABIC).bullet()),
-        Document::one(Paragraph::of(ARABIC).latin_font("Calibri")),
         Document::default().with_table(Table::of(&["المؤشر"])),
         Document::one(Paragraph::of(ARABIC)).under(Chain::stating(Direction::Rtl)),
     ] {
@@ -1421,15 +1714,28 @@ fn every_refusal_is_one_the_design_intended() {
 }
 
 #[test]
-fn a_hard_left_edge_under_arabic_is_reported_by_the_format_that_can_state_it() {
+fn a_hard_left_edge_under_arabic_is_reported_by_every_format_that_can_state_it() {
     // The one asymmetry a user could mistake for missing coverage, so it is
     // asserted rather than left implied: `alignment-incoherent` is structurally
     // silent on Word not because the adapter is thin but because Word has no
-    // way to write the defect. The format that does write it still reports it.
+    // way to write the defect. Both formats that *can* write it report it, and
+    // they report the same thing — PowerPoint's `algn="l"` and CSS's
+    // `text-align: left` are the same instruction under Arabic.
     let doc = Document::one(Paragraph::correct_arabic().alignment(Alignment::Left));
     let readings = read(&doc);
-    assert_eq!(readings.len(), 1, "only one format can state this");
-    assert_eq!(readings[0].rules(), ["alignment-incoherent"]);
+    assert_eq!(
+        readings.iter().map(|r| r.format).collect::<Vec<_>>(),
+        ["pptx", "html"],
+        "the formats with a physical left edge"
+    );
+    for reading in &readings {
+        assert_eq!(
+            reading.rules(),
+            ["alignment-incoherent"],
+            "{}",
+            reading.format
+        );
+    }
 }
 
 /// A corpus deck is not needed to know that both adapters read a real package:
@@ -1456,7 +1762,7 @@ fn every_committed_corpus_document_reads_through_the_same_port() {
         let units = document
             .scan()
             .unwrap_or_else(|e| panic!("{name}: the scan failed: {e}"));
-        let parts = Package::open(&path).unwrap().part_names().unwrap();
+        let parts = vocabulary.parts_of(&path);
         for unit in &units {
             assert!(
                 parts.contains(&unit.location.part),

@@ -3,6 +3,8 @@ resolver = "3"
 members = [
     "crates/mirsam-core",
     "crates/mirsam-ooxml",
+    "crates/mirsam-html",
+    "crates/mirsam-conformance",
     "crates/mirsam-fonts",
     "crates/mirsam-cli",
 ]
@@ -21,6 +23,7 @@ categories = ["command-line-utilities", "text-processing", "internationalization
 [workspace.dependencies]
 mirsam-core = { path = "crates/mirsam-core", version = "0.1.0" }
 mirsam-ooxml = { path = "crates/mirsam-ooxml", version = "0.1.0" }
+mirsam-html = { path = "crates/mirsam-html", version = "0.1.0" }
 mirsam-fonts = { path = "crates/mirsam-fonts", version = "0.1.0" }
 unicode-bidi = "0.3.18"
 unicode-normalization = "0.1.25"
@@ -29,6 +32,9 @@ rustybuzz = "0.20"
 # binary would be two answers to "does this font have this glyph".
 ttf-parser = "0.25"
 quick-xml = "0.42"
+# Tree construction only. The HTML adapter supplies its own `TreeSink` rather
+# than taking `markup5ever_rcdom`, which names itself unsupported.
+html5ever = "0.39"
 zip = { version = "8.6", default-features = false, features = ["deflate"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

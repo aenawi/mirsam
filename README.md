@@ -152,12 +152,16 @@ so an agent can act on it without opening PowerPoint. See [`AGENTS.md`](AGENTS.m
 ## Status
 
 **v0.1 “Steppe Eagle” — audit only, PPTX only.** Byte-preserving `repair` for
-PPTX has landed on `main` and ships as v0.2. A DOCX **reader** has landed too,
-so `mirsam audit report.docx` works; `repair` refuses a `.docx` and says why,
-because the Word writer is not built yet. The XLSX, HTML and PDF adapters are
-specified and scheduled; see [`docs/ROADMAP.md`](docs/ROADMAP.md). The tool
-reports what it can actually verify and nothing more — a discipline inherited
-from its prior art.
+PPTX has landed on `main` and ships as v0.2. Two more **readers** have landed
+since: DOCX, so `mirsam audit report.docx` works, and HTML, so `mirsam audit
+page.html` reads `dir`, `lang` and the part of CSS that decides direction —
+including a stylesheet the page links by a relative path. `repair` refuses
+both and says why, because neither writer is built yet. A page linking a
+stylesheet on a server is audited without it and the report names what it did
+not read, because this tool makes no network calls. The XLSX and PDF adapters
+are specified and scheduled; see [`docs/ROADMAP.md`](docs/ROADMAP.md). The
+tool reports what it can actually verify and nothing more — a discipline
+inherited from its prior art.
 
 ## Design
 
@@ -169,8 +173,8 @@ Every change is checked against a golden corpus: presentations and documents
 under [`tests/fixtures/`](tests/fixtures/), each with a committed report of
 what `mirsam` finds in it, repairs in it and writes to it. CI fails on any
 difference, so a change in behaviour is always visible against a document.
-One conformance suite runs the same cases against every adapter, so the two
-formats cannot drift into two rule sets.
+One conformance suite runs the same cases against every adapter, so the three
+formats cannot drift into three rule sets.
 
 ## Credits
 

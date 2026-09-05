@@ -2,26 +2,26 @@
   "audit": {
     "blocking": false,
     "diagnostics": [],
-    "file": "quarterly-review-correct.docx",
+    "file": "quarterly-page-correct.html",
     "fonts": {
       "checked": false
     },
-    "format": "docx",
+    "format": "html",
     "sources": {
       "unread": []
     },
     "strict": false,
     "summary": {
-      "arabic_units": 14,
+      "arabic_units": 10,
       "errors": 0,
-      "mixed_units": 3,
+      "mixed_units": 1,
       "notes": 0,
-      "units_scanned": 17,
+      "units_scanned": 11,
       "warnings": 0
     }
   },
   "changed_parts": null,
-  "document": "quarterly-review-correct.docx",
+  "document": "quarterly-page-correct.html",
   "exit_codes": {
     "audit": 0,
     "audit --strict": 0,
@@ -29,6 +29,6 @@
     "repair --strict": 2
   },
   "repair": {
-    "refused": ".docx can be audited but not yet repaired; `mirsam audit` reads it, and the writer is scheduled in docs/ROADMAP.md"
+    "refused": ".html can be audited but not yet repaired; `mirsam audit` reads it, and the writer is scheduled in docs/ROADMAP.md"
   }
 }

@@ -1,0 +1,67 @@
+<!doctype html>
+<!--
+  A corpus document (PLAN §5.1). Unlike the decks and the Word files beside
+  it, this one is not generated: an HTML page *is* its own source, and there
+  is no package to build, so `make fixtures` has nothing to do here and the
+  file is edited directly.
+
+  It is one page an Arabic team would plausibly ship, carrying one instance of
+  each defect the HTML adapter can see, and correctly marked text around them
+  so that silence is proved as well as noise.
+-->
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>التقرير الربعي</title>
+<!-- Not fetched: mirsam performs no network I/O, and the report says so
+     rather than letting the silence of a rule imply the sheet was read. -->
+<link rel="stylesheet" href="https://cdn.example.test/site.css">
+<style>
+body { font-family: Dubai, sans-serif; }
+.rtl { direction: rtl; text-align: right; }
+.stray { text-align: left; }
+</style>
+</head>
+<body class="rtl">
+
+<h1>ارتفع الأداء في الربع الرابع</h1>
+
+<!-- Correct: direction and alignment inherited from a stylesheet that agrees
+     with the text, which is the layout doing its job (ADR 0007). -->
+<p>ارتفع الأداء بنسبة 25% في Q4 2026.</p>
+
+<!-- direction-mismatch: declared left to right, and the digits and the Latin
+     move when it renders. -->
+<p dir="ltr">ارتفع الأداء بنسبة 25% في Q4 2026.</p>
+
+<!-- direction-unset: `auto` asks the browser to guess from the first strong
+     character, which is fragile rather than decided. -->
+<p dir="auto">ارتفع الأداء بنسبة 25% في Q4 2026.</p>
+
+<!-- alignment-incoherent: a hard physical left edge under right-to-left text.
+     CSS can write this; Word cannot. -->
+<p class="stray">ارتفع الأداء في الربع الرابع</p>
+
+<!-- literal-bullet: a marker glyph typed into the text instead of a list. -->
+<p>• الإيرادات ارتفعت</p>
+
+<!-- The same point as a list the format produces itself: silent. -->
+<ul>
+<li>المصروفات انخفضت</li>
+</ul>
+
+<!-- tatweel-padding: a heading stretched with typed U+0640. -->
+<h2>الملخـــص</h2>
+
+<!-- container-direction: the cells read right to left and the table lays them
+     out left to right, so the first column lands on the wrong side. -->
+<table dir="ltr">
+<tr><th>المؤشر</th><th>الربع</th></tr>
+<tr><td>الإيرادات</td><td>الرابع</td></tr>
+</table>
+
+<!-- English, correctly marked: the tool must not touch it. -->
+<p lang="en" dir="ltr">Performance rose in the fourth quarter.</p>
+
+</body>
+</html>
