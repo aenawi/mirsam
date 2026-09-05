@@ -907,11 +907,81 @@ committed reports changed in one line each — the key naming the file is
 
 ## M4 — Shaping `[ ]`
 
-### 4.1 `rustybuzz` shaping `[ ]`
+### 4.1 `rustybuzz` shaping `[x]`
 Shape each Arabic run; assert joining forms are produced.
 
-### 4.2 Font coverage `[~]`
+Two modules, and the split between them is the point. `mirsam-core::joining`
+says what the *text* requires — the seen of `سلام` must be drawn initial, the
+lam medial, the alef final, and the meem after the alef standalone — from the
+logical-order codepoints alone, with no font in the room. It is the Unicode
+Joining_Type property and the four-line rule the standard states over it, and
+every one of its tests is checkable against ArabicShaping.txt.
+`mirsam-core::shape` then hands each run to `rustybuzz` — HarfBuzz's shaping
+algorithm, ported, and the same code Firefox's successor engines run — and
+reports what actually came back. **A shaping defect is the gap between the
+two**, and it is the first defect in this tool that no amount of reading XML
+could ever find: the text is correct Unicode, correctly directed, correctly
+aligned, and it renders as a row of disconnected letters.
+
+*What "joined" is decided by.* A font's `cmap` gives the glyph a character
+draws when nothing has shaped it; a shaper applies `init`, `medi` or `fina`
+and substitutes another. So the question is answered without knowing anything
+about a font's design, its glyph names or its rendering: **the character's own
+glyph is not among the ones that came back.** A font with no `GSUB` cannot
+produce any other.
+
+**One letter drawn standalone is not a defect, and a shipped font proves it.**
+The tempting rule — report every letter that came back standalone — fires on
+macOS's Arial, which renders Arabic perfectly and whose `fina` covers neither
+reh nor meem. It does not need to: a reh only ever takes a join from its
+right, and the stroke that makes that join is drawn by the letter *before* it.
+So `shape` reports and does not judge. It says which letters were required to
+join, which the font drew standalone and which it has no glyph for; whether
+that adds up to a finding is 4.3's decision, and 4.3 can only make it honestly
+if the facts arrive unweighted. The one signal that survives is the aggregate:
+a font with no shaping tables produces **no** joins in a run that required
+several, and no design choice can look like that.
+[ADR 0008](adr/0008-a-standalone-letter-is-not-a-shaping-defect.md).
+
+*Three fonts, built here, differing in one thing each.*
+`scripts/make-shaping-fixture.py` writes them byte by byte with Python's
+`struct` and nothing else — no `fontTools`, for the reason
+`make-torture-fixture.py` gives about `zipfile`, and nothing in the generator
+has seen `ttf-parser` or `rustybuzz`. `joining.ttf` carries all three form
+features; `nonjoining.ttf` is the same font with no `GSUB` at all, which is
+the defect M4 exists for; `partial.ttf` shapes everything except the final
+forms of the right-joining letters, which is Arial's behaviour and is not a
+defect at all. A rule that regresses to a per-letter verdict fails against
+`partial.ttf` rather than on a user's deck. They are ~1.8 KB each, they carry
+no outlines because shaping never reads one, and `make fonts` regenerates
+them deterministically.
+
+*The boundary this item does not cross.* `Font::parse` takes bytes.
+Which typeface a paragraph resolves to, and where that file lives on which
+machine, are questions about the world and belong to an adapter — invariant 1
+holds exactly as before, and `mirsam-core` still opens nothing. That is 4.2's
+work, and until it lands nothing in the audit path calls any of this.
+
+*Acceptance:* met. `cargo test` shapes real text through three real fonts and
+asserts the exact glyph each letter came back as, and the three fonts disagree
+about nothing except shaping. `مرحبا` produces five joins through
+`joining.ttf`, three through `partial.ttf` and none through `nonjoining.ttf`.
+Vowelled text is asserted too, because a shaper merges a harakat into its
+base's cluster and a check that demanded one glyph per letter would report
+every vowelled word in Arabic. Validated beyond the fixtures by hand against
+macOS's SF Arabic, Mishafi, Times New Roman and Arial: no false join, no
+false failure, including on the lam-alef ligature.
+
+### 4.2 Font coverage `[ ]`
 `ttf-parser` over the resolved font; report missing codepoints by name.
+
+Unblocked by 4.1: `shape::Font::covers` and `Shaping::unmapped` already
+separate "the font has no glyph for this letter" from "the font drew it
+standalone", because shaping could not report honestly without the
+distinction. What is left is the part that is not the domain's: resolving the
+typeface a paragraph names — `Properties::complex_font`, and the theme or
+style that supplied it — to bytes on a machine, which is an adapter's work and
+where the I/O lives.
 
 ### 4.3 `shaping-broken` and `font-coverage` rules `[~]`
 

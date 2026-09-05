@@ -160,6 +160,16 @@ A report for a format the tool reads but cannot write holds the refusal
 `repair` gave and the exit code it used, in place of a repair report — so the
 day a writer lands, it shows up as a diff on a real document.
 
+**The shaping fixtures are fonts, and they are generated too.** The three
+under `crates/mirsam-core/tests/fonts/` are written byte by byte by
+`scripts/make-shaping-fixture.py` — no `fontTools`, for the reason the
+document generators avoid `python-pptx` — and regenerate with `make fonts`.
+They differ in one thing each: `joining.ttf` carries `init`/`medi`/`fina`,
+`nonjoining.ttf` has no `GSUB` at all, `partial.ttf` shapes everything except
+the final forms of the right-joining letters. Their glyph order is public and
+the tests name exact glyph ids against it, so changing the generator's layout
+means changing the tests with it.
+
 **A corpus document must be one an application opens.** The hand-built ones —
 `torture.pptx`, `clean.pptx`, `broken-arabic.pptx` from
 `scripts/make-torture-fixture.py`, and `quarterly-review.docx` and
@@ -198,6 +208,14 @@ prompt", which is the M1 application check.
    logical-order Unicode.
 6. **Findings carry evidence.** A diagnostic a reviewer cannot verify without
    opening the application is not finished.
+7. **A letter a font drew standalone is not a shaping defect.** macOS's Arial
+   gives no final form to reh or meem and renders Arabic perfectly: a reh
+   only takes a join from its right, and the stroke that makes it belongs to
+   the letter before. The only conclusion the evidence supports is the
+   aggregate — a font that produced *no* joins in a run that required several
+   — and `crates/mirsam-core/tests/fonts/partial.ttf` exists so that a check
+   which forgets this fails a test rather than a user's deck.
+   [ADR 0008](docs/adr/0008-a-standalone-letter-is-not-a-shaping-defect.md).
 
 ## Before pushing
 

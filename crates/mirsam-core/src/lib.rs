@@ -16,6 +16,12 @@
 //! once against that shared shape is what keeps five format adapters from
 //! becoming five divergent rule sets.
 //!
+//! [`shape`] is where that "and a font" is cashed in: it shapes a run through
+//! a real OpenType shaper and reports what came back, so the tool can catch
+//! Arabic that is correct in every attribute and still renders as a row of
+//! disconnected letters. It takes font *bytes* — finding the file is an
+//! adapter's business, and this crate still opens nothing.
+//!
 //! ```
 //! use mirsam_core::{Engine, TextUnit, Direction, Resolved, Properties};
 //!
@@ -35,16 +41,20 @@ pub mod controls;
 pub mod diagnostic;
 pub mod error;
 pub mod fix;
+pub mod joining;
 pub mod ports;
 pub mod rules;
 pub mod script;
+pub mod shape;
 pub mod text;
 
 pub use diagnostic::{Diagnostic, Evidence, Report, RuleId, Severity};
 pub use error::{Error, Result};
 pub use fix::{Fix, Repair};
+pub use joining::JoiningForm;
 pub use ports::{DocumentReader, DocumentWriter};
 pub use rules::{Engine, RepairOptions, Rule};
+pub use shape::{Font, ShapedLetter, Shaping};
 pub use text::{
     Alignment, Bullet, Direction, Location, Origin, Properties, Resolved, TextUnit, UnitId,
     UnitKind,
