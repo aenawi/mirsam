@@ -28,6 +28,11 @@ pub enum Fix {
     /// Remove explicit bidi controls. Byte offsets into the unit's text,
     /// ascending; the adapter must apply them back-to-front.
     RemoveControls(Vec<usize>),
+    /// Remove typed tatweel that pads text to a width. Byte offsets into the
+    /// unit's text, ascending, on the same terms as `RemoveControls` — and an
+    /// adapter given both must delete from one merged, descending sequence,
+    /// since each set indexes the text as it was scanned.
+    RemoveTatweel(Vec<usize>),
     /// Replace a typed marker glyph with the format's native list feature.
     ConvertLiteralBullet {
         marker: char,
@@ -46,6 +51,9 @@ impl fmt::Display for Fix {
             Self::SetComplexFont(typeface) => write!(f, "set complex-script font {typeface:?}"),
             Self::RemoveControls(offsets) => {
                 write!(f, "remove {} explicit bidi control(s)", offsets.len())
+            }
+            Self::RemoveTatweel(offsets) => {
+                write!(f, "remove {} padding tatweel(s)", offsets.len())
             }
             Self::ConvertLiteralBullet { marker } => {
                 write!(f, "convert typed {marker:?} to a native bullet")

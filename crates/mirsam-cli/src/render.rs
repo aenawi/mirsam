@@ -278,10 +278,11 @@ pub fn repair(r: &Repaired<'_>, as_json: bool) {
     );
     let yes_no = |flag: bool| if flag { "yes" } else { "no" };
     println!(
-        "language {} | font {} | convert-bullets {} | align {}",
+        "language {} | font {} | convert-bullets {} | strip-tatweel {} | align {}",
         r.options.language,
         r.options.complex_font.as_deref().unwrap_or("(none)"),
         yes_no(r.options.convert_bullets),
+        yes_no(r.options.strip_tatweel),
         yes_no(r.options.align),
     );
     fonts_line(r.fonts_checked);

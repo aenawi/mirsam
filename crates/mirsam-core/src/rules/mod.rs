@@ -60,6 +60,11 @@ pub struct RepairOptions {
     /// Replace typed bullet glyphs with the format's native list. Off by
     /// default because it edits the text itself, not only its properties.
     pub convert_bullets: bool,
+    /// Delete typed tatweel the engine found padding text to a width. Off by
+    /// default for the same reason as `convert_bullets`, and more so: this
+    /// deletes characters the author typed rather than replacing formatting
+    /// they improvised.
+    pub strip_tatweel: bool,
     /// Write an explicit start-edge alignment on right-to-left paragraphs
     /// that have none of their own. Off by default: the alignment such a
     /// paragraph inherits may be a layout's design — a centred title — and
@@ -73,6 +78,7 @@ impl Default for RepairOptions {
             language: DEFAULT_LOCALE.to_string(),
             complex_font: None,
             convert_bullets: false,
+            strip_tatweel: false,
             align: false,
         }
     }
@@ -124,6 +130,9 @@ impl Engine {
             rules: vec![
                 Box::new(unicode::BidiControls),
                 Box::new(unicode::PresentationForms),
+                Box::new(unicode::TatweelPadding {
+                    strip: options.strip_tatweel,
+                }),
                 Box::new(direction::DirectionMismatch),
                 Box::new(direction::DirectionUnset),
                 Box::new(direction::AlignmentIncoherent),

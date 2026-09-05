@@ -229,6 +229,7 @@ fn the_writer_expresses_every_fix_variant() {
         Fix::SetLanguage("ar-SA".into()),
         Fix::SetComplexFont("Dubai".into()),
         Fix::RemoveControls(vec![0]),
+        Fix::RemoveTatweel(vec![0]),
         Fix::ConvertLiteralBullet { marker: '•' },
         Fix::NormalizePresentationForms,
     ] {
@@ -249,6 +250,7 @@ fn a_planned_repair_audits_clean_and_a_second_pass_is_a_fixed_point() {
     // remain, reported and unrepaired by design.
     let engine = Engine::with_options(&RepairOptions {
         convert_bullets: true,
+        strip_tatweel: true,
         align: true,
         ..RepairOptions::default()
     });
@@ -282,6 +284,60 @@ fn a_planned_repair_audits_clean_and_a_second_pass_is_a_fixed_point() {
         std::fs::read(&once).unwrap() == std::fs::read(&twice).unwrap(),
         "a second repair changed the bytes"
     );
+}
+
+#[test]
+fn a_padded_heading_comes_back_as_the_word_it_was() {
+    // PLAN §4.4's repair, end to end: planned from the scanner's units,
+    // through the writer, and re-read from disk. The heading is العنوان with
+    // five tatweel typed onto the end of it, in a run of its own — which is
+    // how it arrives when the author pads text that was already formatted.
+    let scratch = Scratch::new("tatweel");
+    let (src, out) = (scratch.join("in.pptx"), scratch.join("out.pptx"));
+    scratch_deck(
+        &src,
+        r#"<a:bodyPr rtlCol="1"/><a:p><a:pPr rtl="1" algn="r"/><a:r><a:rPr lang="ar-SA"><a:cs typeface="Dubai"/></a:rPr><a:t>العنوان</a:t></a:r><a:r><a:rPr lang="ar-SA"><a:cs typeface="Dubai"/></a:rPr><a:t>&#x640;&#x640;&#x640;&#x640;&#x640;</a:t></a:r></a:p>"#,
+    );
+
+    let engine = Engine::with_options(&RepairOptions {
+        strip_tatweel: true,
+        ..RepairOptions::default()
+    });
+    let mut doc = PptxDocument::open(&src).unwrap();
+    let units = doc.scan().unwrap();
+    assert_eq!(units[0].text, "العنوان\u{640}\u{640}\u{640}\u{640}\u{640}");
+
+    let plan = engine.plan(&units);
+    assert_eq!(plan.len(), 1, "{plan:#?}");
+    assert_eq!(doc.apply(&plan).unwrap(), 1);
+    doc.write(&out).unwrap();
+
+    let mut repaired = PptxDocument::open(&out).unwrap();
+    let units = repaired.scan().unwrap();
+    assert_eq!(units[0].text, "العنوان", "the padding survived the repair");
+    assert!(engine.audit(&units).diagnostics.is_empty());
+}
+
+#[test]
+fn tatweel_the_engine_did_not_call_padding_is_never_written_out_of_a_deck() {
+    // The repair's own limit, asserted where it would actually bite: a fatha
+    // written on a tatweel is the character doing its job, and a repair that
+    // deleted it would drop the mark onto whatever came before.
+    let scratch = Scratch::new("tatweel-kept");
+    let src = scratch.join("in.pptx");
+    scratch_deck(
+        &src,
+        r#"<a:bodyPr rtlCol="1"/><a:p><a:pPr rtl="1" algn="r"/><a:r><a:rPr lang="ar-SA"><a:cs typeface="Dubai"/></a:rPr><a:t>&#x640;&#x64E; الفتحة</a:t></a:r></a:p>"#,
+    );
+
+    let engine = Engine::with_options(&RepairOptions {
+        strip_tatweel: true,
+        ..RepairOptions::default()
+    });
+    let mut doc = PptxDocument::open(&src).unwrap();
+    let units = doc.scan().unwrap();
+    assert!(engine.audit(&units).diagnostics.is_empty());
+    assert!(engine.plan(&units).is_empty());
 }
 
 // ------------------------------------------------------------------ lowering

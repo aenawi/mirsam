@@ -11,6 +11,25 @@ Working towards byte-preserving `repair` for PPTX. See
 
 ### Added
 
+- **`tatweel-padding`**, and the threshold it needed before it could exist.
+  U+0640 is legitimate — it is the kashida, and a font inserts it during
+  layout, which is why justified Arabic has none of it in the stored string —
+  so the rule judges what surrounds each run rather than the character. Two or
+  more in a row joined to a letter is a word stretched to a width; one wedged
+  between two characters that already join is width and no change to any
+  letter's form. One carrying a harakat is the base that mark sits on, one at
+  a joining edge is how a letter's contextual form is written alone, and a run
+  joined to nothing is a rule somebody drew: none of the three is reported.
+  A warning, because the text renders as arranged and what is wrong is the
+  string behind it — search, spell-check and screen readers all read the
+  padding, and it does not survive a change of width, font or size.
+  `evidence.offenders` gives each run as `U+0640 ARABIC TATWEEL ×N @OFFSET`.
+- **`repair --strip-tatweel`**, the second repair that edits the characters an
+  author typed rather than the properties around them, and off by default for
+  `--convert-bullets`' reason and more so. It deletes exactly the runs the
+  finding listed. A run a join already crosses is provably safe to delete —
+  both neighbours keep the form they had — and a stretched word reverting to
+  its unpadded shape is the repair, not a loss.
 - **`font-coverage` and `shaping-broken`**, the two rules that turn 4.1's and
   4.2's facts into findings. They are two defects, not one, and the advice
   differs: a font with no glyph for the Arabic renders empty boxes, and a font

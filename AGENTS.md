@@ -93,6 +93,28 @@ agrees with the text, reported as an absent one where it contradicts it, with
 `evidence.inherited_from` naming the style. The repair still writes to the
 table, never to the style.
 
+### `tatweel-padding` reports padding, not tatweel
+
+U+0640 is legitimate. It is the kashida, and a font inserts it during layout
+— which is why it never reaches the stored string, and why a paragraph
+justified with kashida has nothing in it for this rule to see. A tatweel that
+*is* in the string was typed, and only some of those are a defect:
+
+- **Reported** — two or more in a row joined to a letter (a word stretched to
+  a width), or one wedged between two characters that already join each other
+  (width, and no change to any letter's form).
+- **Not reported** — one carrying a harakat, which is the base that mark is
+  written on; one at a joining edge, which is how a letter's initial, medial
+  or final form is written on its own; and a run joined to nothing at all,
+  which is a rule somebody drew.
+
+`evidence.offenders` gives each run as `U+0640 ARABIC TATWEEL ×N @OFFSET`,
+the offset being a byte offset into `evidence.logical`. A warning, not an
+error: the text renders as arranged, and what is wrong is the string behind
+it — search, spell-check and screen readers all read the padding, and it does
+not survive a change of width, font or size. `--strip-tatweel` deletes
+exactly the runs the finding listed and nothing else.
+
 ### The two font checks, which are off by default
 
 `font-coverage` and `shaping-broken` are the only rules that ask a question
@@ -138,13 +160,14 @@ The JSON report carries `options`, `repairs.applied`, `repairs.skipped` (a
 fix the adapter cannot express yet — listed, never claimed), and `before` and
 `after`, each an audit in the same shape `audit --format json` emits.
 
-Three repairs need a decision the text cannot supply, so they are off until
+Four repairs need a decision the text cannot supply, so they are off until
 asked: `--font <TYPEFACE>` for `complex-font-missing`, `--convert-bullets`
-for `literal-bullet`, and `--align` for `alignment-unset`. A `literal-bullet`
-finding in `after` with `convert_bullets: false` in `options` is not a
-failed repair; it is one you did not request. The same goes for an
-`alignment-unset` note with `align: false` — and a note never blocks, so it
-never changes the exit code.
+for `literal-bullet`, `--strip-tatweel` for `tatweel-padding`, and `--align`
+for `alignment-unset`. A `literal-bullet` finding in `after` with
+`convert_bullets: false` in `options` is not a failed repair; it is one you
+did not request. The same goes for a `tatweel-padding` warning with
+`strip_tatweel: false`, and for an `alignment-unset` note with `align:
+false` — and a note never blocks, so it never changes the exit code.
 
 ## Reporting honestly
 

@@ -106,10 +106,13 @@ after   errors=0 warnings=0 notes=0
 PASS: errors=0 warnings=0 notes=0 strict=no
 ```
 
-Three repairs are decisions the text cannot make for you, so they are flags:
+Four repairs are decisions the text cannot make for you, so they are flags:
 `--font <TYPEFACE>` fills the empty complex-script slot (without it the
 finding is reported, not repaired); `--convert-bullets` replaces a typed
-`•` with a native list (opt-in, because it edits the text itself); and
+`•` with a native list (opt-in, because it edits the text itself);
+`--strip-tatweel` deletes typed tatweel that pads a heading to a width
+(opt-in for the same reason, and more so — it deletes characters somebody
+typed); and
 `--align` writes a start-edge alignment onto right-to-left paragraphs that
 inherit one that leaves them on the left edge (opt-in, because the edge a
 paragraph starts on is a design decision; without the flag that is reported

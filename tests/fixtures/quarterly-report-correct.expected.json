@@ -58,7 +58,8 @@
       "align": true,
       "complex_font": "Dubai",
       "convert_bullets": true,
-      "language": "ar-SA"
+      "language": "ar-SA",
+      "strip_tatweel": true
     },
     "output": "quarterly-report-correct.repaired.pptx",
     "repairs": {

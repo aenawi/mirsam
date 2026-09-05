@@ -107,11 +107,18 @@ question — does one suite hold both adapters unchanged — is answered.
 
 Add `rustybuzz` and `ttf-parser`:
 
-- Verify Arabic letters actually **join** — catch text that is correct in
-  Unicode but renders as disconnected glyphs.
-- Check the resolved font covers every codepoint used; report substitution
-  risk with the specific missing characters.
-- Detect tatweel used as visual padding rather than justification.
+- **Landed:** Arabic letters are shaped through a real OpenType shaper, and
+  `shaping-broken` reports a font that produces no joining form where at
+  least four were required — text correct in Unicode that renders as
+  disconnected glyphs. See [`PLAN.md`](PLAN.md) §4.1 and §4.3.
+- **Landed:** `font-coverage` checks the resolved font for every Arabic
+  codepoint used and names the missing ones — `U+067E ARABIC LETTER PEH`.
+  Both checks are opt-in behind `--fonts`, because they read the machine
+  rather than the document; see [`PLAN.md`](PLAN.md) §4.2 and §4.3.
+- **Landed:** `tatweel-padding` separates tatweel typed as visual padding
+  from tatweel doing its job — carrying a harakat, showing a letter's
+  contextual form, drawing a rule — and `--strip-tatweel` deletes only the
+  padding. See [`PLAN.md`](PLAN.md) §4.4.
 
 Replaces the "render every slide and eyeball it" step that every Arabic
 workflow currently pushes onto a human.

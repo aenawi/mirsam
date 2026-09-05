@@ -1305,6 +1305,61 @@ fn pre_shaped_presentation_forms_are_reported_in_every_format() {
 }
 
 #[test]
+fn typed_tatweel_padding_a_heading_is_reported_in_every_format() {
+    // PLAN §4.4's acceptance. `PADDED` is العنوان with five tatweel pushed onto
+    // the end of it, spelled out because a run of tatweel in source cannot be
+    // counted by eye.
+    const PADDED: &str = "العنوان\u{0640}\u{0640}\u{0640}\u{0640}\u{0640}";
+    let doc = Document::one(Paragraph::correct_arabic().saying(PADDED));
+    assert!(agree_on(&doc).contains(&"tatweel-padding"));
+
+    // With the offsets, which is what makes the finding checkable: the run
+    // starts where العنوان ends, and is five long.
+    for reading in read_all(&doc) {
+        let report = Engine::with_default_rules().audit(&reading.units);
+        let finding = report
+            .diagnostics
+            .iter()
+            .find(|d| d.rule.0 == "tatweel-padding")
+            .unwrap_or_else(|| panic!("{}: nothing reported", reading.format));
+        assert_eq!(
+            finding.evidence.offenders,
+            vec![format!(
+                "U+0640 ARABIC TATWEEL \u{d7}5 @{}",
+                "العنوان".len()
+            )],
+            "{}",
+            reading.format
+        );
+    }
+}
+
+#[test]
+fn arabic_justified_by_its_font_is_reported_by_nobody() {
+    // The other half of §4.4's acceptance, and the reason the rule needed a
+    // threshold at all. Kashida justification is the font's, applied at layout
+    // time: it never reaches the stored string, so a justified paragraph has
+    // nothing in it to report.
+    let justified = Document::one(Paragraph::correct_arabic().alignment(Alignment::Justify));
+    assert!(!agree_on(&justified).contains(&"tatweel-padding"));
+
+    // And the cases that would fail a rule which regressed to "any tatweel is
+    // a defect": a fatha written on its own, medial heh as a primer shows it,
+    // and a rule drawn with the character that draws rules.
+    for legitimate in [
+        "\u{0640}\u{064E}",
+        "\u{0640}ه\u{0640}",
+        "مرحبا \u{0640}\u{0640}\u{0640}\u{0640} عالم",
+    ] {
+        let doc = Document::one(Paragraph::correct_arabic().saying(legitimate));
+        assert!(
+            !agree_on(&doc).contains(&"tatweel-padding"),
+            "{legitimate:?} was reported"
+        );
+    }
+}
+
+#[test]
 fn a_latin_font_with_an_empty_arabic_slot_is_reported_in_every_format() {
     // The commonest silent defect there is: the Arabic renders in whatever the
     // application substitutes, which is not the typeface anybody chose.

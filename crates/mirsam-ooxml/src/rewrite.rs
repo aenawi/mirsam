@@ -275,15 +275,26 @@ fn apply_to_paragraph(
     inherited: Option<Direction>,
 ) -> Result<()> {
     // Text first: these replace text events in place, so they neither move nor
-    // are moved by the structural edits that follow. Controls before anything
-    // else, whatever order the fixes arrived in: `RemoveControls` carries byte
-    // offsets into the text as it was scanned, and both stripping a marker
-    // from the front and mapping a three-byte form to a two-byte letter would
-    // shift them.
-    for fix in fixes {
-        if let Fix::RemoveControls(offsets) = fix {
-            token::remove_at_offsets(para, A_T, offsets);
-        }
+    // are moved by the structural edits that follow. Deletions before anything
+    // else, whatever order the fixes arrived in: both carry byte offsets into
+    // the text as it was scanned, and stripping a marker from the front or
+    // mapping a three-byte form to a two-byte letter would shift them.
+    //
+    // And both in *one* pass, for the same reason: a paragraph carrying a bidi
+    // control and a padded heading yields two sets of offsets into the same
+    // original string, so applying one set and then the other would delete the
+    // second from text that had already moved.
+    let deletions: Vec<usize> = fixes
+        .iter()
+        .filter_map(|fix| match fix {
+            Fix::RemoveControls(offsets) | Fix::RemoveTatweel(offsets) => Some(offsets),
+            _ => None,
+        })
+        .flatten()
+        .copied()
+        .collect();
+    if !deletions.is_empty() {
+        token::remove_at_offsets(para, A_T, &deletions);
     }
     if fixes.contains(&Fix::NormalizePresentationForms) {
         // The mapping is the domain's: one character at a time, so a combining
@@ -361,7 +372,7 @@ fn apply_to_paragraph(
                 edit_tag(para, bullet, |tag| set_attribute(tag, "char", &marker));
             }
 
-            Fix::RemoveControls(_) | Fix::NormalizePresentationForms => {}
+            Fix::RemoveControls(_) | Fix::RemoveTatweel(_) | Fix::NormalizePresentationForms => {}
         }
     }
 

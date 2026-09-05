@@ -58,6 +58,7 @@ pub mod ports;
 pub mod rules;
 pub mod script;
 pub mod shape;
+pub mod tatweel;
 pub mod text;
 
 pub use coverage::{Coverage, MissingChar};

@@ -159,6 +159,9 @@ crates/
     coverage.rs    the question underneath shaping — has the font the letter
                    at all — over the characters a complex-script slot answers
                    for, and no others
+    tatweel.rs     which typed U+0640 is padding and which is the character
+                   doing its job, judged from what each run is joined to,
+                   because the kashida a font inserts never reaches the text
     charname.rs    the Arabic script's Unicode names, so a coverage finding
                    reads U+067E ARABIC LETTER PEH. Generated; make names
     diagnostic.rs  Severity, Diagnostic, Evidence, Report
