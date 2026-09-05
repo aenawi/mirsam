@@ -105,6 +105,9 @@
       "checked": false
     },
     "format": "pptx",
+    "sources": {
+      "unread": []
+    },
     "strict": false,
     "summary": {
       "arabic_units": 5,

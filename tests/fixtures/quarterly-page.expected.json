@@ -1,0 +1,267 @@
+{
+  "audit": {
+    "blocking": true,
+    "diagnostics": [
+      {
+        "evidence": {
+          "inherited_from": null,
+          "logical": "ارتفع الأداء بنسبة 25% في Q4 2026.",
+          "offenders": [],
+          "visual_declared": "يف %25 ةبسنب ءادألا عفترا Q4 2026.",
+          "visual_expected": ".Q4 2026 يف %25 ةبسنب ءادألا عفترا"
+        },
+        "fixable": true,
+        "location": {
+          "container": "p",
+          "paragraph": 4,
+          "part": "quarterly-page.html"
+        },
+        "message": "renders as ltr but reads as rtl; visual order differs from the logical text",
+        "rule": "direction-mismatch",
+        "severity": "error",
+        "unit": "quarterly-page.html#p4"
+      },
+      {
+        "evidence": {
+          "inherited_from": null,
+          "logical": "المؤشر\nالربع\nالإيرادات\nالرابع",
+          "offenders": [],
+          "visual_declared": null,
+          "visual_expected": null
+        },
+        "fixable": true,
+        "location": {
+          "container": null,
+          "paragraph": null,
+          "part": "quarterly-page.html"
+        },
+        "message": "table declared ltr but its cells read rtl; the columns run the wrong way",
+        "rule": "container-direction",
+        "severity": "warning",
+        "unit": "quarterly-page.html#tbl1"
+      },
+      {
+        "evidence": {
+          "inherited_from": null,
+          "logical": null,
+          "offenders": [],
+          "visual_declared": null,
+          "visual_expected": null
+        },
+        "fixable": true,
+        "location": {
+          "container": "title",
+          "paragraph": 1,
+          "part": "quarterly-page.html"
+        },
+        "message": "no base direction declared; correct today only by auto-detection",
+        "rule": "direction-unset",
+        "severity": "warning",
+        "unit": "quarterly-page.html#p1"
+      },
+      {
+        "evidence": {
+          "inherited_from": null,
+          "logical": null,
+          "offenders": [],
+          "visual_declared": null,
+          "visual_expected": null
+        },
+        "fixable": true,
+        "location": {
+          "container": "p",
+          "paragraph": 5,
+          "part": "quarterly-page.html"
+        },
+        "message": "no base direction declared; correct today only by auto-detection",
+        "rule": "direction-unset",
+        "severity": "warning",
+        "unit": "quarterly-page.html#p5"
+      },
+      {
+        "evidence": {
+          "inherited_from": "quarterly-page.html table@",
+          "logical": null,
+          "offenders": [],
+          "visual_declared": null,
+          "visual_expected": null
+        },
+        "fixable": true,
+        "location": {
+          "container": "table 1 row 1 cell 1",
+          "paragraph": 10,
+          "part": "quarterly-page.html"
+        },
+        "message": "no base direction of its own; inherits ltr, but this reads as rtl",
+        "rule": "direction-unset",
+        "severity": "warning",
+        "unit": "quarterly-page.html#p10"
+      },
+      {
+        "evidence": {
+          "inherited_from": "quarterly-page.html table@",
+          "logical": null,
+          "offenders": [],
+          "visual_declared": null,
+          "visual_expected": null
+        },
+        "fixable": true,
+        "location": {
+          "container": "table 1 row 1 cell 2",
+          "paragraph": 11,
+          "part": "quarterly-page.html"
+        },
+        "message": "no base direction of its own; inherits ltr, but this reads as rtl",
+        "rule": "direction-unset",
+        "severity": "warning",
+        "unit": "quarterly-page.html#p11"
+      },
+      {
+        "evidence": {
+          "inherited_from": "quarterly-page.html table@",
+          "logical": null,
+          "offenders": [],
+          "visual_declared": null,
+          "visual_expected": null
+        },
+        "fixable": true,
+        "location": {
+          "container": "table 1 row 2 cell 1",
+          "paragraph": 12,
+          "part": "quarterly-page.html"
+        },
+        "message": "no base direction of its own; inherits ltr, but this reads as rtl",
+        "rule": "direction-unset",
+        "severity": "warning",
+        "unit": "quarterly-page.html#p12"
+      },
+      {
+        "evidence": {
+          "inherited_from": "quarterly-page.html table@",
+          "logical": null,
+          "offenders": [],
+          "visual_declared": null,
+          "visual_expected": null
+        },
+        "fixable": true,
+        "location": {
+          "container": "table 1 row 2 cell 2",
+          "paragraph": 13,
+          "part": "quarterly-page.html"
+        },
+        "message": "no base direction of its own; inherits ltr, but this reads as rtl",
+        "rule": "direction-unset",
+        "severity": "warning",
+        "unit": "quarterly-page.html#p13"
+      },
+      {
+        "evidence": {
+          "inherited_from": null,
+          "logical": null,
+          "offenders": [],
+          "visual_declared": null,
+          "visual_expected": null
+        },
+        "fixable": true,
+        "location": {
+          "container": "p",
+          "paragraph": 7,
+          "part": "quarterly-page.html"
+        },
+        "message": "paragraph begins with a typed '•'; use a native list instead",
+        "rule": "literal-bullet",
+        "severity": "warning",
+        "unit": "quarterly-page.html#p7"
+      },
+      {
+        "evidence": {
+          "inherited_from": null,
+          "logical": "الملخـــص",
+          "offenders": [
+            "U+0640 ARABIC TATWEEL ×3 @10"
+          ],
+          "visual_declared": null,
+          "visual_expected": null
+        },
+        "fixable": true,
+        "location": {
+          "container": "h2",
+          "paragraph": 9,
+          "part": "quarterly-page.html"
+        },
+        "message": "3 typed tatweel(s) stretch the text to a width; the stored text is no longer the word — search, spell-check and screen readers all read the padding, and it does not follow a change of width, font or size",
+        "rule": "tatweel-padding",
+        "severity": "warning",
+        "unit": "quarterly-page.html#p9"
+      },
+      {
+        "evidence": {
+          "inherited_from": null,
+          "logical": "التقرير الربعي",
+          "offenders": [],
+          "visual_declared": null,
+          "visual_expected": null
+        },
+        "fixable": false,
+        "location": {
+          "container": "title",
+          "paragraph": 1,
+          "part": "quarterly-page.html"
+        },
+        "message": "no alignment declared; a left-to-right layout places this on the left edge",
+        "rule": "alignment-unset",
+        "severity": "note",
+        "unit": "quarterly-page.html#p1"
+      },
+      {
+        "evidence": {
+          "inherited_from": "quarterly-page.html .stray{text-align}",
+          "logical": "ارتفع الأداء في الربع الرابع",
+          "offenders": [],
+          "visual_declared": null,
+          "visual_expected": null
+        },
+        "fixable": false,
+        "location": {
+          "container": "p.stray",
+          "paragraph": 6,
+          "part": "quarterly-page.html"
+        },
+        "message": "no alignment of its own; the alignment it inherits is left, the edge a right-to-left reader does not start from",
+        "rule": "alignment-unset",
+        "severity": "note",
+        "unit": "quarterly-page.html#p6"
+      }
+    ],
+    "file": "quarterly-page.html",
+    "fonts": {
+      "checked": false
+    },
+    "format": "html",
+    "sources": {
+      "unread": [
+        "https://cdn.example.test/site.css"
+      ]
+    },
+    "strict": false,
+    "summary": {
+      "arabic_units": 14,
+      "errors": 1,
+      "mixed_units": 3,
+      "notes": 2,
+      "units_scanned": 15,
+      "warnings": 9
+    }
+  },
+  "changed_parts": null,
+  "document": "quarterly-page.html",
+  "exit_codes": {
+    "audit": 1,
+    "audit --strict": 1,
+    "repair": 2,
+    "repair --strict": 2
+  },
+  "repair": {
+    "refused": ".html can be audited but not yet repaired; `mirsam audit` reads it, and the writer is scheduled in docs/ROADMAP.md"
+  }
+}

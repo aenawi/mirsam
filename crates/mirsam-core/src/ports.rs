@@ -18,6 +18,28 @@ pub trait DocumentReader {
 
     /// Lower the document into text units, resolving property inheritance.
     fn scan(&mut self) -> Result<Vec<TextUnit>>;
+
+    /// Sources the last [`scan`] could not read, named as the document names
+    /// them, in document order.
+    ///
+    /// A document may point at a file the tool cannot reach — an HTML page
+    /// linking `https://cdn.example/site.css`, which this tool will not fetch
+    /// because it performs no network I/O. The rules in such a sheet are rules
+    /// nobody applied, so a property they would have set comes back `Unset`,
+    /// and a finding about an absent value may be answered by a stylesheet
+    /// that was never seen.
+    ///
+    /// This is the `NOT RUN` of standing rule 4, at the level of the document
+    /// rather than of a check: the caller has to be able to say what was not
+    /// read instead of letting a report imply that everything was. Empty for
+    /// a format whose parts are all inside the file it opened — a package is
+    /// self-contained, so both OOXML adapters answer with nothing, and
+    /// nothing is the whole truth for them.
+    ///
+    /// [`scan`]: DocumentReader::scan
+    fn unread_sources(&self) -> Vec<String> {
+        Vec::new()
+    }
 }
 
 /// A document whose text units can be mechanically repaired.

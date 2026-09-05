@@ -10,9 +10,9 @@ right-to-left, bidirectional and typography defects in documents. Single static
 binary: no Python, no Node, no Office, no runtime of any kind on the target
 machine.
 
-`audit` reads `.pptx` and `.docx`. `repair` writes `.pptx` only: a `.docx`
-is refused as a readable format without a writer, which is a usage error
-(exit `2`) and not a claim that the document was not understood.
+`audit` reads `.pptx`, `.docx` and `.html`/`.htm`. `repair` writes `.pptx`
+only: the other two are refused as readable formats without a writer, which is
+a usage error (exit `2`) and not a claim that the document was not understood.
 
 Inspired by Sultan Alsafran's MIT-licensed `arabic-presentations` skill. No
 shared code. See [`CREDITS.md`](CREDITS.md).
@@ -115,6 +115,41 @@ it — search, spell-check and screen readers all read the padding, and it does
 not survive a change of width, font or size. `--strip-tatweel` deletes
 exactly the runs the finding listed and nothing else.
 
+### HTML, where the direction is usually not in the document
+
+An `.html` page states direction in three places and the adapter reads all of
+them: `dir`, a `style` attribute, and CSS — from `<style>` elements and from
+`<link rel="stylesheet">` whose `href` is a **relative path on this machine**,
+resolved against the document. Selectors, specificity and `!important` are
+resolved as a browser resolves them, so `dir="rtl"` under a stylesheet saying
+`direction: ltr` is reported as **ltr**: the tool reports what a reader sees.
+
+Three consequences worth knowing before you read a report:
+
+- **`sources.unread` is a `NOT RUN`, and it is in every report.** A stylesheet
+  named by an absolute URL is not fetched — mirsam performs no network I/O —
+  and one named by a root-relative path (`/css/site.css`) cannot be resolved
+  without a document root. Rules in a sheet that was not read are rules nobody
+  applied, so a `direction-unset` finding on such a page **may be answered by
+  CSS the tool never saw**. Read `"sources": {"unread": [...]}` before
+  concluding anything from an absent value. It is `{"unread": []}` for every
+  `.pptx` and `.docx`, because a package holds everything that decides its own
+  text ([ADR 0009](docs/adr/0009-a-source-the-adapter-could-not-read-is-part-of-the-report.md)).
+- **`dir="auto"` comes back as unset, and that is not harshness.** `auto` asks
+  the browser to guess from the first strong character, which is what `Unset`
+  means. It gets `مرحبا 2026` right and `2026 مرحبا` wrong, so a paragraph is
+  correct under it by luck of today's text. A **warning**, the fragile tier.
+- **`complex-font-missing` never fires on HTML, and that is correct.** CSS
+  gives an element one `font-family` for every script, not OOXML's Latin and
+  complex-script pair, so a filled Latin slot beside an empty Arabic one is a
+  document the web cannot write. The mirror holds too: CSS's `left` and
+  `right` *are* physical edges, so `alignment-incoherent` is live on HTML in a
+  way it is not on Word.
+
+A unit id is `<file>#p<n>` / `#tbl<n>` / `#cols<n>`, the same shapes the OOXML
+adapters issue, and `location.part` is the file's own name. A `Columns`
+container is an element CSS lays out in two or more columns.
+
 ### The two font checks, which are off by default
 
 `font-coverage` and `shaping-broken` are the only rules that ask a question
@@ -209,7 +244,7 @@ that is *here* and cannot draw the text will not draw it anywhere, because a
 the reader's machine, and no report may suggest otherwise.
 
 **A new adapter must pass the conformance suite unchanged.**
-`crates/mirsam-ooxml/tests/conformance.rs` states each situation once, in the
+`crates/mirsam-conformance/tests/conformance.rs` states each situation once, in the
 shared model's vocabulary, and runs it against every adapter through
 `DocumentReader` — the same situation must come back as the same finding
 whichever application wrote the file. No case that asserts what the tool
@@ -222,7 +257,7 @@ reason, and the committed list of those refusals is asserted, so a format that
 quietly stopped expressing something fails rather than passes.
 
 **Any change to what is reported or written** shows up in the golden corpus:
-`cargo test` compares every `.pptx` and `.docx` under `tests/fixtures/` with
+`cargo test` compares every `.pptx`, `.docx` and `.html` under `tests/fixtures/` with
 its committed `<document>.expected.json` and fails on any difference. When the
 difference is intended, run `make golden`, read the diff, and commit the
 regenerated reports with the change that explains them. Never regenerate to
@@ -272,6 +307,13 @@ PresentationML ones over the decks), and `make validate-fixtures` validates
 all of them against the published ECMA-376 schemas. A document the application
 offers to repair cannot answer "does it open the repaired file without a
 prompt", which is the M1 application check.
+
+**The two HTML corpus documents are the exception, and edited by hand.** A
+page *is* its own source: there is no package to build, so `make fixtures` has
+nothing to generate and `scripts/validate-ooxml.py` has nothing to validate.
+`quarterly-page.html` carries one instance of each defect the adapter can see;
+`quarterly-page-correct.html` is the page the tool must leave completely alone.
+Change either and run `make golden`.
 
 ### Non-negotiable invariants
 

@@ -1215,10 +1215,129 @@ was, and re-audits clean.
 
 ---
 
-## M5–M6 — Web, spreadsheets, PDF `[ ]`
+## M5 — Web `[ ]`
 
 Adapters only; no core changes expected. If one is needed, record an ADR
-explaining what the core got wrong.
+explaining what the core got wrong. One was needed —
+[ADR 0009](adr/0009-a-source-the-adapter-could-not-read-is-part-of-the-report.md)
+— and 5.1 says why below.
+
+### 5.1 HTML reader `[x]`
+
+`mirsam-html`: a `DocumentReader` over HTML and the part of CSS that decides
+direction. The web is the third format, and the first that is not an OOXML
+package — which is the point of doing it now rather than XLSX, whose adapter
+would have reused everything `mirsam-ooxml` already has and proved nothing.
+
+**A page states direction in three places and the tool has to read all of
+them.** `dir="rtl"` is the one an attribute linter sees; `<style>body {
+direction: rtl }` and `.rtl { direction: rtl; text-align: right }` are where a
+great many Arabic sites actually state it. An adapter that read attributes
+alone would report `direction-unset` on every one of those pages, which is
+invariant 2 reached through the adapter rather than through a rule — a finding
+on formatting the author chose, and the failure mode this project treats as
+worse than a miss. So `crate::css` runs a real, if small, cascade: selector
+matching over type, `*`, id, class, `[attr]`, `[attr=value]` and `:root`,
+descendant and child combinators, specificity, `!important`, and the inherited
+properties CSS says are inherited. At-rules are skipped whole, because a
+declaration inside `@media` applies under a viewport this tool does not have.
+
+*Every omission can only cost a finding; none of them can manufacture one.*
+That is the test each shortcut was held to. A selector this crate cannot match
+is dropped — that selector, never the whole rule — and a declaration nobody
+applied leaves the property where it already was.
+
+**`dir` is a hint the stylesheet outranks**, because in a browser `dir="rtl"`
+*is* a rule in the user agent's stylesheet, so an author's `direction: ltr`
+beats it. Reading `dir` as the last word would report the wrong direction for
+a page whose CSS disagrees with its markup, and then propose a repair that
+changes nothing a reader sees. `CascadeOrigin` models the three origins and
+the adapter reports what the reader gets.
+
+**`dir="auto"` is `Unset`, and it stops inheriting.** `auto` does not state a
+direction; it asks the browser to take the first strong character, which is
+the sentence `Resolved::Unset` already carries — *nothing anywhere; the
+renderer picks*. So Arabic under it is `direction-unset`, the fragile tier, a
+warning rather than an error. And it *replaces* the inherited direction rather
+than deferring to it: a paragraph of Arabic marked `auto` under an `ltr` body
+renders right to left, and reporting it as contradicted-by-the-chain would be
+a finding on text the browser already gets right.
+
+**CSS has one font stack, so `complex-font-missing` cannot fire on HTML.**
+OOXML gives a run a Latin slot and a complex-script slot and that rule reports
+the document that filled the first and left the second empty. CSS's
+`font-family` answers for every script on the element, so the stack lowers into
+both slots and the rule's precondition is unreachable. That is a defect a web
+author cannot write, exactly as a hard left edge is one a Word author cannot
+write, and the conformance suite records it as a refusal rather than a skip.
+The mirror of it: CSS's `left` and `right` **are** physical, so
+`alignment-incoherent` is live on HTML, and the suite now asserts that both
+formats which can state a hard left edge report it identically.
+
+**The core change, and why it was not a format leaking in.** A package holds
+everything that decides its own text. A page can link a stylesheet on a server
+this tool will never call, because mirsam performs no network I/O — and the
+rules in that sheet are rules nobody applied, so a `direction-unset` finding on
+such a page may be answered by CSS the tool never saw. Standing rule 4 says
+that has to be sayable, so `DocumentReader` gained `unread_sources()`,
+defaulting to nothing, and every report carries `sources: {unread: [...]}`
+beside `fonts: {checked: ...}`. It returns opaque strings the engine never
+parses; it does not know what a stylesheet is. See
+[ADR 0009](adr/0009-a-source-the-adapter-could-not-read-is-part-of-the-report.md).
+
+**The tree is `html5ever`'s, and the DOM is this crate's.** `<p>a<p>b` is two
+siblings, a `<div>` inside a `<p>` closes it, and text between `<table>` and
+its first `<tr>` is foster-parented out of the table — each of which moves a
+node's *ancestors*, which is precisely what direction is inherited along. A
+hand-rolled nesting stack would resolve direction from a chain no browser has.
+`markup5ever_rcdom` is not taken: it describes itself as unsupported and not
+for production, and `dom.rs` is the two hundred lines that avoid depending on
+that claim.
+
+**A paragraph is a block box with text in it**, since there is no `<paragraph>`
+element: every block-level element, carrying its own inline content and
+stopping at the next block inside it. `<table>` is a container as it is in both
+other formats, an element with `column-count: 2` is the `Columns` container
+PowerPoint spells `a:bodyPr`, and a cell's paragraph names its cell in the
+words the Word adapter already uses — `table 1 row 2 cell 3`.
+
+**The conformance suite moved.** It asks whether the adapters *agree*, so it
+has to see all of them; living inside `mirsam-ooxml` it would have made that
+crate depend on its peers, which is the hexagon leaking through the test tree.
+It now sits in `mirsam-conformance`, a crate that holds no library code, and
+its vocabulary trait writes a *document* rather than a package so a single-file
+format needs no exception to join.
+
+*Acceptance:* met. All twenty-nine conformance cases pass with HTML among the
+formats, twenty-four of them without a line changing — the same situation comes
+back as the same finding whichever of the three applications wrote the file.
+The four cases that did change are the two refusals HTML adds
+(`Alignment::Distributed`, which CSS has no value for, and a filled Latin slot
+beside an empty complex-script one, which one font stack cannot state) and the
+two assertions those refusals make sharper. `tests/fixtures/quarterly-page.html`
+carries one instance of each defect the adapter can see and
+`quarterly-page-correct.html` is the page the tool must leave completely alone;
+both are in the golden corpus, and the first records the unread stylesheet and
+the exit code `repair` gives a readable format with no writer.
+
+### 5.2 HTML rules — `<bdi>`/`<bdo>`, logical properties, faked RTL `[ ]`
+
+The rules that are HTML's own rather than the shared model's: `<bdo dir>`
+overriding the algorithm where markup should have carried the direction,
+`<bdi>` absent around interpolated user text, physical `margin-left` where a
+logical `margin-inline-start` was meant, and DOM order reversed by hand to
+fake right-to-left layout — the web's answer to reversing a string, and the
+same defect invariant 5 forbids.
+
+### 5.3 XLSX `[ ]`
+
+Sheet direction, cell alignment, and preserving formulas and defined names
+through a repair. Reuses `mirsam-ooxml`'s package layer; the question it has
+to answer is whether a cell is a paragraph or a container.
+
+---
+
+## M6 — PDF `[ ]`
 
 PDF implements `DocumentReader` **only**.
 

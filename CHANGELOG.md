@@ -11,6 +11,52 @@ Working towards byte-preserving `repair` for PPTX. See
 
 ### Added
 
+- **An HTML reader**, `mirsam-html`, and with it `mirsam audit page.html`.
+  The web is the third format and the first that is not a package. It is also
+  the first where the direction is usually *not in the document*: `dir="rtl"`
+  is the version an attribute linter sees, and `body { direction: rtl }` in a
+  stylesheet is where a great many Arabic sites actually state it. An adapter
+  that read attributes alone would report `direction-unset` on every one of
+  those pages — a finding on formatting the author chose, which is the failure
+  this project treats as worse than a miss — so the adapter runs a real, if
+  small, cascade over `<style>`, the `style` attribute, and stylesheets linked
+  by a relative path on this machine. `dir` enters it at the origin a browser
+  gives it, so a page whose CSS says `direction: ltr` under a `dir="rtl"` is
+  reported as left to right: what the reader sees is what the tool reports.
+- **`sources` in every report**, and it is the second `NOT RUN`. A stylesheet
+  named by an absolute URL is not fetched — mirsam makes no network calls, and
+  an audit whose answer depended on a server would not be reproducible — so
+  the rules in it are rules nobody applied, and a `direction-unset` finding on
+  such a page may be answered by CSS the tool never saw. `"sources":
+  {"unread": [...]}` names every one of them; it reads `{"unread": []}` on a
+  `.pptx` or `.docx`, because a package holds everything that decides its own
+  text. This is the one core change M5 needed, and
+  [ADR 0009](docs/adr/0009-a-source-the-adapter-could-not-read-is-part-of-the-report.md)
+  records why the port and not the CLI is where it belongs.
+- **`dir="auto"` is read as unset**, which is the honest reading rather than a
+  harsh one: `auto` asks the browser to guess from the first strong character,
+  and that is what `Resolved::Unset` already says. It gets `مرحبا 2026` right
+  and `2026 مرحبا` wrong, so a paragraph correct under it is correct by luck
+  of today's text. Reported as a warning, the fragile tier. It also *stops*
+  inheriting, because a browser stops consulting the ancestors too.
+- **The conformance suite moved to `mirsam-conformance`**, a crate with no
+  library code in it. The suite asks whether the adapters agree, so it has to
+  see all of them; living inside `mirsam-ooxml` it would have made that crate
+  depend on its peers. Twenty-four of its twenty-nine cases pass with HTML
+  among the formats without a line changing. The five that moved record two
+  new refusals, both properties of CSS rather than of the adapter —
+  `text-align` has no distributed value, and one `font-family` cannot fill a
+  Latin slot and leave the complex-script one empty, which is why
+  `complex-font-missing` is structurally silent on HTML — and the mirror of
+  the second: CSS's `left` *is* a physical edge, so `alignment-incoherent` is
+  live on the web in a way it is not in Word, and both formats that can state
+  a hard left edge are now asserted to report it identically.
+- **Two HTML corpus documents.** `quarterly-page.html` carries one instance of
+  each defect the adapter can see, including the unread stylesheet and the
+  refusal `repair` gives a readable format with no writer;
+  `quarterly-page-correct.html` is the page the tool must leave completely
+  alone. Unlike the decks beside them they are not generated: a page is its
+  own source.
 - **`tatweel-padding`**, and the threshold it needed before it could exist.
   U+0640 is legitimate — it is the kashida, and a font inserts it during
   layout, which is why justified Arabic has none of it in the stored string —

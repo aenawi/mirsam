@@ -231,6 +231,9 @@
       "checked": false
     },
     "format": "docx",
+    "sources": {
+      "unread": []
+    },
     "strict": false,
     "summary": {
       "arabic_units": 13,

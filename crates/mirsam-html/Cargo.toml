@@ -1,0 +1,13 @@
+[package]
+name = "mirsam-html"
+description = "HTML/CSS adapter for mirsam. Reads dir, lang and the direction-bearing CSS a browser would apply."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+mirsam-core.workspace = true
+html5ever.workspace = true

@@ -1,0 +1,19 @@
+[package]
+name = "mirsam-conformance"
+description = "One conformance suite, every mirsam adapter. Holds no code: the crate exists so the suite can depend on every format at once."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dev-dependencies]
+mirsam-core.workspace = true
+mirsam-ooxml.workspace = true
+mirsam-html.workspace = true
+zip.workspace = true

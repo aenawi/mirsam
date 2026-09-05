@@ -64,7 +64,11 @@ fn fixtures() -> PathBuf {
 
 /// The extensions the binary reads, and so the extensions that make a file in
 /// this directory a member of the corpus.
-const CORPUS: &[&str] = &["pptx", "docx"];
+const CORPUS: &[&str] = &["pptx", "docx", "html"];
+
+/// The corpus documents that are ZIP packages, which is where a part-level
+/// diff means anything. An HTML page is one file and has no parts.
+const PACKAGED: &[&str] = &["pptx", "docx"];
 
 /// The same, in the order a sorted, deduplicated list of them comes back — so
 /// a test can compare against it directly.
@@ -658,6 +662,7 @@ fn the_corpus_includes_a_document_with_alternate_content() {
     // is what a prefix-renaming serialiser breaks.
     let carrying: Vec<String> = documents()
         .iter()
+        .filter(|document| extension(document).is_some_and(|e| PACKAGED.contains(&e.as_str())))
         .filter(|document| {
             let pkg = Package::open(document).unwrap();
             pkg.parts_where(|n| n.ends_with(".xml"))

@@ -13,6 +13,7 @@ use mirsam_core::error::Error as CoreError;
 use mirsam_core::rules::{DEFAULT_LOCALE, is_arabic_tag};
 use mirsam_core::{DocumentReader, DocumentWriter, Engine, FontSource, Repair, RepairOptions};
 use mirsam_fonts::SystemFonts;
+use mirsam_html::HtmlDocument;
 use mirsam_ooxml::{DocxDocument, PptxDocument};
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -265,13 +266,14 @@ fn same_file(a: &Path, b: &Path) -> bool {
 }
 
 /// The extensions `open` accepts, for the hint an unknown one gets.
-const READABLE: &[&str] = &["pptx", "docx"];
+const READABLE: &[&str] = &["pptx", "docx", "html", "htm"];
 
 fn open(path: &Path) -> Result<Box<dyn DocumentReader>> {
     let context = || format!("opening {}", path.display());
     match extension(path).as_str() {
         "pptx" => Ok(Box::new(PptxDocument::open(path).with_context(context)?)),
         "docx" => Ok(Box::new(DocxDocument::open(path).with_context(context)?)),
+        "html" | "htm" => Ok(Box::new(HtmlDocument::open(path).with_context(context)?)),
         other => Err(CoreError::UnknownFormat(other.to_string()).into()),
     }
 }
@@ -353,6 +355,7 @@ fn run() -> Result<u8> {
                 &report,
                 strict,
                 fonts.requested(),
+                &document.unread_sources(),
                 format == Format::Json,
             );
 

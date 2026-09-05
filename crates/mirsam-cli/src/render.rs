@@ -107,6 +107,34 @@ fn fonts_line(checked: bool) {
     );
 }
 
+/// What the adapter could not read, in the report itself.
+///
+/// Standing rule 4 again, one level up from the font checks: an HTML page may
+/// link a stylesheet on a server this tool will not call, and the rules in it
+/// are rules nobody applied. A finding about an absent direction on such a
+/// document may be answered by CSS that was never seen, and the report has to
+/// say so rather than let its own silence imply otherwise.
+///
+/// Present in every report, empty where the format has nothing outside the
+/// file it opened — which is the whole truth for a package.
+fn sources(unread: &[String]) -> serde_json::Value {
+    json!({ "unread": unread })
+}
+
+/// The same, for a human. Silent when everything was read: a line saying
+/// nothing was missed on every PowerPoint deck is noise.
+fn sources_line(unread: &[String]) {
+    if unread.is_empty() {
+        return;
+    }
+    println!(
+        "sources NOT READ ({}) — rules in these were not applied, so an absent \
+         value here may be one they set: {}",
+        unread.len(),
+        unread.join(", ")
+    );
+}
+
 /// The counts an agent branches on, in the same shape for every report.
 fn summary(report: &Report) -> serde_json::Value {
     json!({
@@ -164,6 +192,7 @@ pub fn report(
     report: &Report,
     strict: bool,
     fonts_checked: bool,
+    unread: &[String],
     as_json: bool,
 ) {
     if as_json {
@@ -173,6 +202,7 @@ pub fn report(
             "strict": strict,
             "blocking": report.is_blocking(strict),
             "fonts": fonts(fonts_checked),
+            "sources": sources(unread),
             "summary": summary(report),
             "diagnostics": report.diagnostics,
         });
@@ -189,6 +219,7 @@ pub fn report(
         report.units_scanned, report.arabic_units, report.mixed_units
     );
     fonts_line(fonts_checked);
+    sources_line(unread);
     println!();
     findings(report);
     verdict(report, strict);

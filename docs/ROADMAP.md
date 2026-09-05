@@ -129,8 +129,16 @@ workflow currently pushes onto a human.
 
 **v0.6.0**
 
-- HTML/CSS: `dir`, `lang`, logical properties, `<bdi>`/`<bdo>` misuse,
-  DOM order reversed to fake RTL.
+- **Landed:** the HTML reader. `dir`, `lang` and the part of CSS that decides
+  direction — `<style>`, a `style` attribute and a stylesheet linked by a
+  relative path, with selectors, specificity and `!important`, because on the
+  web the direction is usually in the stylesheet rather than in the document.
+  A stylesheet on a server is not fetched, and the report names every one it
+  did not read rather than letting an absent value look decided. See
+  [`PLAN.md`](PLAN.md) §5.1 and
+  [ADR 0009](adr/0009-a-source-the-adapter-could-not-read-is-part-of-the-report.md).
+- HTML rules of its own: `<bdi>`/`<bdo>` misuse, physical properties where
+  logical ones were meant, DOM order reversed to fake RTL.
 - XLSX: sheet direction, cell alignment, formula and identifier preservation.
 
 ---
