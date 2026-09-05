@@ -23,7 +23,12 @@
 //!    its own `w:basedOn` chain. A paragraph that names a style does not also
 //!    take the default one ([ECMA-376] Part 1 §17.7.2): the style it named is
 //!    the whole answer, and its `w:basedOn` chain is where it looks next.
-//! 5. `w:docDefaults`, which is what the document states for everything.
+//! 5. For a paragraph inside a table, the table style its `w:tblPr/w:tblStyle`
+//!    names — or the document's default table style, for a table naming none —
+//!    and that style's own `w:basedOn` chain. Word's hierarchy puts a table
+//!    style below the paragraph style and above the document defaults
+//!    ([ECMA-376] Part 1 §17.7.2), which is where it sits here.
+//! 6. `w:docDefaults`, which is what the document states for everything.
 //!
 //! **`w:link` is not a hop.** A linked style is one paragraph style and one
 //! character style that Word presents as a single entry in its UI, and it
@@ -32,14 +37,21 @@
 //! document where the halves disagree it would prefer the half Word does not
 //! apply.
 //!
-//! Table styles are the one source deliberately absent, because tables are
-//! PLAN §3.4 and a cell has no unit of its own here yet.
+//! **`w:tblStylePr` is not read.** A table style's *conditional* formatting —
+//! its first row, its last column, its banding — applies only to the parts of
+//! the table `w:tblPr/w:tblLook` turns on, and only to the cells at those
+//! positions. Reading it would mean tracking each cell's coordinates against
+//! that mask, and reading it *without* that mask would apply a header row's
+//! formatting to every cell in the table. Only a table style's unconditional
+//! `w:pPr` and `w:rPr` are taken, which is what Word applies to every cell.
 //!
 //! ## What is resolved, and what is not
 //!
 //! Direction, alignment, the complex-script font slot, and whether the
 //! paragraph has a real list. The same set [`crate::inherit`] resolves, for
-//! the same reasons, plus the list.
+//! the same reasons, plus the list. For a table, its column order:
+//! [`StyleSheet::resolve_table`] answers a `w:tbl` whose own `w:tblPr` states
+//! no `w:bidiVisual` from the table style chain above it.
 //!
 //! [ADR 0007] decides what to conclude from an inherited value by asking
 //! whether it agrees with the text, and states that test for direction and
@@ -185,6 +197,9 @@ struct Formatting {
     complex_font: FontRef,
     /// `w:pPr/w:numPr`, and whether it names a real list or removes one.
     bullet: Option<Bullet>,
+    /// `w:tblPr/w:bidiVisual`: the column order of a table this style lays
+    /// out, which is the table's own property and not any paragraph's.
+    table_direction: Option<Direction>,
 }
 
 impl Formatting {
@@ -193,6 +208,7 @@ impl Formatting {
             && self.alignment.is_none()
             && self.complex_font.is_empty()
             && self.bullet.is_none()
+            && self.table_direction.is_none()
     }
 }
 
@@ -249,6 +265,17 @@ fn paragraph_source(stack: &[String]) -> Option<Source> {
     }
 }
 
+/// The source a *table* property at this point belongs to.
+///
+/// `w:docDefaults` has no table half, so a `w:style` is the only source there
+/// can be one. The path matters as much as it does for a paragraph property:
+/// `w:tblPr` is the table's own in `document.xml` — which [`crate::docx`]
+/// reads — the style's in `styles.xml`, and a superseded one inside a
+/// `w:tblPrChange`.
+fn table_source(stack: &[String]) -> Option<Source> {
+    ends_with(stack, &["w:style", "w:tblPr"]).then_some(Source::Style)
+}
+
 /// The source a run property at this point belongs to.
 fn run_source(stack: &[String]) -> Option<Source> {
     if ends_with(stack, &["w:style", "w:rPr"]) {
@@ -285,6 +312,10 @@ pub struct StyleSheet {
     styles: BTreeMap<String, Style>,
     /// `w:style[@w:type="paragraph"][@w:default="1"]`, if the document has one.
     default_paragraph: Option<String>,
+    /// `w:style[@w:type="table"][@w:default="1"]`, if the document has one.
+    /// Word applies it to every table that names no style of its own, exactly
+    /// as it applies the default paragraph style to an unstyled paragraph.
+    default_table: Option<String>,
     /// The theme part and its font scheme, for `@w:cstheme`.
     theme: Option<(String, FontScheme)>,
 }
@@ -455,6 +486,20 @@ impl StyleSheet {
                     formatting.bullet.get_or_insert(bullet);
                 }
             }
+            // The column order a table style lays its tables out in. A table
+            // property, never a paragraph one: a cell's paragraphs keep their
+            // own `w:bidi`, and reading this as one would report a direction
+            // no paragraph in the document states.
+            "w:bidiVisual" => {
+                let direction = if on_off_element(e) {
+                    Direction::Rtl
+                } else {
+                    Direction::Ltr
+                };
+                if let Some(formatting) = table_source(stack).and_then(|s| self.target(open, s)) {
+                    formatting.table_direction.get_or_insert(direction);
+                }
+            }
             "w:rFonts" => {
                 let font = FontRef::read(e);
                 if let Some(formatting) = run_source(stack).and_then(|s| self.target(open, s)) {
@@ -481,10 +526,15 @@ impl StyleSheet {
     fn commit(&mut self, builder: Option<StyleBuilder>) {
         let Some(builder) = builder else { return };
         let Some(id) = builder.id else { return };
-        if builder.default && builder.kind == "paragraph" {
-            // First writer wins: a document naming two default paragraph
-            // styles is malformed, and Word applies the first.
-            self.default_paragraph.get_or_insert_with(|| id.clone());
+        // First writer wins: a document naming two default styles of one type
+        // is malformed, and Word applies the first.
+        let slot = match (builder.default, builder.kind.as_str()) {
+            (true, "paragraph") => Some(&mut self.default_paragraph),
+            (true, "table") => Some(&mut self.default_table),
+            _ => None,
+        };
+        if let Some(slot) = slot {
+            slot.get_or_insert_with(|| id.clone());
         }
         self.styles.insert(id, builder.style);
     }
@@ -533,7 +583,21 @@ impl StyleSheet {
     /// `style` is the paragraph's `w:pPr/w:pStyle` and `run_style` the
     /// `w:rPr/w:rStyle` of the first run that named one. A property already
     /// resolved is left alone, so direct formatting still wins.
-    pub fn resolve(&self, style: Option<&str>, run_style: Option<&str>, props: &mut Properties) {
+    ///
+    /// `table` is `Some` for a paragraph inside a table, holding the
+    /// `w:tblPr/w:tblStyle` that table names, or `None` inside it for a table
+    /// that names none — which still takes the document's default table
+    /// style. A table style sits *below* the paragraph style and above
+    /// `w:docDefaults` in Word's hierarchy ([ECMA-376] Part 1 §17.7.2), which
+    /// is where it is consulted here. A paragraph outside every table passes
+    /// `None` and takes no table style at all.
+    pub fn resolve(
+        &self,
+        style: Option<&str>,
+        run_style: Option<&str>,
+        table: Option<Option<&str>>,
+        props: &mut Properties,
+    ) {
         for (id, source) in self.chain(run_style) {
             self.take(props, &source.formatting, Some(id));
         }
@@ -543,7 +607,41 @@ impl StyleSheet {
         for (id, source) in self.chain(paragraph) {
             self.take(props, &source.formatting, Some(id));
         }
+        if let Some(table) = table {
+            for (id, source) in self.chain(table.or(self.default_table.as_deref())) {
+                self.take(props, &source.formatting, Some(id));
+            }
+        }
         self.take(props, &self.defaults, None);
+    }
+
+    /// Fill in a table's own column order from the table style chain, when the
+    /// `w:tblPr` did not state a `w:bidiVisual` itself.
+    ///
+    /// `style` is the `w:tblPr/w:tblStyle` the table names; a table naming
+    /// none takes the document's default table style, exactly as an unstyled
+    /// paragraph takes the default paragraph one.
+    ///
+    /// Resolving this can only ever make the tool quieter, and that is why it
+    /// is done: a table whose style turns right-to-left layout on is laid out
+    /// the way its author asked, and reading it as undeclared would report
+    /// `container-direction` on every correctly-styled Arabic table in the
+    /// document — invariant 2 reached through the adapter. What the value
+    /// then *means* is [ADR 0007]'s and the rule's: an inherited direction
+    /// that contradicts the text is still reported, exactly as an absent one.
+    pub fn resolve_table(&self, style: Option<&str>, direction: &mut Resolved<Direction>) {
+        if !direction.is_unset() {
+            return;
+        }
+        for (id, source) in self.chain(style.or(self.default_table.as_deref())) {
+            if let Some(resolved) = source.formatting.table_direction {
+                *direction = Resolved::Inherited(
+                    resolved,
+                    Origin::new(&self.part, format!("style[{id}]/tblPr@bidiVisual")),
+                );
+                return;
+            }
+        }
     }
 
     /// Take from one source whatever the paragraph has not resolved yet,

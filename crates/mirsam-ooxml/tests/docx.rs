@@ -1,4 +1,4 @@
-//! The DOCX reader (PLAN M3 3.2).
+//! The DOCX reader (PLAN M3 3.2, and its tables — 3.4).
 //!
 //! Every case is WordprocessingML lowered onto the shared text model, and the
 //! assertions are on `TextUnit` rather than on XML: what this file is asking is
@@ -65,7 +65,7 @@ fn a_paragraph_becomes_one_unit_addressed_by_part_and_ordinal() {
     assert_eq!(unit.location.part, PART);
     assert_eq!(unit.location.paragraph, Some(1));
     // Word names no enclosing shape for body text, so there is nothing
-    // truthful to put here. A cell would be one, and cells are §3.4.
+    // truthful to put here. A table cell is the one thing it does name.
     assert_eq!(unit.location.container, None);
 }
 
@@ -364,19 +364,204 @@ fn a_fallback_is_not_read_beside_the_choice_it_stands_in_for() {
     assert_eq!(units[0].text, "مرحبا");
 }
 
+// ------------------------------------------------------------------ tables
+
+/// A one-row table over the given `w:tblPr` and cell texts.
+fn table(tbl_pr: &str, cells: &[&str]) -> String {
+    let cells: String = cells
+        .iter()
+        .map(|t| format!("<w:tc><w:p><w:r><w:t>{t}</w:t></w:r></w:p></w:tc>"))
+        .collect();
+    format!("<w:tbl>{tbl_pr}<w:tr>{cells}</w:tr></w:tbl>")
+}
+
+/// The Arabic table header three of the cases below share.
+const CELLS: [&str; 3] = ["المؤشر", "الربع الثالث", "الربع الرابع"];
+
 #[test]
-fn a_paragraph_in_a_table_cell_is_still_a_paragraph() {
-    // Cells are §3.4 — the table itself is not a unit yet. What must hold now
-    // is that the text inside one is not lost.
+fn a_table_is_a_container_of_its_own_addressed_by_part_and_ordinal() {
+    let xml = document(&format!(
+        "{}{}",
+        table("", &CELLS),
+        table("", &["Metric", "Q3"]),
+    ));
+    let units = scan_xml(PART, &xml).unwrap();
+    let tables: Vec<_> = units.iter().filter(|u| u.kind == UnitKind::Table).collect();
+
+    assert_eq!(tables.len(), 2, "{units:#?}");
+    assert_eq!(tables[0].id.0, "word/document.xml#tbl1");
+    assert_eq!(tables[1].id.0, "word/document.xml#tbl2");
+    // A container's text is the text it lays out, one paragraph per line.
+    assert_eq!(tables[0].text, CELLS.join("\n"));
+    // The cells stay paragraphs in their own right.
+    assert_eq!(
+        units.iter().filter(|u| u.kind == UnitKind::Table).count(),
+        2
+    );
+    assert_eq!(units.len(), 7);
+}
+
+#[test]
+fn bidi_visual_is_the_tables_direction_and_a_missing_val_is_on() {
+    for (tbl_pr, expected) in [
+        ("<w:tblPr><w:bidiVisual/></w:tblPr>", Direction::Rtl),
+        (
+            r#"<w:tblPr><w:bidiVisual w:val="1"/></w:tblPr>"#,
+            Direction::Rtl,
+        ),
+        (
+            r#"<w:tblPr><w:bidiVisual w:val="0"/></w:tblPr>"#,
+            Direction::Ltr,
+        ),
+    ] {
+        let xml = document(&table(tbl_pr, &CELLS));
+        let units = scan_xml(PART, &xml).unwrap();
+        let found = units.iter().find(|u| u.kind == UnitKind::Table).unwrap();
+        assert_eq!(
+            found.props.direction,
+            Resolved::Explicit(expected),
+            "{tbl_pr}"
+        );
+    }
+}
+
+#[test]
+fn an_arabic_table_laid_out_left_to_right_is_the_flagship_table_finding() {
+    // The whole of §3.4: `w:bidiVisual` is needed exactly where the cells read
+    // right to left, and its absence there reverses the columns for a reader.
+    let arabic = document(&table("", &CELLS));
+    let units = scan_xml(PART, &arabic).unwrap();
+    assert!(findings(&units).contains(&"container-direction".to_string()));
+
+    // And is not needed anywhere else: the same table declared right to left,
+    // and an English table declaring nothing, are both silent.
+    for xml in [
+        document(&table("<w:tblPr><w:bidiVisual/></w:tblPr>", &CELLS)),
+        document(&table("", &["Metric", "Q3", "Q4"])),
+    ] {
+        let units = scan_xml(PART, &xml).unwrap();
+        assert!(
+            !findings(&units).contains(&"container-direction".to_string()),
+            "{xml}"
+        );
+    }
+}
+
+#[test]
+fn a_paragraph_in_a_table_cell_is_still_a_paragraph_and_says_which_cell() {
     let xml = document(concat!(
         "<w:tbl><w:tr><w:tc>",
         "<w:p><w:pPr><w:bidi/></w:pPr><w:r><w:t>خلية</w:t></w:r></w:p>",
+        "</w:tc><w:tc>",
+        "<w:p><w:pPr><w:bidi/></w:pPr><w:r><w:t>خلية أخرى</w:t></w:r></w:p>",
         "</w:tc></w:tr></w:tbl>",
     ));
     let units = scan_xml(PART, &xml).unwrap();
-    assert_eq!(units.len(), 1);
-    assert_eq!(units[0].text, "خلية");
-    assert!(units.iter().all(|u| u.kind == UnitKind::Paragraph));
+    let paragraphs: Vec<_> = units
+        .iter()
+        .filter(|u| u.kind == UnitKind::Paragraph)
+        .collect();
+
+    assert_eq!(paragraphs.len(), 2, "{units:#?}");
+    assert_eq!(paragraphs[0].text, "خلية");
+    assert_eq!(
+        paragraphs[0].location.container.as_deref(),
+        Some("table 1 row 1 cell 1")
+    );
+    assert_eq!(
+        paragraphs[1].location.container.as_deref(),
+        Some("table 1 row 1 cell 2")
+    );
+    // Body text outside every table names no cell, because Word names nothing
+    // enclosing it.
+    let body = scan_xml(PART, &document(&paragraph("", ARABIC))).unwrap();
+    assert!(body[0].location.container.is_none());
+}
+
+#[test]
+fn a_nested_table_is_its_own_container_and_the_outer_one_lays_it_out_too() {
+    // A table in a cell of another is a container of its own — its columns run
+    // whichever way its `w:tblPr` says — and the text in it is laid out by
+    // both, so both are judged on it.
+    let inner = table("<w:tblPr><w:bidiVisual/></w:tblPr>", &["داخلي"]);
+    let xml = document(&format!(
+        "<w:tbl><w:tr><w:tc>{inner}<w:p><w:r><w:t>خارجي</w:t></w:r></w:p></w:tc></w:tr></w:tbl>",
+    ));
+    let units = scan_xml(PART, &xml).unwrap();
+    let tables: Vec<_> = units.iter().filter(|u| u.kind == UnitKind::Table).collect();
+
+    assert_eq!(tables.len(), 2, "{units:#?}");
+    // Closed innermost first, so the nested table is `#tbl2` and arrives first.
+    assert_eq!(tables[0].id.0, "word/document.xml#tbl2");
+    assert_eq!(tables[0].text, "داخلي");
+    assert_eq!(
+        tables[0].props.direction,
+        Resolved::Explicit(Direction::Rtl)
+    );
+    assert_eq!(tables[1].id.0, "word/document.xml#tbl1");
+    assert_eq!(tables[1].text, "داخلي\nخارجي");
+    assert_eq!(tables[1].props.direction, Resolved::Unset);
+
+    // The paragraph in the nested table names the cell nearest it.
+    let inner_cell = units
+        .iter()
+        .find(|u| u.text == "داخلي" && u.kind == UnitKind::Paragraph)
+        .unwrap();
+    assert_eq!(
+        inner_cell.location.container.as_deref(),
+        Some("table 2 row 1 cell 1")
+    );
+}
+
+#[test]
+fn a_table_that_lays_out_no_text_is_no_unit() {
+    let xml = document("<w:tbl><w:tr><w:tc><w:p/></w:tc></w:tr></w:tbl>");
+    let units = scan_xml(PART, &xml).unwrap();
+    assert!(units.is_empty(), "{units:#?}");
+}
+
+#[test]
+fn a_drawingml_table_is_not_a_word_table() {
+    // `token.rs`'s claim in the other direction: an `a:tbl` sitting in a Word
+    // part is PowerPoint's vocabulary and lays out nothing here.
+    let xml = document(concat!(
+        "<a:tbl><a:tr><a:tc><a:txBody>",
+        "<a:p><a:r><a:t>المؤشر</a:t></a:r></a:p>",
+        "</a:txBody></a:tc></a:tr></a:tbl>",
+    ));
+    assert!(scan_xml(PART, &xml).unwrap().is_empty());
+}
+
+#[test]
+fn a_superseded_direction_in_a_revision_record_is_not_the_tables() {
+    // `w:tblPrChange` holds the column order as it stood *before* a tracked
+    // change, in the same element that states it now and written after it.
+    // Reading it would report the layout somebody has already corrected.
+    let tbl_pr = concat!(
+        "<w:tblPr><w:bidiVisual/>",
+        r#"<w:tblPrChange w:id="1" w:author="a" w:date="2026-01-01T00:00:00Z">"#,
+        r#"<w:tblPr><w:bidiVisual w:val="0"/></w:tblPr></w:tblPrChange>"#,
+        "</w:tblPr>",
+    );
+    let xml = document(&table(tbl_pr, &CELLS));
+    let units = scan_xml(PART, &xml).unwrap();
+    let found = units.iter().find(|u| u.kind == UnitKind::Table).unwrap();
+    assert_eq!(found.props.direction, Resolved::Explicit(Direction::Rtl));
+}
+
+#[test]
+fn a_superseded_paragraph_property_is_not_the_paragraphs_either() {
+    // The same claim one level down: `w:pPrChange` carries a whole `w:pPr`,
+    // and it is written after the one in force.
+    let p_pr = concat!(
+        "<w:pPr><w:bidi/>",
+        r#"<w:pPrChange w:id="1" w:author="a" w:date="2026-01-01T00:00:00Z">"#,
+        r#"<w:pPr><w:bidi w:val="0"/><w:jc w:val="center"/></w:pPr></w:pPrChange>"#,
+        "</w:pPr>",
+    );
+    let unit = scan_one(p_pr, ARABIC);
+    assert_eq!(unit.props.direction, Resolved::Explicit(Direction::Rtl));
+    assert!(unit.props.alignment.is_unset(), "{unit:#?}");
 }
 
 // ------------------------------------------------------------------ the package

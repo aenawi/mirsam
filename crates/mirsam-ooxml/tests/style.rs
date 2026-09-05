@@ -1,8 +1,9 @@
-//! Word's style chain (PLAN M3 3.3).
+//! Word's style chain (PLAN M3 3.3, and its table styles — 3.4).
 //!
 //! `w:docDefaults`, the named styles a paragraph reaches through `w:pStyle`
-//! and `w:rStyle`, the `w:basedOn` walk above them, and the theme a
-//! `@w:cstheme` points at. Every assertion is on the resolved `TextUnit`,
+//! and `w:rStyle`, the table style a `w:tbl` and the paragraphs in its cells
+//! reach through `w:tblStyle`, the `w:basedOn` walk above them, and the theme
+//! a `@w:cstheme` points at. Every assertion is on the resolved `TextUnit`,
 //! because what this file is asking is whether a Word paragraph reaches the
 //! rules carrying the same evidence a PowerPoint one does — a value, and the
 //! part and property that supplied it.
@@ -322,12 +323,17 @@ fn a_table_styles_own_alignment_is_not_the_paragraphs() {
            </w:tblStylePr>\
          </w:style>",
     );
-    assert!(sheet.is_empty());
 
     let unit = resolve("<w:pPr><w:pStyle w:val=\"Grid\"/></w:pPr>", &sheet);
     assert!(unit.props.direction.is_unset());
     assert!(unit.props.alignment.is_unset());
     assert!(unit.props.complex_font.is_unset());
+
+    // The one thing that `w:tblPr` does state is the table's own column
+    // order, and it reaches a table rather than a paragraph.
+    let mut direction = Resolved::Unset;
+    sheet.resolve_table(Some("Grid"), &mut direction);
+    assert_eq!(*inherited(&direction).0, Direction::Rtl);
 }
 
 #[test]
@@ -480,6 +486,144 @@ fn a_paragraph_that_removes_its_list_has_none_to_inherit() {
     let units = scan_xml_with(PART, &xml, Some(&sheet(source))).unwrap();
     assert_eq!(units[0].props.bullet, Bullet::Suppressed);
     assert!(findings(&units).contains(&"literal-bullet".to_string()));
+}
+
+// -------------------------------------------------------------- table styles
+
+/// A `word/document.xml` holding one Arabic table over the given `w:tblPr`.
+fn table_document(tbl_pr: &str) -> String {
+    format!(
+        "<w:document{W}><w:body><w:tbl>{tbl_pr}<w:tr><w:tc>\
+         <w:p><w:r><w:t>{ARABIC}</w:t></w:r></w:p>\
+         </w:tc></w:tr></w:tbl></w:body></w:document>"
+    )
+}
+
+/// The table unit of such a document, resolved against a stylesheet.
+fn resolve_table(tbl_pr: &str, sheet: &StyleSheet) -> TextUnit {
+    let xml = table_document(tbl_pr);
+    scan_xml_with(PART, &xml, Some(sheet))
+        .expect("the part did not parse")
+        .into_iter()
+        .find(|u| u.kind == mirsam_core::UnitKind::Table)
+        .unwrap_or_else(|| panic!("no table unit from {xml}"))
+}
+
+#[test]
+fn a_table_style_supplies_the_column_order_the_table_did_not_state() {
+    // Reading a styled right-to-left table as undeclared would report
+    // `container-direction` on every correctly-styled Arabic table in the
+    // document — invariant 2 reached through the adapter.
+    let sheet = sheet(
+        "<w:style w:type=\"table\" w:styleId=\"ArabicGrid\">\
+           <w:tblPr><w:bidiVisual/></w:tblPr></w:style>",
+    );
+    let unit = resolve_table(
+        "<w:tblPr><w:tblStyle w:val=\"ArabicGrid\"/></w:tblPr>",
+        &sheet,
+    );
+
+    let (direction, origin) = inherited(&unit.props.direction);
+    assert_eq!(*direction, Direction::Rtl);
+    assert_eq!(origin.part, STYLES);
+    assert_eq!(origin.property, "style[ArabicGrid]/tblPr@bidiVisual");
+    assert!(!findings(&[unit]).contains(&"container-direction".to_string()));
+}
+
+#[test]
+fn a_table_that_states_its_own_column_order_does_not_take_the_styles() {
+    let sheet = sheet(
+        "<w:style w:type=\"table\" w:styleId=\"LatinGrid\">\
+           <w:tblPr><w:bidiVisual w:val=\"0\"/></w:tblPr></w:style>",
+    );
+    let unit = resolve_table(
+        "<w:tblPr><w:tblStyle w:val=\"LatinGrid\"/><w:bidiVisual/></w:tblPr>",
+        &sheet,
+    );
+    assert_eq!(unit.props.direction, Resolved::Explicit(Direction::Rtl));
+}
+
+#[test]
+fn a_style_chain_answers_the_table_and_a_contradicting_answer_is_still_reported() {
+    // The `w:basedOn` walk is the same one a paragraph takes, and the style
+    // cited is the one that actually stated the value.
+    let sheet = sheet(
+        "<w:style w:type=\"table\" w:styleId=\"Base\">\
+           <w:tblPr><w:bidiVisual w:val=\"0\"/></w:tblPr></w:style>\
+         <w:style w:type=\"table\" w:styleId=\"Grid\">\
+           <w:basedOn w:val=\"Base\"/></w:style>",
+    );
+    let unit = resolve_table("<w:tblPr><w:tblStyle w:val=\"Grid\"/></w:tblPr>", &sheet);
+
+    let (direction, origin) = inherited(&unit.props.direction);
+    assert_eq!(*direction, Direction::Ltr);
+    assert_eq!(origin.property, "style[Base]/tblPr@bidiVisual");
+    // A style that lays its tables out left to right is a default nobody
+    // aimed at Arabic, and the reader still meets the columns reversed
+    // (ADR 0007 §1).
+    assert!(findings(&[unit]).contains(&"container-direction".to_string()));
+}
+
+#[test]
+fn a_table_naming_no_style_takes_the_documents_default_table_style() {
+    let sheet = sheet(
+        "<w:style w:type=\"table\" w:default=\"1\" w:styleId=\"TableNormal\">\
+           <w:tblPr><w:bidiVisual/></w:tblPr></w:style>",
+    );
+    assert_eq!(
+        *inherited(&resolve_table("", &sheet).props.direction).0,
+        Direction::Rtl
+    );
+}
+
+#[test]
+fn a_table_style_answers_the_paragraphs_in_its_cells_below_their_own_style() {
+    // Word's hierarchy puts a table style under the paragraph style and over
+    // `w:docDefaults` (§17.7.2). A cell paragraph that names neither takes the
+    // table style's, so an Arabic cell under a right-to-left table style is
+    // the design doing its job and is silent.
+    let sheet = sheet(
+        "<w:docDefaults><w:pPrDefault><w:pPr><w:jc w:val=\"left\"/></w:pPr>\
+         </w:pPrDefault></w:docDefaults>\
+         <w:style w:type=\"table\" w:styleId=\"ArabicGrid\">\
+           <w:tblPr><w:bidiVisual/></w:tblPr>\
+           <w:pPr><w:bidi/><w:jc w:val=\"right\"/></w:pPr></w:style>",
+    );
+    let xml = table_document("<w:tblPr><w:tblStyle w:val=\"ArabicGrid\"/></w:tblPr>");
+    let units = scan_xml_with(PART, &xml, Some(&sheet)).unwrap();
+    let cell = units
+        .iter()
+        .find(|u| u.kind == mirsam_core::UnitKind::Paragraph)
+        .unwrap();
+
+    let (direction, origin) = inherited(&cell.props.direction);
+    assert_eq!(*direction, Direction::Rtl);
+    assert_eq!(origin.property, "style[ArabicGrid]/pPr@bidi");
+    // The table style is nearer than `w:docDefaults`, which says the opposite
+    // edge.
+    assert_eq!(*inherited(&cell.props.alignment).0, Alignment::End);
+    // Nothing about direction is left to report, on the cell or the table.
+    let found = findings(&units);
+    assert!(
+        !found.iter().any(|r| r.starts_with("direction-")),
+        "{found:?}"
+    );
+    assert!(
+        !found.contains(&"container-direction".to_string()),
+        "{found:?}"
+    );
+    assert!(!found.contains(&"alignment-unset".to_string()), "{found:?}");
+}
+
+#[test]
+fn a_paragraph_outside_every_table_takes_no_table_style() {
+    // Otherwise the document's default table style would format every
+    // paragraph in the document, which is a value no reader will see.
+    let sheet = sheet(
+        "<w:style w:type=\"table\" w:default=\"1\" w:styleId=\"TableNormal\">\
+           <w:pPr><w:bidi/></w:pPr></w:style>",
+    );
+    assert!(resolve("", &sheet).props.direction.is_unset());
 }
 
 // -------------------------------------------------------------- the package

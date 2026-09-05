@@ -5,7 +5,7 @@ use crate::bidi;
 use crate::diagnostic::{Diagnostic, Evidence, RuleId, Severity};
 use crate::fix::Fix;
 use crate::script;
-use crate::text::{Alignment, Direction, Resolved, TextUnit, UnitKind};
+use crate::text::{Alignment, Direction, Origin, Resolved, TextUnit, UnitKind};
 
 /// The direction these rules judge: the one written on the paragraph, or —
 /// where none is — UAX#9's first-strong auto-detection.
@@ -385,6 +385,14 @@ fn wording(kind: UnitKind) -> (&'static str, &'static str, &'static str) {
 /// One rule rather than one per container, because the judgement does not
 /// vary with the container: only the attribute an adapter lowers the repair
 /// onto does, and that is the adapter's business.
+///
+/// A container's direction can be inherited — Word answers a `w:tbl` that
+/// states no `w:bidiVisual` from the table style above it — and ADR 0007 §1
+/// decides what to conclude from that: an inherited value that agrees with
+/// the text is the design doing its job and is silent, and one that
+/// contradicts it is a default nobody aimed at this container and is reported
+/// exactly as an absent one. The repair still writes to the container the
+/// finding names, never to the style (ADR 0007 §6).
 pub struct ContainerDirection;
 
 impl Rule for ContainerDirection {
@@ -407,18 +415,25 @@ impl Rule for ContainerDirection {
         let (subject, reads, consequence) = wording(unit.kind);
         let expected = bidi::dominant_direction(&unit.text);
         let message = match unit.props.direction {
-            // The container's design, never a finding. A container has no
-            // inheritance chain of the shape 2.2 resolves — a table's `rtl`
-            // and a body's `rtlCol` are stated on the container or not at all
-            // — so this arm is unaffected by it (ADR 0007, consequences).
-            Resolved::Inherited(..) => return Vec::new(),
-            Resolved::Explicit(declared) if declared == expected => return Vec::new(),
-            // Left-to-right is what an undeclared container gets, and is right.
-            Resolved::Unset if expected == Direction::Ltr => return Vec::new(),
+            // Whoever said it, a direction that agrees with the text is the
+            // container laid out the way it reads (ADR 0007 §1, §4).
+            Resolved::Explicit(declared) | Resolved::Inherited(declared, _)
+                if declared == expected =>
+            {
+                return Vec::new();
+            }
             Resolved::Explicit(declared) => {
                 format!("{subject} declared {declared} but {reads} {expected}; {consequence}")
             }
-            Resolved::Unset => {
+            // Left-to-right is what an undeclared container gets, and is right.
+            Resolved::Unset | Resolved::Inherited(..) if expected == Direction::Ltr => {
+                return Vec::new();
+            }
+            // Undeclared, or declared by a style whose value contradicts the
+            // text — a default nobody aimed at this container, reported
+            // exactly as an absent one and at the severity an absent one
+            // carries (ADR 0007 §1, §3).
+            Resolved::Unset | Resolved::Inherited(..) => {
                 format!("{subject} declares no direction; {reads} {expected}, so {consequence}")
             }
         };
@@ -432,6 +447,10 @@ impl Rule for ContainerDirection {
             )
             .with_evidence(Evidence {
                 logical: Some(unit.text.clone()),
+                // Present exactly when a source above the container supplied
+                // the direction, so a reviewer can check the claim without
+                // opening the application (invariant 6, ADR 0007 §5).
+                inherited_from: unit.props.direction.origin().map(Origin::to_string),
                 ..Default::default()
             })
             .fixable(),
@@ -534,18 +553,55 @@ mod container_direction_tests {
     fn a_correct_inherited_or_english_container_is_silent() {
         for u in [
             table(ARABIC, Resolved::Explicit(Direction::Rtl)),
-            table(ARABIC, inherited(Direction::Ltr)),
+            // The style laid the table out the way its text reads: the design
+            // doing its job, and never a finding (ADR 0007 §1).
+            table(ARABIC, inherited(Direction::Rtl)),
             table("Metric\nQ3\nQ4", Resolved::Unset),
+            table("Metric\nQ3\nQ4", inherited(Direction::Ltr)),
             table(
                 "Metric\nThird quarter (قطاع الطاقة)\nFourth quarter",
                 Resolved::Unset,
             ),
             columns(ARABIC, Resolved::Explicit(Direction::Rtl)),
-            columns(ARABIC, inherited(Direction::Ltr)),
+            columns(ARABIC, inherited(Direction::Rtl)),
             columns("Two columns of English prose", Resolved::Unset),
         ] {
             assert!(ContainerDirection.check(&u).is_empty(), "{u:#?}");
         }
+    }
+
+    #[test]
+    fn an_inherited_direction_contradicting_the_text_is_reported_as_an_absent_one() {
+        // A table style that lays its tables out left to right is a default
+        // nobody aimed at Arabic, and the reader still meets the columns the
+        // wrong way round. ADR 0007 §1 and §3: reported, at the severity an
+        // absent direction carries, and naming the source so the claim can be
+        // checked without opening Word (§5).
+        for u in [
+            table(ARABIC, inherited(Direction::Ltr)),
+            columns(ARABIC, inherited(Direction::Ltr)),
+        ] {
+            let found = ContainerDirection.check(&u);
+            assert_eq!(found.len(), 1, "{found:#?}");
+            assert_eq!(found[0].severity, Severity::Warning);
+            assert!(found[0].message.contains("declares no direction"));
+            assert_eq!(
+                found[0].evidence.inherited_from.as_deref(),
+                Some("ppt/slideMasters/slideMaster1.xml bodyStyle/lvl1pPr")
+            );
+            // The repair writes to the container, never to the source
+            // above it (ADR 0007 §6).
+            assert_eq!(
+                ContainerDirection.fix(&u),
+                Some(Fix::SetDirection(Direction::Rtl))
+            );
+        }
+    }
+
+    #[test]
+    fn a_direction_written_on_the_container_names_no_source() {
+        let found = &ContainerDirection.check(&table(ARABIC, Resolved::Unset))[0];
+        assert!(found.evidence.inherited_from.is_none(), "{found:#?}");
     }
 
     #[test]
