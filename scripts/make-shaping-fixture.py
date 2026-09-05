@@ -34,7 +34,15 @@ the detection and not the shaper.
 Each names itself distinctly — `Mirsam Joining`, `Mirsam Nonjoining`,
 `Mirsam Partial` — so the directory doubles as a machine for `mirsam-fonts`
 to index: three files, three families, and a resolver that must hand back the
-right bytes for each. A fourth file exists only for that:
+right bytes for each. Two more files exist for reasons of their own:
+
+  latin.ttf
+      Printable ASCII and no Arabic at all, with no GSUB. The *other*
+      defect, and the one PLAN §4.3's `font-coverage` rule exists for: a
+      deck that points its complex-script slot at Helvetica renders every
+      Arabic letter as an empty box, and no shaping table would have saved
+      it. Shaping through it must stay silent — a letter the font has no
+      glyph for says nothing about whether the font can join.
 
   bold.ttf
       `Mirsam Joining` again, styled `Bold`, with no GSUB, and named so that
@@ -181,14 +189,30 @@ def glyf() -> bytes:
     return b"\0\0\0\0"
 
 
-def cmap() -> bytes:
-    # Three segments, sorted by end code: the space, the letters, and the
-    # 0xFFFF terminator every format 4 subtable is required to end with.
-    segments = [
-        (0x0020, 0x0020, (GID_SPACE - 0x0020) & 0xFFFF),
-        (FIRST_CP, LAST_CP, (GID_ISOL - FIRST_CP) & 0xFFFF),
-        (0xFFFF, 0xFFFF, 1),
-    ]
+def cmap(arabic: bool = True) -> bytes:
+    """The character-to-glyph map.
+
+    With `arabic` the letters U+0621..U+064A are mapped, which is what makes
+    the shaping fixtures answerable for Arabic at all. Without it the font
+    maps printable ASCII and nothing else — `latin.ttf`, the font that has no
+    Arabic to draw and no shaping table that could have saved it.
+    """
+    if not arabic:
+        # Printable ASCII onto the glyphs the Arabic letters would have used.
+        # They have no outlines either; what matters is that a glyph exists
+        # for a `Q` and does not for a beh.
+        segments = [
+            (0x0020, 0x007E, (GID_SPACE - 0x0020) & 0xFFFF),
+            (0xFFFF, 0xFFFF, 1),
+        ]
+    else:
+        # Three segments, sorted by end code: the space, the letters, and the
+        # 0xFFFF terminator every format 4 subtable is required to end with.
+        segments = [
+            (0x0020, 0x0020, (GID_SPACE - 0x0020) & 0xFFFF),
+            (FIRST_CP, LAST_CP, (GID_ISOL - FIRST_CP) & 0xFFFF),
+            (0xFFFF, 0xFFFF, 1),
+        ]
     seg_count = len(segments)
     search_range = 2 * (2 ** (seg_count.bit_length() - 1))
 
@@ -236,7 +260,7 @@ def post() -> bytes:
     return struct.pack(">IihhIIIII", 0x00030000, 0, -100, 50, 0, 0, 0, 0, 0)
 
 
-def os2() -> bytes:
+def os2(arabic: bool = True) -> bytes:
     return (
         struct.pack(
             ">HhHHH",
@@ -251,9 +275,15 @@ def os2() -> bytes:
         + struct.pack(">hh", 50, 250)  # strikeout
         + struct.pack(">h", 0)  # sFamilyClass
         + b"\0" * 10  # panose
-        + struct.pack(">IIII", 1 << 13, 0, 0, 0)  # unicode ranges: Arabic
+        # Unicode ranges: bit 13 is Arabic, bit 0 Basic Latin. Nothing in the
+        # shaping path reads this, and it is stated correctly anyway — a
+        # fixture that lied about what it covers would be a fixture to
+        # distrust.
+        + struct.pack(">IIII", 1 << 13 if arabic else 1 << 0, 0, 0, 0)
         + b"MRSM"  # achVendID
-        + struct.pack(">HHH", 0x0040, 0x0020, LAST_CP)  # regular, first, last
+        + struct.pack(
+            ">HHH", 0x0040, 0x0020, LAST_CP if arabic else 0x007E
+        )  # regular, first, last
         + struct.pack(">hhh", 800, -200, 0)  # typo ascender/descender/gap
         + struct.pack(">HH", 800, 200)  # win ascent/descent
         + struct.pack(">II", 0, 0)  # code page ranges
@@ -367,10 +397,12 @@ def assemble(tables: dict[str, bytes]) -> bytes:
     return font[:at] + struct.pack(">I", adjustment) + font[at + 4 :]
 
 
-def build(shaping: bytes | None, family: str, subfamily: str) -> bytes:
+def build(
+    shaping: bytes | None, family: str, subfamily: str, arabic: bool = True
+) -> bytes:
     tables = {
-        "OS/2": os2(),
-        "cmap": cmap(),
+        "OS/2": os2(arabic),
+        "cmap": cmap(arabic),
         "glyf": glyf(),
         "head": head(),
         "hhea": hhea(),
@@ -391,7 +423,8 @@ def build(shaping: bytes | None, family: str, subfamily: str) -> bytes:
 # ones a real font can leave alone for the reason `partial.ttf` documents.
 PARTIAL_FINA_FROM = 0x0633
 
-# filename -> (family the file names itself, style within it, its GSUB)
+# filename -> (family the file names itself, style within it, its GSUB,
+#              whether it maps Arabic at all)
 #
 # `bold.ttf` is not a shaping fixture. It is a second file claiming
 # `Mirsam Joining`, sorting before `joining.ttf`, and carrying no GSUB — so a
@@ -400,19 +433,33 @@ PARTIAL_FINA_FROM = 0x0633
 # than on a user's deck. This is Arial's situation on macOS reduced to its
 # principle: eleven files state that family, and only one of them is the font
 # a document naming `Arial` is asking for.
+#
+# `latin.ttf` is not a shaping fixture either. It is the *other* defect: a
+# font that maps printable ASCII and no Arabic whatsoever, which is what
+# Helvetica or Comic Sans is when a deck points the complex-script slot at it.
+# Every Arabic character comes back missing, the text renders as a row of
+# empty boxes, and no shaping table would have saved it. It is the font
+# `font-coverage` exists for, and shaping through it must stay silent —
+# a letter the font has no glyph for proves nothing about its `GSUB`.
 FONTS = {
-    "bold.ttf": ("Mirsam Joining", "Bold", None),
-    "joining.ttf": ("Mirsam Joining", "Regular", gsub()),
-    "nonjoining.ttf": ("Mirsam Nonjoining", "Regular", None),
-    "partial.ttf": ("Mirsam Partial", "Regular", gsub(fina_from=PARTIAL_FINA_FROM)),
+    "bold.ttf": ("Mirsam Joining", "Bold", None, True),
+    "joining.ttf": ("Mirsam Joining", "Regular", gsub(), True),
+    "latin.ttf": ("Mirsam Latin", "Regular", None, False),
+    "nonjoining.ttf": ("Mirsam Nonjoining", "Regular", None, True),
+    "partial.ttf": (
+        "Mirsam Partial",
+        "Regular",
+        gsub(fina_from=PARTIAL_FINA_FROM),
+        True,
+    ),
 }
 
 
 def main() -> None:
     os.makedirs(OUT_DIR, exist_ok=True)
-    for filename, (family, subfamily, shaping) in FONTS.items():
+    for filename, (family, subfamily, shaping, arabic) in FONTS.items():
         path = os.path.join(OUT_DIR, filename)
-        data = build(shaping, family, subfamily)
+        data = build(shaping, family, subfamily, arabic)
         with open(path, "wb") as handle:
             handle.write(data)
         print(

@@ -24,7 +24,7 @@ Status legend: `[x]` done · `[ ]` ready · `[~]` blocked on the item above.
 
 ---
 
-## M1 — Repair `[ ]`
+## M1 — Repair `[x]`
 
 The order matters: the round-trip guarantee must exist *before* the first
 mutation, or there is nothing to prove the mutation didn't damage anything.
@@ -569,7 +569,7 @@ report change, and `make validate-fixtures` still passes on all five decks.
 
 ---
 
-## M3 — Word `[ ]`
+## M3 — Word `[x]`
 
 ### 3.1 Extract the shared package layer `[x]`
 ZIP access, part enumeration and the byte-preserving rewrite already lived in
@@ -905,7 +905,7 @@ committed reports changed in one line each — the key naming the file is
 
 ---
 
-## M4 — Shaping `[ ]`
+## M4 — Shaping `[~]`
 
 ### 4.1 `rustybuzz` shaping `[x]`
 Shape each Arabic run; assert joining forms are produced.
@@ -1038,10 +1038,130 @@ perfectly and is missing only Persian peh and Urdu tteh, and `Arial` resolves
 to `Arial.ttf` with complete coverage and four joins of five — ADR 0008's reh,
 still not a defect.
 
-### 4.3 `shaping-broken` and `font-coverage` rules `[~]`
+### 4.3 `shaping-broken` and `font-coverage` rules `[x]`
 
-*Acceptance:* a deck using a Latin-only font for Arabic is reported with the
-exact characters that will not render.
+4.1 and 4.2 built two modules that refuse to draw a conclusion. This is where
+the conclusions are drawn, and there are exactly two, because they are two
+defects with two pieces of advice. **`font-coverage`** says the font has no
+glyph for the Arabic: it renders as empty boxes, and no shaping table would
+have saved it. **`shaping-broken`** says the font has every letter and no
+shaping tables: it renders as a row of disconnected letters, and installing a
+font with more coverage would change nothing. Telling an author to pick a
+different typeface is the answer to both and for opposite reasons, which is
+why one rule reporting both would be a rule that cannot be acted on.
+
+**These are the first rules in this tool that ask a question about the
+machine, and that is why they are off by default.** Every other check reads a
+document and gives the same answer on any computer. These two need a font
+file, and which fonts a computer has is not a property of the deck: an audit
+that resolved them without being asked would report differently on a
+developer's laptop and on a CI runner looking at one document, and neither run
+could be reproduced from the file alone. So `mirsam audit --fonts` asks for
+them, `--font-dir` pins the directories searched — which is what makes the
+check reproducible at all — and **the report says which of the two audits it
+is**, in both output formats: `fonts NOT RUN` for a human, `"fonts":
+{"checked": false}` for an agent. That is standing rule 4 spent where it was
+always going to be needed. The golden corpus never passes the flag, so the
+six committed reports gained one key each and not a single finding, which is
+the claim that nothing else moved.
+
+*Which way the claim runs, and it only runs one way.* A font that is **here**
+and cannot draw the text will not draw it anywhere, because a `cmap` and a
+`GSUB` travel with the font — that is what makes a finding worth making. A
+font that is here and draws the text perfectly proves nothing whatsoever
+about the reader's machine, and silence from these rules is not a promise
+that the document renders. `AGENTS.md` says so where an agent will read it.
+
+*Three ways to say nothing, all of them deliberate.* A paragraph naming no
+complex-script font is `complex-font-missing`'s, not theirs — guessing which
+font the application will substitute is exactly the invention this design
+refuses. A family this machine does not have is the tool losing the ability to
+say what the reader will see, which is a fact about the computer and not a
+defect in the deck; reporting it would fire on every runner with no fonts
+installed. And a file the shaper cannot parse is a fact about the file,
+reported by whoever supplied it.
+
+**Where the shaping threshold sits, which ADR 0008 left to this item.** The
+signal is `joins_produced == 0` against enough required joins to mean
+something, and the number is **four**, counted over letters the font actually
+has. The arithmetic is the argument: a letter is required to take a *final*
+form only because the letter before it joined forwards, so every final has a
+companion initial or medial, and initials and medials are the dual-joining
+letters — the ones a font like Arial does shape. Two joins are therefore
+*one* such letter, which is precisely the design choice ADR 0008 forbids
+concluding a defect from, and which a two-letter word is the whole of. Four
+are two of them, independently, both silent, and no font that shapes Arabic
+at all looks like that. Unmapped letters are excluded from the count for a
+different reason: a font cannot join a glyph it does not have, so counting
+them would let a Latin-only font produce a `shaping-broken` finding next to
+its `font-coverage` one — the tool arguing with itself about one paragraph,
+with the same repair and two explanations.
+
+*Severity is what 4.2 built `missing_occurrences` for.* A font answering for
+**none** of the Arabic was not the font this text needed: the paragraph goes
+blank, there is nothing to argue about, and it is an error. A font missing
+*some* of it is an otherwise sound pairing meeting an unusual letter —
+Mishafi has no Persian peh — which is still wrong for the characters it hits,
+still worth an author's attention, and is not the same claim. Warning.
+
+**Neither is fixable, and that is not an omission.** The repair for both is a
+different typeface, and which one is an authoring decision the text cannot
+supply — the reason `complex-font-missing` proposes nothing until `--font`
+chooses one. It is stronger here: that rule fills an *empty* slot, while
+these two would be overwriting a font the author deliberately put there.
+
+*The fifth fixture font.* `latin.ttf` maps printable ASCII and no Arabic
+whatsoever, written by the same `struct`-and-nothing-else generator as the
+other four. It is Helvetica under Arabic reduced to its principle, and it is
+what makes the acceptance a committed test rather than a manual check. The
+four fonts now disagree about exactly two things — coverage and shaping — and
+each rule is separated by the one it is named for.
+
+*A cost, stated rather than optimised away.* Each rule resolves the typeface
+per unit, so a paragraph's font file is read twice and a deck's font file
+once per paragraph per rule. On a 126-unit deck resolving to macOS's 2.3 MB
+`Helvetica.ttc` that is 42 ms — the operating system's page cache absorbs it —
+against 5 ms for the same audit with the checks off. Memoising the bytes is
+one `HashMap` in an adapter when a deck arrives that needs it, and
+`ARCHITECTURE.md`'s KISS note is the reason it is not there already.
+
+*Acceptance:* met. `cargo test` audits `broken-arabic.pptx` through the real
+PPTX adapter on a machine whose every typeface is `latin.ttf`, and every
+Arabic paragraph comes back a `font-coverage` error listing the exact
+characters by name; the same deck through `nonjoining.ttf` comes back
+`shaping-broken` and not `font-coverage`; through `joining.ttf`, neither.
+Validated beyond the fixtures against macOS, on a copy of that deck retyped
+to each face: `Helvetica` and `Comic Sans MS` report every Arabic character of
+every paragraph, and `Times New Roman`, `Geeza Pro`, `Mishafi`, `Al Nile` and
+`Baghdad` report nothing at all. `Arial` reports nothing either — ADR 0008's
+reh, four joins of five, still not a defect.
+
+### 4.4 `tatweel-padding` rule `[ ]`
+
+U+0640 ARABIC TATWEEL used as visual padding rather than as justification.
+`ROADMAP.md` has asked for this since M4 was written and no item carried it,
+which is what this entry fixes.
+
+*The hard part is that tatweel is legitimate*, which makes this ADR 0004's
+first failure mode waiting to happen for the third time. It is the kashida:
+the letter-stretching Arabic typography has justified text with for a
+thousand years, and a font's `GSUB` may insert it. What is a defect is a
+*typed* one standing in for a layout the author could not get — a run of them
+padding a heading to a width, or one wedged into a word to fake alignment —
+and the tool cannot read intent. So the threshold is the whole design
+question, the way 4.3's was: state it, argue it, and commit a fixture that
+fails a rule which regresses to "any tatweel is a defect".
+
+*Note that this is a defect in the text*, not in the properties around it, so
+its repair edits characters — the second one ever to do so, after
+`literal-bullet`, and it inherits that rule's caution: opt-in, because
+deleting a character the author typed is not the same as changing an
+attribute they left blank. Whether stripping is even safe is part of the
+question: a tatweel between two letters that already join is padding, and one
+carrying a harakat is not.
+
+*Acceptance:* a deck padding a heading with typed tatweel is reported with the
+offsets, and a deck whose Arabic is justified by its font's kashida is not.
 
 ---
 

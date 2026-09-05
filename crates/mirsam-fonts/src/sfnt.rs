@@ -107,7 +107,11 @@ fn name_table(file: &mut File, offset: u64) -> io::Result<Option<Vec<u8>>> {
     let mut directory = vec![0u8; 16 * tables as usize];
     file.read_exact(&mut directory)?;
 
-    let Some(record) = directory.chunks_exact(16).find(|r| &r[..4] == b"name") else {
+    // `as_chunks` rather than `chunks_exact`: the record length is a constant,
+    // and the array type carries it so the indexing below is checked once here
+    // instead of on every field read.
+    let (records, _) = directory.as_chunks::<16>();
+    let Some(record) = records.iter().find(|r| &r[..4] == b"name") else {
         return Ok(None);
     };
     let table_offset = u32::from_be_bytes([record[8], record[9], record[10], record[11]]);

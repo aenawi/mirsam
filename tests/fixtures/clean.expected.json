@@ -3,6 +3,9 @@
     "blocking": false,
     "diagnostics": [],
     "file": "clean.pptx",
+    "fonts": {
+      "checked": false
+    },
     "format": "pptx",
     "strict": false,
     "summary": {
@@ -47,6 +50,9 @@
     },
     "blocking": false,
     "file": "clean.pptx",
+    "fonts": {
+      "checked": false
+    },
     "format": "pptx",
     "options": {
       "align": true,

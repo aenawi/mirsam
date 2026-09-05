@@ -248,10 +248,14 @@ fn rules_json_lists_every_rule_with_an_id() {
     assert_eq!(out.code, exit::OK);
     let value: serde_json::Value = serde_json::from_str(&out.stdout).expect("valid JSON");
     let rules = value.as_array().expect("an array of rules");
-    assert_eq!(rules.len(), 10, "expected the ten documented rules");
+    assert_eq!(rules.len(), 12, "expected the twelve documented rules");
     for rule in rules {
         assert!(rule.get("id").is_some(), "a rule with no id: {rule}");
     }
+    // The two font rules are listed whether or not this invocation could have
+    // run them: `mirsam rules` describes the rule set, not the last audit.
+    let ids: Vec<&str> = rules.iter().map(|r| r["id"].as_str().unwrap()).collect();
+    assert!(ids.contains(&"font-coverage") && ids.contains(&"shaping-broken"));
 }
 
 #[test]
@@ -790,5 +794,114 @@ fn an_unknown_extension_names_every_format_that_can_be_read() {
         out.stderr.contains(".pptx") && out.stderr.contains(".docx"),
         "the hint should list what this build reads:\n{}",
         out.stderr
+    );
+}
+
+// -------------------------------------------------------------- font checks
+
+/// The shaping fixtures, a directory of four fonts that is the same on every
+/// machine — which is what makes a font check reproducible at all.
+fn font_dir() -> String {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../mirsam-core/tests/fonts")
+        .canonicalize()
+        .expect("the fixture fonts are committed")
+        .to_string_lossy()
+        .into_owned()
+}
+
+#[test]
+fn the_font_checks_are_reported_as_not_run_unless_asked_for() {
+    // Standing rule 4. `font-coverage` and `shaping-broken` are the only rules
+    // that read the machine rather than the document, so they are opt-in — and
+    // a report that did not say so would let their silence be mistaken for a
+    // pass. Both output formats have to say it: an agent reading JSON must
+    // never have to scrape the human text for it.
+    let out = run(&["audit", &fixture("torture.pptx")]);
+    assert!(
+        out.stdout.contains("fonts NOT RUN"),
+        "stdout:\n{}",
+        out.stdout
+    );
+
+    let out = run(&["audit", &fixture("torture.pptx"), "--format", "json"]);
+    assert_eq!(
+        parse_json(&out)["fonts"]["checked"],
+        serde_json::json!(false)
+    );
+
+    // And neither rule can have reported anything.
+    let ids = rule_ids(&parse_json(&out)["diagnostics"]);
+    assert!(
+        !ids.iter()
+            .any(|id| id == "font-coverage" || id == "shaping-broken"),
+        "{ids:?}"
+    );
+}
+
+#[test]
+fn asking_for_them_says_so_in_both_formats() {
+    // A fixed directory rather than the platform's, so this asserts what the
+    // binary did and not what fonts the developer happens to have installed.
+    let dir = font_dir();
+    let out = run(&[
+        "audit",
+        &fixture("torture.pptx"),
+        "--font-dir",
+        &dir,
+        "--format",
+        "json",
+    ]);
+    assert_eq!(
+        parse_json(&out)["fonts"]["checked"],
+        serde_json::json!(true)
+    );
+
+    let out = run(&["audit", &fixture("torture.pptx"), "--font-dir", &dir]);
+    assert!(
+        out.stdout.contains("fonts checked"),
+        "stdout:\n{}",
+        out.stdout
+    );
+}
+
+#[test]
+fn a_typeface_this_machine_does_not_have_changes_nothing() {
+    // The deck names Calibri and Dubai; the fixture directory has neither, so
+    // the source answers `None` for every one of them. That is the tool losing
+    // the ability to say what the reader will see — a fact about the machine,
+    // not a defect in the deck — and it must not move the exit code.
+    let plain = run(&["audit", &fixture("torture.pptx"), "--format", "json"]);
+    let checked = run(&[
+        "audit",
+        &fixture("torture.pptx"),
+        "--font-dir",
+        &font_dir(),
+        "--format",
+        "json",
+    ]);
+
+    assert_eq!(plain.code, checked.code);
+    assert_eq!(
+        rule_ids(&parse_json(&plain)["diagnostics"]),
+        rule_ids(&parse_json(&checked)["diagnostics"]),
+    );
+}
+
+#[test]
+fn repair_reports_the_font_checks_too() {
+    // The repair report holds two audits, and the same caveat applies to both.
+    let scratch = Scratch::new("fonts-repair");
+    let output = scratch.path("repaired.pptx");
+    let out = run(&[
+        "repair",
+        &fixture("broken-arabic.pptx"),
+        &output,
+        "--format",
+        "json",
+    ]);
+    assert_eq!(
+        parse_json(&out)["fonts"]["checked"],
+        serde_json::json!(false)
     );
 }

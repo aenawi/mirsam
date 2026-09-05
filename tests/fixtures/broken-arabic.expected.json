@@ -101,6 +101,9 @@
       }
     ],
     "file": "broken-arabic.pptx",
+    "fonts": {
+      "checked": false
+    },
     "format": "pptx",
     "strict": false,
     "summary": {
@@ -257,6 +260,9 @@
     },
     "blocking": false,
     "file": "broken-arabic.pptx",
+    "fonts": {
+      "checked": false
+    },
     "format": "pptx",
     "options": {
       "align": true,

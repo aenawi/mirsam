@@ -101,7 +101,11 @@ impl FontFile {
 /// a real and reportable state — text set in a font nobody has renders in
 /// whatever the application substitutes, and the tool can no longer say what
 /// the reader will see. It is not an error, and must not be reported as one.
-pub trait FontSource {
+///
+/// `Send + Sync` because a [`crate::Rule`] holds one: the engine is a set of
+/// rules that must stay shareable across threads, and a source that could not
+/// be shared would decide that for it.
+pub trait FontSource: Send + Sync {
     /// The file that answers to the typeface `family` names.
     ///
     /// Matching is the implementation's business, and is expected to be at

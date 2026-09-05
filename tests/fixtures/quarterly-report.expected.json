@@ -682,6 +682,9 @@
       }
     ],
     "file": "quarterly-report.pptx",
+    "fonts": {
+      "checked": false
+    },
     "format": "pptx",
     "strict": false,
     "summary": {
@@ -1474,6 +1477,9 @@
     },
     "blocking": false,
     "file": "quarterly-report.pptx",
+    "fonts": {
+      "checked": false
+    },
     "format": "pptx",
     "options": {
       "align": true,

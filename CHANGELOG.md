@@ -11,6 +11,42 @@ Working towards byte-preserving `repair` for PPTX. See
 
 ### Added
 
+- **`font-coverage` and `shaping-broken`**, the two rules that turn 4.1's and
+  4.2's facts into findings. They are two defects, not one, and the advice
+  differs: a font with no glyph for the Arabic renders empty boxes, and a font
+  with every letter and no shaping tables renders a row of disconnected
+  letters. `font-coverage` names the exact characters that will not render —
+  `U+067E ARABIC LETTER PEH` — as an error when the font answers for none of
+  the text and a warning when it misses part of it. Neither is `fixable`: the
+  repair for both is a different typeface, and unlike `complex-font-missing`,
+  which fills an *empty* slot, these would be overwriting a font the author
+  chose.
+- **`mirsam audit --fonts`**, and it is opt-in on purpose. These are the only
+  rules that ask about the machine rather than the document, and an audit that
+  resolved fonts without being asked would report differently on a laptop and
+  on a CI runner looking at one file. Every report now says which of the two
+  audits it is — `fonts NOT RUN` for a human, `"fonts": {"checked": false}` for
+  an agent — so their silence is never mistaken for a pass. `--font-dir <DIR>`
+  searches given directories instead of the platform's, which is what makes the
+  result reproducible. The claim runs one way only: a font that is *here* and
+  cannot draw the text will not draw it anywhere, and a font that is here and
+  draws it proves nothing about the reader's machine.
+- The shaping threshold ADR 0008 left open is **four required joins**, counted
+  over letters the font actually has. A final form exists only because the
+  letter before it joined forwards, so every final has a companion initial or
+  medial — the dual-joining letters a font like Arial does shape. Two joins are
+  therefore one such letter, which is exactly the design choice the ADR forbids
+  concluding from, and is the whole of a two-letter word. Unmapped letters are
+  excluded so that a Latin-only font cannot produce a `shaping-broken` finding
+  beside its `font-coverage` one: the tool would be arguing with itself about
+  one paragraph.
+- **`latin.ttf`**, a fifth generated fixture font: printable ASCII, no Arabic,
+  no `GSUB`. Helvetica under a complex-script slot, reduced to its principle,
+  so PLAN §4.3's acceptance is a committed test rather than a manual check.
+  Validated beyond the fixtures against macOS — `Helvetica` and `Comic Sans MS`
+  report every Arabic character of every paragraph, while `Times New Roman`,
+  `Geeza Pro`, `Mishafi`, `Al Nile`, `Baghdad` and `Arial` report nothing at
+  all.
 - **Font coverage.** `mirsam-core::coverage` asks the question underneath
   shaping — does the font have the letter at all? A font with no shaping
   tables renders Arabic as disconnected letters; a font with no Arabic renders

@@ -22,6 +22,7 @@ shared code. See [`CREDITS.md`](CREDITS.md).
 ```bash
 mirsam audit deck.pptx --format json     # full diagnostic model
 mirsam audit deck.pptx --strict          # warnings block too
+mirsam audit deck.pptx --fonts           # also check the fonts installed here
 mirsam repair deck.pptx fixed.pptx --format json   # repaired copy, both audits
 mirsam explain "<text>"                  # reproduce a defect with no document
 mirsam rules --format json               # every check and its id
@@ -92,6 +93,40 @@ agrees with the text, reported as an absent one where it contradicts it, with
 `evidence.inherited_from` naming the style. The repair still writes to the
 table, never to the style.
 
+### The two font checks, which are off by default
+
+`font-coverage` and `shaping-broken` are the only rules that ask a question
+about **the machine running mirsam** rather than about the document, so they
+run only when `--fonts` asks for them. Every report says which of the two
+audits it is — `fonts NOT RUN` in the human output, `"fonts": {"checked":
+false}` in JSON — and you must read that before concluding anything from their
+silence. A check that did not run is `NOT RUN`, never a pass.
+
+`--font-dir <DIR>` (repeatable) searches those directories instead of the
+platform's, which is what makes the result reproducible: a fixed directory
+gives a fixed answer on any machine.
+
+**The claim runs one way only.** A font that is *here* and cannot draw the
+text will not draw it anywhere — a `cmap` and a `GSUB` travel with the font —
+which is what makes a finding worth reporting. A font that is here and draws
+the text perfectly proves **nothing** about the reader's machine. Do not turn
+silence from these two rules into "the Arabic will render".
+
+They are two defects, not one, and the advice differs:
+
+- `font-coverage` — the font has no glyph for some of the Arabic; it renders
+  as empty boxes. `evidence.offenders` is the exact list, by Unicode name.
+  An error when the font answers for *none* of the text, a warning when it
+  misses part of it.
+- `shaping-broken` — the font has every letter and no shaping tables; the
+  Arabic renders as disconnected letters. Reported only on the aggregate —
+  no joins produced where at least four were required and the font had the
+  glyphs — because one letter drawn standalone is not a defect (invariant 7).
+
+Neither is `fixable`. The repair for both is a different typeface, and which
+one is an authoring decision; unlike `complex-font-missing`, which fills an
+empty slot, these would be overwriting a font the author chose.
+
 ### Repairing
 
 `repair <in> <out>` never modifies `<in>` and refuses `<out> == <in>` under
@@ -127,9 +162,13 @@ Read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) first, then
 [`docs/PLAN.md`](docs/PLAN.md) for the ordered work items.
 
 **Adding a rule** — implement `Rule` in `crates/mirsam-core/src/rules/`,
-register it in `Engine::with_options`. Nothing else changes. If its repair
+register it in `Engine::build`. Nothing else changes. If its repair
 needs a choice the text cannot make, the choice is a `RepairOptions` field,
-not a CLI flag with logic behind it.
+not a CLI flag with logic behind it. A rule that needs to know something about
+the *machine* rather than the document takes a port instead, the way
+`rules/font.rs` takes a `FontSource` — `RepairOptions` is for authoring
+preferences, and putting a source there would make an audit's result depend on
+which computer ran it without saying so anywhere.
 
 **Adding a format** — new crate implementing `DocumentReader`; add
 `DocumentWriter` only if the format can be faithfully edited in place.
@@ -137,8 +176,11 @@ not a CLI flag with logic behind it.
 **Resolving a font** — `mirsam-core` never opens one. `ports::FontSource`
 takes a family name and answers with bytes, `mirsam-fonts` implements it over
 the platform's font directories, and `shape` and `coverage` work on what comes
-back. A source answering `None` means this machine has no such font, which is
-a reportable state and not an error. Note which way the claim runs: a font
+back; `Engine::with_fonts` is what arms the two rules over it, and
+`Engine::with_options` leaves them registered and unrun. A source answering
+`None` means this machine has no such font, which those rules treat as
+silence: a fact about the computer, not a defect in the deck. Note which way
+the claim runs: a font
 that is *here* and cannot draw the text will not draw it anywhere, because a
 `cmap` travels with the font — but a font that is here proves nothing about
 the reader's machine, and no report may suggest otherwise.
@@ -169,7 +211,7 @@ A report for a format the tool reads but cannot write holds the refusal
 `repair` gave and the exit code it used, in place of a repair report — so the
 day a writer lands, it shows up as a diff on a real document.
 
-**The shaping fixtures are fonts, and they are generated too.** The four
+**The shaping fixtures are fonts, and they are generated too.** The five
 under `crates/mirsam-core/tests/fonts/` are written byte by byte by
 `scripts/make-shaping-fixture.py` — no `fontTools`, for the reason the
 document generators avoid `python-pptx` — and regenerate with `make fonts`.
@@ -182,7 +224,11 @@ fixture: it claims the family `Mirsam Joining` a second time, sorts before
 `joining.ttf` and shapes nothing, so a font source answering a family name
 with whichever file it met first fails a test rather than a user's deck. That
 is macOS's Arial in miniature — eleven files state that family, and only
-`Arial.ttf` has any Arabic.
+`Arial.ttf` has any Arabic. The fifth, `latin.ttf`, is the other defect
+entirely: printable ASCII, no Arabic at all, no `GSUB`, which is Helvetica
+under a complex-script slot. It is what `font-coverage` is proved against, and
+shaping through it must stay silent — a letter a font has no glyph for says
+nothing about whether the font can join.
 
 **The Unicode name table is generated as well.** `charname.rs` comes from
 `scripts/make-char-names.py`, which reads the UCD Python itself ships — no
