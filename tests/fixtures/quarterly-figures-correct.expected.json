@@ -1,0 +1,76 @@
+{
+  "audit": {
+    "blocking": false,
+    "diagnostics": [],
+    "file": "quarterly-figures-correct.xlsx",
+    "fonts": {
+      "checked": false
+    },
+    "format": "xlsx",
+    "sources": {
+      "unread": [
+        "الأرقام!D3"
+      ]
+    },
+    "strict": false,
+    "summary": {
+      "arabic_units": 13,
+      "errors": 0,
+      "mixed_units": 2,
+      "notes": 0,
+      "units_scanned": 14,
+      "warnings": 0
+    }
+  },
+  "changed_parts": {},
+  "document": "quarterly-figures-correct.xlsx",
+  "exit_codes": {
+    "audit": 0,
+    "audit --strict": 0,
+    "repair": 0,
+    "repair --strict": 0
+  },
+  "repair": {
+    "after": {
+      "diagnostics": [],
+      "summary": {
+        "arabic_units": 13,
+        "errors": 0,
+        "mixed_units": 2,
+        "notes": 0,
+        "units_scanned": 14,
+        "warnings": 0
+      }
+    },
+    "before": {
+      "diagnostics": [],
+      "summary": {
+        "arabic_units": 13,
+        "errors": 0,
+        "mixed_units": 2,
+        "notes": 0,
+        "units_scanned": 14,
+        "warnings": 0
+      }
+    },
+    "blocking": false,
+    "file": "quarterly-figures-correct.xlsx",
+    "fonts": {
+      "checked": false
+    },
+    "format": "xlsx",
+    "options": {
+      "align": true,
+      "complex_font": "Dubai",
+      "convert_bullets": true,
+      "language": "ar-SA",
+      "strip_tatweel": true
+    },
+    "output": "quarterly-figures-correct.repaired.xlsx",
+    "repairs": {
+      "applied": [],
+      "skipped": []
+    },
+    "strict": false
+  }
+}

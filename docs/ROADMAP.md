@@ -147,7 +147,20 @@ workflow currently pushes onto a human.
   They live in `mirsam-core` and the other two formats return `Inexpressible`,
   which is four new refusals rather than four skips. See
   [`PLAN.md`](PLAN.md) §5.2.
-- XLSX: sheet direction, cell alignment, formula and identifier preservation.
+- **Landed:** the XLSX adapter, and the second format with a writer. A cell is
+  a paragraph and the worksheet around it is the container, because
+  `sheetView/@rightToLeft` decides which side column A sits on — reported only
+  where the sheet has two or more columns of text, since one column has no
+  column order to get wrong. `readingOrder` and `horizontal` are the cell's own
+  word, `cellStyleXfs` the named style behind them, and the sheet supplies the
+  reading order to any cell that states none. A formula's cached result is not
+  judged and is named in `sources.unread`, which is ADR 0009 reaching a second
+  format. `repair` writes a workbook: it appends a format record and repoints
+  one cell's `@s` rather than editing what forty cells share, appends a shared
+  string rather than rewriting one a dozen cells show, and leaves every `<f>`
+  and every `<definedName>` byte for byte. Excel has no language slot on a
+  cell and no list feature, so `SetLanguage` and `ConvertLiteralBullet` are
+  refused and listed rather than claimed. See [`PLAN.md`](PLAN.md) §5.3.
 
 ---
 

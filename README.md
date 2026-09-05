@@ -1,11 +1,12 @@
 # mirsam · مرسم
 
 **Arabic text correctness for documents.** A single dependency-free binary that
-finds right-to-left, bidirectional and typography defects in PowerPoint and
-Word files, *proves* each one by resolving what the text will actually look
-like when rendered, and repairs them without touching a byte it was not asked
-to. Word is audit-only so far; the XLSX, HTML and PDF adapters are scheduled;
-see [Roadmap](docs/ROADMAP.md).
+finds right-to-left, bidirectional and typography defects in PowerPoint, Word,
+Excel and HTML files, *proves* each one by resolving what the text will
+actually look like when rendered, and repairs them without touching a byte it
+was not asked to. PowerPoint and Excel are repaired; Word and HTML are
+audit-only so far, and the PDF adapter is scheduled; see
+[Roadmap](docs/ROADMAP.md).
 
 > **mirsam** (مَرْسَم) — an atelier; the room where things are properly drawn.
 > From the root ر-س-م: to draw, to inscribe, to render.
@@ -152,16 +153,24 @@ so an agent can act on it without opening PowerPoint. See [`AGENTS.md`](AGENTS.m
 ## Status
 
 **v0.1 “Steppe Eagle” — audit only, PPTX only.** Byte-preserving `repair` for
-PPTX has landed on `main` and ships as v0.2. Two more **readers** have landed
-since: DOCX, so `mirsam audit report.docx` works, and HTML, so `mirsam audit
-page.html` reads `dir`, `lang` and the part of CSS that decides direction —
-including a stylesheet the page links by a relative path. `repair` refuses
+PPTX has landed on `main` and ships as v0.2. Three formats have landed since.
+DOCX and HTML are **readers**: `mirsam audit report.docx` works, and `mirsam
+audit page.html` reads `dir`, `lang` and the part of CSS that decides direction
+— including a stylesheet the page links by a relative path. `repair` refuses
 both and says why, because neither writer is built yet. A page linking a
 stylesheet on a server is audited without it and the report names what it did
-not read, because this tool makes no network calls. The XLSX and PDF adapters
-are specified and scheduled; see [`docs/ROADMAP.md`](docs/ROADMAP.md). The
-tool reports what it can actually verify and nothing more — a discipline
-inherited from its prior art.
+not read, because this tool makes no network calls.
+
+XLSX is the second format with a **writer**: `mirsam repair book.xlsx
+fixed.xlsx` sets a sheet's `rightToLeft` and a cell's reading order and
+alignment, and leaves every formula and defined name exactly as it found them
+— a workbook's formatting is shared between its cells, so a repair appends a
+format record and repoints the one cell rather than editing what forty cells
+are using. A formula's cached result is not judged and is named in the report,
+for the reason a stylesheet on a server is. The PDF adapter is specified and
+scheduled; see [`docs/ROADMAP.md`](docs/ROADMAP.md). The tool reports what it
+can actually verify and nothing more — a discipline inherited from its prior
+art.
 
 ## Design
 

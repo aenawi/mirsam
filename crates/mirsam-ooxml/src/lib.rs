@@ -30,6 +30,14 @@
 //! `a:fontScheme` is DrawingML wherever it is stored, so [`inherit`] reads
 //! Word's theme part unchanged.
 //!
+//! SpreadsheetML is the third vocabulary, and it reuses those same two shared
+//! modules and nothing else: [`xlsx`] is Excel's reader and writer,
+//! [`workbook`] the format-record chain a cell resolves against, and [`sheet`]
+//! its repair vocabulary — what [`rewrite`] is for DrawingML, over a module
+//! that has to *append* a record where DrawingML edits an attribute in place,
+//! because a cell's formatting is shared between cells and a paragraph's is
+//! not.
+//!
 //! A part a repair does not touch survives byte for byte ([`package`]); a
 //! token a repair does not address survives byte for byte ([`token`]). The
 //! guarantee is the same one stated at two scales, and a format that reads the
@@ -43,8 +51,11 @@ pub mod package;
 pub mod pptx;
 pub mod rels;
 pub mod rewrite;
+pub mod sheet;
 pub mod style;
 pub mod token;
+pub mod workbook;
+pub mod xlsx;
 
 pub use docx::DocxDocument;
 pub use inherit::StyleIndex;
@@ -52,3 +63,5 @@ pub use package::Package;
 pub use pptx::PptxDocument;
 pub use rels::RelationshipGraph;
 pub use style::StyleSheet;
+pub use workbook::Workbook;
+pub use xlsx::XlsxDocument;
