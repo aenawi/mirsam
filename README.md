@@ -14,6 +14,7 @@ so far, and the PDF adapter is scheduled; see [Roadmap](docs/ROADMAP.md).
 $ mirsam audit deck.pptx
 mirsam audit  deck.pptx  [pptx]
 units 42 | arabic 31 | mixed 12
+fonts NOT RUN — pass --fonts to resolve each typeface here and report Arabic it cannot draw or cannot join
 
 error   [direction-mismatch] ppt/slides/slide4.xml:paragraph-2:Body 3
         renders as ltr but reads as rtl; visual order differs from the logical text
@@ -34,11 +35,17 @@ string and reports a defect only when the resolved visual order is wrong:
 
 ```console
 $ mirsam explain "GPS يعتمد عليه النظام"
-logical text       GPS يعتمد عليه النظام
+logical text      GPS يعتمد عليه النظام
 dominant direction rtl
 auto-detected      ltr
 base direction     changes the rendering — declaring it is required
+  as rtl           \u{0645}\u{0627}\u{0638}\u{0646}\u{0644}\u{0627} \u{0647}\u{064A}\u{0644}\u{0639} \u{062F}\u{0645}\u{062A}\u{0639}\u{064A} GPS
+  as ltr           GPS \u{0645}\u{0627}\u{0638}\u{0646}\u{0644}\u{0627} \u{0647}\u{064A}\u{0644}\u{0639} \u{062F}\u{0645}\u{062A}\u{0639}\u{064A}
 ```
+
+The last two lines are the resolved *visual* orders, printed as codepoints
+rather than glyphs: a terminal re-applies the bidi algorithm to text that has
+already been reordered, so the escapes are what can be trusted.
 
 That is the difference between *"the RTL flag is missing"* and *"this sentence
 will render with the acronym on the wrong side, here is the proof."*
@@ -86,7 +93,8 @@ describes the file on disk rather than the intention:
 $ mirsam repair deck.pptx fixed.pptx --convert-bullets --align
 mirsam repair  deck.pptx -> fixed.pptx  [pptx]
 units 2 | arabic 2 | mixed 1
-language ar-SA | font (none) | convert-bullets yes | align yes
+language ar-SA | font (none) | convert-bullets yes | strip-tatweel no | align yes
+fonts NOT RUN — pass --fonts to resolve each typeface here and report Arabic it cannot draw or cannot join
 
 applied 8 repair(s)
   ppt/slides/slide1.xml:paragraph-1:Title 1
@@ -151,8 +159,17 @@ so an agent can act on it without opening PowerPoint. See [`AGENTS.md`](AGENTS.m
 
 ## Status
 
-**v0.1 “Steppe Eagle” — audit only, PPTX only.** Byte-preserving `repair` for
-PPTX has landed on `main` and ships as v0.2. Three formats have landed since.
+**On `main` today: four formats read, three of them repaired.** `audit` reads
+`.pptx`, `.docx`, `.xlsx` and `.html`; byte-preserving `repair` writes `.pptx`,
+`.docx` and `.xlsx`, and refuses `.html` rather than approximating it. Shaping
+and font-coverage checks are behind `--fonts`. Milestones M0 through M5 are
+complete; PDF (M6) and distribution (M7) are not — see
+[`docs/ROADMAP.md`](docs/ROADMAP.md).
+
+Nothing is tagged or published yet. `VERSION` reads `0.1.0` — the “Steppe
+Eagle” foundation, which was PPTX audit only — and every version number in the
+roadmap is a plan rather than a release. What you get is what you build from
+`main`, which is the whole list above.
 
 HTML is a **reader**: `mirsam audit page.html` reads `dir`, `lang` and the part
 of CSS that decides direction — including a stylesheet the page links by a
@@ -209,14 +226,22 @@ MIT. See [`LICENSE`](LICENSE).
 
 **أداة لضبط صحّة النصوص العربية في المستندات.** ملف تنفيذي واحد بلا اعتماديات،
 يكتشف مشاكل الاتجاه من اليمين إلى اليسار والنص ثنائي الاتجاه والطباعة في ملفات
-PowerPoint — ويُثبت كل ملاحظة عبر حساب الترتيب البصري الفعلي للنص وفق خوارزمية
-يونيكود ثنائية الاتجاه.
+PowerPoint وWord وExcel وHTML — ويُثبت كل ملاحظة عبر حساب الترتيب البصري الفعلي
+للنص وفق خوارزمية يونيكود ثنائية الاتجاه، ثم يُصلحها دون المساس ببايت واحد لم
+يُطلب منه تغييره.
 
 **مرسم**: المكان الذي يُرسم فيه الشيء على وجهه الصحيح، من الجذر ر-س-م.
 
-الحالة: الإصدار 0.1 يدعم الفحص فقط، ولملفات PowerPoint فقط. أمر الإصلاح لملفات
-PowerPoint جاهز في الفرع الرئيسي وسيصدر في الإصدار 0.2، وبقية الصيغ مجدولة في
+الحالة على الفرع الرئيسي: الأمر `audit` يقرأ أربع صيغ — `.pptx` و`.docx`
+و`.xlsx` و`.html` — والأمر `repair` يكتب ثلاثًا منها: `.pptx` و`.docx`
+و`.xlsx`. أما `.html` فيُرفض إصلاحه صراحةً لأن كاتبه لم يُبنَ بعد، ولا يُقارَب
+تقريبًا. وفحص التشكيل الطباعي وتغطية الخطوط متاح عبر الخيار `--fonts`. صيغة PDF
+مجدولة للقراءة فقط، ولن تُصلَح أبدًا في مكانها؛ انظر
 [خارطة الطريق](docs/ROADMAP.md).
+
+لم يُوسم أي إصدار ولم يُنشر بعد. ملف `VERSION` يحمل الرقم 0.1.0 — أساس «Steppe
+Eagle» الذي كان يدعم فحص PowerPoint فقط — وكل رقم إصدار في خارطة الطريق خطّة لا
+إصدارًا فعليًا. فما تحصل عليه هو ما تبنيه من الفرع الرئيسي، وهو كل ما سبق.
 
 الرخصة: MIT.
 
