@@ -198,8 +198,13 @@ crates/
                    legend or a set of data labels draws, which are not
                    paragraphs and which no DrawingML pass can see
     docx.rs        WordprocessingML vocabulary: paragraphs and the properties
-                   the rules judge. DocumentReader only — Word's writer is
-                   not built, and the split ports are what let it wait
+                   the rules judge, and the tables around them.
+                   DocumentReader and DocumentWriter
+    word.rs        WordprocessingML's repair vocabulary. What rewrite.rs is
+                   for DrawingML, over a format whose w:jc is already
+                   direction-relative — so unlike PowerPoint's, nothing here
+                   has to be told which way a paragraph reads before it can
+                   write a Start down
     style.rs       Word's own chain, which is not a walk between parts:
                    docDefaults, the styles a paragraph and its runs name, and
                    the w:basedOn above each — all in one word/styles.xml.
@@ -249,9 +254,9 @@ crates/
                    directory and a few kilobytes, not half a gigabyte of
                    outlines — with ttf-parser decoding the records
   mirsam-cli/      driving adapter — argument parsing and rendering only
-    tests/golden.rs  the golden corpus: every .pptx, .docx and .html under
-                   tests/fixtures/ against its committed report of what the
-                   binary finds, repairs and writes — or, for a format it
+    tests/golden.rs  the golden corpus: every .pptx, .docx, .xlsx and .html
+                   under tests/fixtures/ against its committed report of what
+                   the binary finds, repairs and writes — or, for a format it
                    reads but cannot write, of the refusal it gives instead
 ```
 

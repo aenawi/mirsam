@@ -11,7 +11,7 @@ binary: no Python, no Node, no Office, no runtime of any kind on the target
 machine.
 
 `audit` reads `.pptx`, `.docx`, `.xlsx` and `.html`/`.htm`. `repair` writes
-`.pptx` and `.xlsx`: the other two are refused as readable formats without a
+`.pptx`, `.docx` and `.xlsx`: `.html` is refused as a readable format without a
 writer, which is a usage error (exit `2`) and not a claim that the document was
 not understood.
 
@@ -175,6 +175,41 @@ pointing there. `<f>` formulas and `xl/workbook.xml`'s `<definedNames>` come
 through untouched, and mechanically so: `xl/workbook.xml` is not a part a
 repair plan can name, and a cell repair edits `@s` or the content of a `<v>`
 and nothing beside it.
+
+### Repairing a Word document, where two things are refused
+
+A `.docx` repair writes `w:pPr/w:bidi`, `w:pPr/w:jc`, `w:rPr/w:lang@w:bidi`,
+`w:rPr/w:rFonts@w:cs`, `w:pPr/w:numPr` and `w:tblPr/w:bidiVisual`, and every
+one of them lands in its schema-sequence position — WordprocessingML's
+property elements are `xsd:sequence`, so a correct element written in the
+wrong place is a document Word offers to repair.
+
+Three things about it are worth knowing before reading a repair report.
+
+- **`w:jc` is written relative, so no direction is resolved to write one.**
+  The PowerPoint writer has to know the direction a paragraph inherits before
+  it can put a `Start` down, because `a:pPr/@algn` names physical edges. Word's
+  does not: `start` is the start edge whichever way the paragraph runs. The
+  same fact is why **a physical edge is refused** — `SetAlignment(Left)` and
+  `SetAlignment(Right)` appear in `repairs.skipped`, never as a repair that
+  failed, because Word has no spelling for "the left of the page whatever the
+  direction". No Word unit ever produces one, so this is a refusal you will not
+  see in practice; it is stated so the writer cannot start inventing one.
+- **`--convert-bullets` needs a list the document already defines.** Word has
+  no per-paragraph bullet: a list is a `w:numPr` pointing into the numbering
+  part. The repair points at a bulleted definition the document already
+  carries, preferring one that draws the marker the author typed, and
+  otherwise the fix is **skipped**. A repair cannot add the numbering part
+  itself — that is a part, a content-type override and a relationship, none of
+  which is an edit to the paragraph the finding named.
+- **`--font` clears `@w:cstheme` on the runs it fills.** `@w:cstheme` is what
+  Word renders and `@w:cs` the value it caches beside it, so writing the
+  typeface into the cache and leaving a theme reference standing would change
+  what the file says and not what a reader sees.
+
+A paragraph inside a text box is a unit of its own and is repaired as one; the
+paragraph anchoring the box is not repaired through it, and an `mc:Fallback`
+is neither counted nor edited — the same two regions the reader steps over.
 
 ### HTML, where the direction is usually not in the document
 
@@ -380,7 +415,9 @@ share a stem: the report is named for it.
 
 A report for a format the tool reads but cannot write holds the refusal
 `repair` gave and the exit code it used, in place of a repair report — so the
-day a writer lands, it shows up as a diff on a real document.
+day a writer lands, it shows up as a diff on a real document. That is what the
+two `.docx` reports did when M3's writer landed, and `.html` is what carries
+the refusal now.
 
 **The shaping fixtures are fonts, and they are generated too.** The five
 under `crates/mirsam-core/tests/fonts/` are written byte by byte by

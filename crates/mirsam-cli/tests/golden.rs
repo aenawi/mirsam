@@ -13,12 +13,16 @@
 //!
 //! ## A format the tool reads but cannot write
 //!
-//! `repair` refuses a `.docx`, and refuses it as a *readable format without a
+//! `repair` refuses an `.html`, and refuses it as a *readable format without a
 //! writer* rather than as an unknown extension. That refusal is recorded here
 //! rather than worked around: the report holds the message and the exit code
-//! it produced, so the day the Word writer lands, the corpus shows the change
-//! as a diff on a real document instead of as a test somebody remembered to
-//! update.
+//! it produced, so the day the writer lands, the corpus shows the change as a
+//! diff on a real document instead of as a test somebody remembered to update.
+//!
+//! It did exactly that for Word. The two `.docx` reports held that refusal
+//! until M3's writer landed, and the change arrived as a repair report and a
+//! part-level diff on `quarterly-review.docx` — which is the review this
+//! paragraph exists to force.
 //!
 //! A diff is a change in behaviour. When it is intended, regenerate the
 //! reports and commit them with the change that caused them, so the diff is

@@ -11,9 +11,12 @@
 //! of its own: every mutation below is a scaffold call with a DrawingML name
 //! in it.
 //!
-//! That split is what makes a second format cheap. A WordprocessingML repair
-//! is the same scaffold with `w:p`, `w:pPr/w:bidi` and `w:jc` in place of the
-//! names here; nothing in [`crate::token`] has to learn about it.
+//! That split is what makes a second format cheap, and [`crate::word`] is the
+//! claim collected: the same scaffold with `w:p`, `w:pPr/w:bidi` and `w:jc` in
+//! place of the names here, and not a line of [`crate::token`] moved to carry
+//! it. It came out simpler than this module in one respect — see
+//! [`Inherited`], whose Word counterpart does not exist because `w:jc` is
+//! already relative to the paragraph's own direction.
 
 use crate::chart::ChartText;
 use crate::token::is_true;

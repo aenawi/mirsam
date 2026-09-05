@@ -302,6 +302,9 @@ fn open_for_repair(path: &Path) -> Result<Box<dyn DocumentWriter>> {
         "pptx" => Ok(Box::new(
             PptxDocument::open(path).with_context(|| format!("opening {}", path.display()))?,
         )),
+        "docx" => Ok(Box::new(
+            DocxDocument::open(path).with_context(|| format!("opening {}", path.display()))?,
+        )),
         "xlsx" => Ok(Box::new(
             XlsxDocument::open(path).with_context(|| format!("opening {}", path.display()))?,
         )),

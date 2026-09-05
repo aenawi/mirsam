@@ -886,12 +886,13 @@ document that never inherits anything would let a broken `StyleSheet` pass:
 contradicts the Arabic under it, and `RtlTable` supplies a column order the
 table does not state.
 
-**`repair` refuses a `.docx`, and the corpus now records the refusal rather
-than working around it.** A report for a readable format with no writer holds
-the sentence the binary printed and the exit code it used — `2`, a usage
-error, because the audit above it read the file perfectly well. The day the
-Word writer lands, that shows up as a diff on a real document instead of as a
-test somebody remembered to update. The three OPC-level invariants in
+**`repair` refused a `.docx` when this item landed, and the corpus recorded
+the refusal rather than working around it.** A report for a readable format
+with no writer holds the sentence the binary printed and the exit code it used
+— `2`, a usage error, because the audit above it read the file perfectly well.
+That is exactly how §3.6 arrived: a repair report and a part-level diff on a
+real document, rather than a test somebody remembered to update. The three
+OPC-level invariants in
 `corpus_packages.rs` — content types, relationships resolving, ASCII item
 names — now run over every corpus document rather than the decks alone, which
 is the package layer being held to the guarantee the second format reuses it
@@ -902,6 +903,82 @@ with no case skipped and no adapter special-cased, and `make golden`
 regenerates a corpus that now holds documents of both formats. The five
 committed reports changed in one line each — the key naming the file is
 `document` rather than `deck`, because the corpus is no longer only decks.
+
+### 3.6 DOCX writer `[x]`
+`DocumentWriter` on `DocxDocument`, and `mirsam repair report.docx fixed.docx`
+stops refusing. `word.rs` is WordprocessingML's repair vocabulary — what
+`rewrite.rs` is for DrawingML and `sheet.rs` for SpreadsheetML — and it is the
+third module built on `token.rs` without a line of it moving, which is the
+claim 3.1 made and this is the second test of.
+
+*Shape.* `docx.rs` groups repairs by the part and the ordinal a unit id names
+and hands each part to `word::apply_plan`. Every mutation there is a `token.rs`
+call with a WordprocessingML name in it: `w:pPr/w:bidi`, `w:pPr/w:jc`,
+`w:rPr/w:lang@w:bidi`, `w:rPr/w:rFonts@w:cs`, `w:pPr/w:numPr` and
+`w:tblPr/w:bidiVisual`, each placed by rank against the schema sequence its
+parent is, because `CT_PPrBase` and `CT_RPr` are `xsd:sequence` and a correct
+element in the wrong position is a document Word offers to repair.
+
+**The writer needs no inherited direction, and that is Word's doing rather
+than a shortcut.** 1.2's hardest correction was that lowering `Start` onto
+DrawingML's physical `algn` without knowing the paragraph's direction
+reproduces the defect being repaired, which is why `rewrite::Inherited` exists
+and why `PptxDocument::apply` re-runs its scanner over every part it touches.
+`w:jc` is evaluated against the paragraph's own `w:bidi` ([MS-OE376] Part 4
+§2.3.1.13, note b), so `Start` is written `start` whichever way the paragraph
+runs, and there is nothing here to resolve. The whole inheritance pass is
+absent from this adapter, not skipped in it.
+
+**Two refusals, both the format's.** A *physical* edge is not something a Word
+paragraph can state, which is the refusal the conformance suite already
+records for the reading side; `supports` answers it for the writing side, so
+`SetAlignment(Left)` is listed in `repairs.skipped` rather than lowered onto
+whichever relative edge lands left today. And a typed bullet becomes a
+`w:numPr` pointing into the numbering part, so it can only join a list the
+document already defines — `package.rs` replaces the entries a package holds,
+and a numbering part that is not there is a part, a content-type override and
+a relationship, none of which is an edit to the paragraph the finding named.
+`bullet_list` prefers a definition whose first level draws the marker the
+author typed, falls back to any bulleted one, and refuses a list whose `w:num`
+overrides its abstract at level zero.
+
+**Three smaller decisions, each a defect if taken the other way.**
+`<w:bidi/>` is *on*, so a left-to-right repair writes `w:val="0"` and never an
+empty element — creating one to mean *off* would turn the repair into the
+defect it was sent to fix. Filling `@w:cs` **removes** `@w:cstheme` beside it:
+the theme reference is what Word renders and `@w:cs` the value it caches for
+consumers that do not implement themes, so writing into the cache and leaving
+the reference standing is a repair that reports success and changes nothing a
+reader sees. And a `w:t` whose text this repair changed is marked
+`xml:space="preserve"` where the result has an edge of whitespace, because
+stripping a typed `•` leaves the space behind it and Word would otherwise
+collapse a space nobody asked to delete — only the runs actually rewritten are
+marked, so the rest of the paragraph still comes out byte for byte.
+
+**What is not this paragraph.** `token.rs` gained the ability to take a
+caller-chosen set of elements to *step over*, and Word is why: a
+`w:txbxContent` nests whole paragraphs inside a run, and each is a unit with
+its own ordinal, its own text and its own repairs. Offsets the domain computed
+for the outer paragraph index the outer paragraph's runs alone. An
+`mc:Fallback` is stepped over for the reader's reason — it spells out the same
+paragraphs as the `mc:Choice` beside it, and a rewriter that counted both
+would put paragraph 2's repair on the fallback's copy of paragraph 1, a report
+and a document that had come apart while both looked right.
+
+*Acceptance:* met. `crates/mirsam-ooxml/tests/word.rs`, thirty-eight cases —
+the rewriter asserted on the **whole** part, as 1.2's are, plus the
+`DocumentWriter` port over a real package. The corpus is where it shows: both
+`.docx` reports lost their `refused` line and gained a repair report,
+`quarterly-review.docx` now has a `changed_parts` diff naming exactly the tags
+above, and its `after` audit is empty — every fixable finding in a real Word
+document cleared. `make validate-fixtures` accepts the repaired copy against
+the ECMA-376 transitional schemas, and a second `repair` of that output stages
+nothing and reproduces it byte for byte.
+
+*Not run.* "Word opens the repaired document without offering to repair it" is
+the M1 application check in its Word form, and it cannot run in CI. Schema
+validity is the strongest claim a machine can make here and is what the
+acceptance above rests on; it is not the same claim.
 
 ---
 

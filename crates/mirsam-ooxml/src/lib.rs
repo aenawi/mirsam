@@ -23,12 +23,12 @@
 //! inside a part. Everything else names elements, and an element name belongs
 //! to exactly one format: [`rewrite`] is DrawingML's repair vocabulary,
 //! [`pptx`] its reader, [`inherit`] the layout/master chain it resolves,
-//! [`chart`] the chart parts a deck references, and [`docx`] and [`style`]
-//! WordprocessingML's reader and its own style chain — which share
-//! [`package`] and [`token`] with the rest and name not one DrawingML
-//! element. The theme is the exception both formats really do share: a
-//! `a:fontScheme` is DrawingML wherever it is stored, so [`inherit`] reads
-//! Word's theme part unchanged.
+//! [`chart`] the chart parts a deck references, and [`docx`], [`style`] and
+//! [`word`] WordprocessingML's reader, its own style chain and its repair
+//! vocabulary — which share [`package`] and [`token`] with the rest and name
+//! not one DrawingML element. The theme is the exception both formats really
+//! do share: a `a:fontScheme` is DrawingML wherever it is stored, so
+//! [`inherit`] reads Word's theme part unchanged.
 //!
 //! SpreadsheetML is the third vocabulary, and it reuses those same two shared
 //! modules and nothing else: [`xlsx`] is Excel's reader and writer,
@@ -54,6 +54,7 @@ pub mod rewrite;
 pub mod sheet;
 pub mod style;
 pub mod token;
+pub mod word;
 pub mod workbook;
 pub mod xlsx;
 

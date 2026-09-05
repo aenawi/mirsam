@@ -766,21 +766,76 @@ fn a_correctly_marked_word_document_exits_zero() {
 
 #[test]
 fn repairing_a_readable_but_unwritable_format_says_so_rather_than_denying_it() {
-    // `docx` is not an unknown extension — `audit` reads it. Reporting it as
+    // `html` is not an unknown extension — `audit` reads it. Reporting it as
     // one would be the tool contradicting itself between two commands, so the
     // refusal names the real reason and stays a usage error.
-    let scratch = Scratch::new("docx-repair");
-    let input = docx(&scratch, "in.docx", "");
-    let out = run(&["repair", &input, &scratch.path("out.docx")]);
+    //
+    // This case was written against `.docx`, which is the format that used to
+    // answer it. Word gained a writer, so the claim moved to the format that
+    // still has none rather than being deleted with the adapter that outgrew
+    // it: what is under test is the refusal, not which format gives it.
+    let scratch = Scratch::new("html-repair");
+    let input = scratch.file(
+        "page.html",
+        "<p dir=\"rtl\">ارتفع الأداء بنسبة 25%</p>".as_bytes(),
+    );
+    let out = run(&["repair", &input, &scratch.path("out.html")]);
 
-    assert_eq!(out.code, exit::USAGE);
+    assert_eq!(out.code, exit::USAGE, "stderr:\n{}", out.stderr);
     assert!(
         out.stderr.contains("audited") && out.stderr.contains("not yet repaired"),
         "stderr:\n{}",
         out.stderr
     );
     // And nothing was written.
-    assert!(!Path::new(&scratch.path("out.docx")).exists());
+    assert!(!Path::new(&scratch.path("out.html")).exists());
+}
+
+#[test]
+fn a_word_document_is_repaired_and_the_repaired_copy_audits_clean() {
+    // The other side of the case above: `repair` no longer turns a `.docx`
+    // away, and what it writes is a document the same binary reads back with
+    // the finding gone.
+    let scratch = Scratch::new("docx-repaired");
+    let input = docx(
+        &scratch,
+        "broken.docx",
+        r#"<w:pPr><w:bidi w:val="0"/></w:pPr>"#,
+    );
+    let output = scratch.path("fixed.docx");
+
+    let out = run(&["repair", &input, &output, "--format", "json"]);
+    assert_eq!(out.code, exit::OK, "stderr:\n{}", out.stderr);
+
+    let json = parse_json(&out);
+    assert_eq!(json["format"], "docx");
+    assert!(
+        !json["repairs"]["applied"].as_array().unwrap().is_empty(),
+        "{json:#?}"
+    );
+    assert!(
+        json["repairs"]["skipped"].as_array().unwrap().is_empty(),
+        "nothing in this document is beyond WordprocessingML:\n{json:#?}"
+    );
+    assert!(
+        rule_ids(&json["before"]["diagnostics"]).contains(&"direction-mismatch".to_string()),
+        "{json:#?}"
+    );
+    assert!(
+        !rule_ids(&json["after"]["diagnostics"]).contains(&"direction-mismatch".to_string()),
+        "{json:#?}"
+    );
+
+    // The input is never modified, and the direction landed on the paragraph.
+    let repaired = std::fs::read(&output).unwrap();
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(repaired)).unwrap();
+    let mut document = String::new();
+    std::io::Read::read_to_string(
+        &mut archive.by_name("word/document.xml").unwrap(),
+        &mut document,
+    )
+    .unwrap();
+    assert!(document.contains(r#"<w:bidi w:val="1"/>"#), "{document}");
 }
 
 #[test]

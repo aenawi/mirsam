@@ -91,13 +91,22 @@ DOCX reuses the OOXML package layer; only the vocabulary differs
   no line of `mirsam-core` changed to make DOCX pass, which was the question
   the suite existed to answer. Two Word documents joined the golden corpus.
   See [`PLAN.md`](PLAN.md) §3.5.
-- The writer. Until it exists `repair` refuses a `.docx` as a readable format
-  without one, rather than as an unknown extension. The corpus records that
-  refusal, so the day it lands shows up as a diff on a real document.
+- **Landed:** the writer. `mirsam repair report.docx fixed.docx` works, and
+  the corpus recorded the refusal it replaced, so it arrived as a diff on a
+  real document rather than as a test somebody remembered to update. The
+  interesting result is what the writer did *not* need: PowerPoint's rewriter
+  must be told which way each paragraph reads before it can write a `Start`,
+  because `algn` names physical edges, and Word's `w:jc` is already relative —
+  so the whole inheritance pass is absent from this adapter rather than
+  skipped in it. Two repairs are refused, and both refusals are the format's:
+  Word cannot state a physical edge, and a typed bullet can only join a list
+  the document already defines. See [`PLAN.md`](PLAN.md) §3.6.
 - Numbering and fields.
 
-**Done when** the writer lands and `repair` stops refusing. The abstraction
-question — does one suite hold both adapters unchanged — is answered.
+**Done when** the writer lands and `repair` stops refusing. **Met.** The
+abstraction question — does one suite hold both adapters unchanged — is
+answered, and so is its writing half: three vocabularies now sit on one
+token-rewrite scaffold.
 
 ---
 
