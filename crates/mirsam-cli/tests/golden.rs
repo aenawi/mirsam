@@ -44,10 +44,16 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 const BIN: &str = env!("CARGO_BIN_EXE_mirsam");
 const UPDATE: &str = "MIRSAM_UPDATE_GOLDEN";
 
-/// The repair the corpus records. Both opt-in repairs are on, so every fix
-/// the adapter can express is exercised; the options are part of the report,
-/// so a reader never has to guess them.
-const REPAIR_OPTIONS: &[&str] = &["--convert-bullets", "--font", "Dubai", "--align"];
+/// The repair the corpus records. Every opt-in repair is on, so every fix the
+/// adapter can express is exercised; the options are part of the report, so a
+/// reader never has to guess them.
+const REPAIR_OPTIONS: &[&str] = &[
+    "--convert-bullets",
+    "--strip-tatweel",
+    "--font",
+    "Dubai",
+    "--align",
+];
 
 fn fixtures() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

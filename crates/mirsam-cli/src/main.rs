@@ -81,6 +81,13 @@ enum Command {
         /// because it edits the text itself rather than the properties around it.
         #[arg(long)]
         convert_bullets: bool,
+        /// Delete typed tatweel that pads text to a width. Opt-in, and more
+        /// cautiously than --convert-bullets: it deletes characters the author
+        /// typed. Only the padding goes — a tatweel carrying a harakat, or one
+        /// showing a letter's contextual form, is never reported and never
+        /// touched.
+        #[arg(long)]
+        strip_tatweel: bool,
         /// Write an explicit start-edge alignment on right-to-left paragraphs
         /// that have none of their own. Opt-in: what such a paragraph inherits
         /// may be a layout's design, such as a centred title, and the tool
@@ -358,6 +365,7 @@ fn run() -> Result<u8> {
             lang,
             font,
             convert_bullets,
+            strip_tatweel,
             align,
             force,
             strict,
@@ -382,6 +390,7 @@ fn run() -> Result<u8> {
                 language: lang,
                 complex_font: font,
                 convert_bullets,
+                strip_tatweel,
                 align,
             };
             let engine = engine(&options, &fonts);

@@ -235,6 +235,59 @@ fn controls_are_removed_before_the_marker_is_stripped_whatever_the_order_given()
     );
 }
 
+// -------------------------------------------------------------------- tatweel
+
+#[test]
+fn remove_tatweel_deletes_the_padding_and_keeps_the_word() {
+    // "العنوان" is 14 bytes, so the five tatweel padding it sit at 14..24.
+    assert_rewrite(
+        "<a:p><a:r><a:t>العنوان\u{0640}\u{0640}\u{0640}\u{0640}\u{0640}</a:t></a:r></a:p>",
+        vec![Fix::RemoveTatweel(vec![14, 16, 18, 20, 22])],
+        r#"<a:p><a:r><a:t>العنوان</a:t></a:r></a:p>"#,
+    );
+}
+
+#[test]
+fn remove_tatweel_reaches_padding_split_across_runs() {
+    // A heading padded in PowerPoint lands as its own run more often than not,
+    // because the author typed it after the text was already formatted.
+    assert_rewrite(
+        "<a:p><a:r><a:t>العنوان</a:t></a:r><a:r><a:t>\u{0640}\u{0640}\u{0640}</a:t></a:r></a:p>",
+        vec![Fix::RemoveTatweel(vec![14, 16, 18])],
+        r#"<a:p><a:r><a:t>العنوان</a:t></a:r><a:r><a:t></a:t></a:r></a:p>"#,
+    );
+}
+
+#[test]
+fn a_control_and_a_padded_heading_are_deleted_from_one_sequence() {
+    // Both fixes carry offsets into the text *as scanned*. Applying either set
+    // on its own and then the other would delete the second from a string that
+    // had already shortened, and the second deletion would land on a letter.
+    //
+    // "العنوان" is 14 bytes, the three tatweel take it to 20, and the mark
+    // sits at 20.
+    let padded = "<a:p><a:r><a:t>العنوان\u{0640}\u{0640}\u{0640}\u{200F}</a:t></a:r></a:p>";
+    let expected = r#"<a:p><a:r><a:t>العنوان</a:t></a:r></a:p>"#;
+    assert_rewrite(
+        padded,
+        vec![
+            Fix::RemoveTatweel(vec![14, 16, 18]),
+            Fix::RemoveControls(vec![20]),
+        ],
+        expected,
+    );
+    // And in the other order, because the planner's emission order is not a
+    // contract the rewriter may lean on.
+    assert_rewrite(
+        padded,
+        vec![
+            Fix::RemoveControls(vec![20]),
+            Fix::RemoveTatweel(vec![14, 16, 18]),
+        ],
+        expected,
+    );
+}
+
 // --------------------------------------------------------- presentation forms
 
 #[test]

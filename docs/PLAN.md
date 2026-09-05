@@ -905,7 +905,7 @@ committed reports changed in one line each — the key naming the file is
 
 ---
 
-## M4 — Shaping `[~]`
+## M4 — Shaping `[x]`
 
 ### 4.1 `rustybuzz` shaping `[x]`
 Shape each Arabic run; assert joining forms are produced.
@@ -1136,7 +1136,7 @@ every paragraph, and `Times New Roman`, `Geeza Pro`, `Mishafi`, `Al Nile` and
 `Baghdad` report nothing at all. `Arial` reports nothing either — ADR 0008's
 reh, four joins of five, still not a defect.
 
-### 4.4 `tatweel-padding` rule `[ ]`
+### 4.4 `tatweel-padding` rule `[x]`
 
 U+0640 ARABIC TATWEEL used as visual padding rather than as justification.
 `ROADMAP.md` has asked for this since M4 was written and no item carried it,
@@ -1152,16 +1152,66 @@ and the tool cannot read intent. So the threshold is the whole design
 question, the way 4.3's was: state it, argue it, and commit a fixture that
 fails a rule which regresses to "any tatweel is a defect".
 
+**The threshold, and why it is a property of the neighbours rather than of
+the character.** A kashida a font inserts never reaches the stored string —
+it is applied during layout and thrown away with the line boxes — so every
+tatweel this tool can see was typed by somebody. `crate::tatweel` therefore
+groups them into maximal runs and asks what each run is joined to. Two or
+more in a row, joined to a letter on either side, is a word stretched to a
+width: **no typography needs a second tatweel**, because one is already
+enough to carry a mark or show a form, so the repetition *is* the evidence
+and two is where the line falls. One, with a join already crossing it — the
+character before joins forwards, the character after takes a join — is width
+and nothing else, because both neighbours take exactly the form they had
+without it; that is the wedge that fakes an alignment inside a word.
+
+*Three ways to say nothing, and each one is a real document.* A tatweel
+immediately followed by a combining mark is the base that mark is written on,
+which is how a lone fatha appears in a table of harakat or a keyboard legend;
+delete it and the mark lands on whatever precedes. A lone tatweel at a
+joining edge is how a letter's initial, medial or final form is written on
+its own, in a primer or a dictionary — the tatweel is the thing being shown.
+And a run joined to nothing on either side is a rule or a separator, drawn
+with the character that draws rules; reporting it would be inventing a
+stretched word where there is no word. All three are committed as cases that
+a rule regressing to "any tatweel is a defect" fails.
+
 *Note that this is a defect in the text*, not in the properties around it, so
 its repair edits characters — the second one ever to do so, after
-`literal-bullet`, and it inherits that rule's caution: opt-in, because
-deleting a character the author typed is not the same as changing an
-attribute they left blank. Whether stripping is even safe is part of the
-question: a tatweel between two letters that already join is padding, and one
-carrying a harakat is not.
+`literal-bullet`, and it inherits that rule's caution: `--strip-tatweel`,
+opt-in, because deleting a character the author typed is not the same as
+changing an attribute they left blank. Whether stripping is safe turned out
+to be the same question as the threshold, and it is asserted against
+`joining::forms` rather than restated: deleting a run a join crosses changes
+no letter's form, however long the run is. A *stretched* run at a word edge
+is not form-preserving — a noon padded to a width reverts to a plain noon —
+and that is the repair rather than a loss, because a plain noon is what the
+unpadded word says. Nothing else is ever deleted, so the `Carrier` and
+`Displayed` cases are safe by never being touched.
 
-*Acceptance:* a deck padding a heading with typed tatweel is reported with the
-offsets, and a deck whose Arabic is justified by its font's kashida is not.
+**A warning, not an error**, which is ADR 0004's severity table read
+honestly: the text renders exactly as the author arranged it. What is wrong
+is the string behind it, and every cost is one a screenshot cannot show — a
+search for the heading no longer matches the heading, a spell-checker does not
+know the word, a screen reader reads the padding aloud, and the width it was
+measured against is gone the moment the box, the font or the point size
+changes.
+
+*The adapter learned one thing.* `RemoveControls` and `RemoveTatweel` both
+carry byte offsets into the text *as scanned*, so a paragraph with a bidi
+control in a padded heading would have had the second set applied to a string
+the first had already shortened. `rewrite.rs` now deletes from one merged,
+descending sequence, and the case is committed in both fix orders — the
+planner's emission order is not a contract the rewriter may lean on.
+
+*Acceptance:* met, in the conformance suite, so it holds for `.pptx` and
+`.docx` alike. A heading padded with five typed tatweel comes back a
+`tatweel-padding` warning naming the run's offset and length in both formats;
+the same paragraph justified — where the kashida is the font's and the string
+holds none of it — comes back with nothing, as do a lone fatha on a tatweel,
+medial heh as a primer shows it, and a rule drawn with four of them. Through
+the writer, a padded heading in a run of its own is repaired to the word it
+was, and re-audits clean.
 
 ---
 
