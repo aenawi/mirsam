@@ -1215,12 +1215,14 @@ was, and re-audits clean.
 
 ---
 
-## M5 — Web `[ ]`
+## M5 — Web `[x]`
 
 Adapters only; no core changes expected. If one is needed, record an ADR
 explaining what the core got wrong. One was needed —
 [ADR 0009](adr/0009-a-source-the-adapter-could-not-read-is-part-of-the-report.md)
-— and 5.1 says why below.
+— and 5.1 says why below. 5.3 is the one item here that also *writes*, and it
+needed nothing new in the core either: the `Fix` vocabulary was already right,
+and what changed was where a repair has to put the value it names.
 
 ### 5.1 HTML reader `[x]`
 
@@ -1432,11 +1434,109 @@ situation and to stay silent on the correctly marked version of the same page.
 `<bdi>` line that proves the silence, and `quarterly-page-correct.html` is
 still reported clean.
 
-### 5.3 XLSX `[ ]`
+### 5.3 XLSX `[x]`
 
 Sheet direction, cell alignment, and preserving formulas and defined names
 through a repair. Reuses `mirsam-ooxml`'s package layer; the question it has
-to answer is whether a cell is a paragraph or a container.
+to answer is whether a cell is a paragraph or a container. It is the second
+format with a writer, and the first whose writer cannot repair anything by
+editing it in place.
+
+**A cell is a paragraph and the worksheet is the container.** The cell is one
+run of text with one set of properties deciding how it renders, which is what
+`TextUnit` is; it lays out no other unit, and every container this model has —
+a table, a multi-column body, a chart axis — is something whose direction
+decides where *other* units begin. `sheetView/@rightToLeft` is that: it decides
+which side column A sits on, the sentence `a:tblPr/@rtl` and
+`w:tblPr/w:bidiVisual` already state, so a sheet is a `Table` and carries a
+table's id. It is emitted only where the sheet holds text in **two or more
+columns**, on the reasoning that made a text body a `Columns` container at
+`numCol >= 2` and not below it: with one column there is nothing to start at
+the wrong end of, and a container reported on a single column of text would be
+a finding on a margin.
+
+*The suite gained by that rather than losing.* Two of its cases stated a table
+of one cell, which no format has a column order for and PowerPoint and Word
+happen to emit a container for anyway; both now state two. A degenerate table
+was proving less than it looked.
+
+**Excel is the first format where a container is also the chain above its
+cells.** `AGENTS.md` says a cell's text does not inherit its table's column
+order, and in the other two formats that is simply true. `rightToLeft` is not
+only a column order: it is the reading order every cell in the sheet falls back
+to when its own format record states none. So a cell with no `readingOrder`
+resolves to the sheet's, `Inherited` naming the worksheet part, and ADR 0007
+judges it from there — silent where it agrees with the text, reported as an
+absent value where it contradicts it.
+
+**`readingOrder="0"` is `Unset`, and that is the same argument `dir="auto"`
+got.** It is *context dependent*: it asks the application to take the direction
+from the first strong character, which is the sentence `Resolved::Unset`
+carries. A cell under it is correct by today's text and undefined for
+tomorrow's, which is the fragile tier, not a decision.
+
+**`horizontal="general"` is `Unset` too, and for a sharper reason.** It looks
+like a direction-relative alignment and is not one: it is Excel's default
+chosen by the cell's *data type*, text at the start edge and numbers at the
+end. Reading it as `Start` would silence `alignment-unset` on the commonest
+cell in any workbook — a rule going quiet on a value nobody stated, which is
+invariant 2 run backwards.
+
+**Three things SpreadsheetML cannot say, and one it says only once.** There is
+no list feature, so a marker at the front of a cell is always a glyph somebody
+typed and `--convert-bullets` has nothing to convert *to*. There is one font
+per cell and it draws every script, so `complex-font-missing`'s precondition is
+unreachable exactly as it is on HTML — one stack, no pair of slots to fill
+unevenly. `alignment/@indent` is measured from the start edge like every other
+OOXML indent, so `inset` stays absent. And there is no language tag anywhere on
+a cell, a run, a font or a style: `docProps/core.xml`'s `dc:language` is the
+only place a workbook states one, so that is what every cell inherits — and
+the repair is **refused**, because one tag answers for the whole file and
+setting it to satisfy an Arabic cell would relabel the English beside it. The
+finding therefore lands on every Arabic cell in an untagged workbook. That
+repetition is the format's shape and the corpus carries it rather than hiding
+it.
+
+**A formula is a source the adapter could not read, which is ADR 0009 reaching
+a second format.** `<c><f>…</f><v>…</v></c>` stores a *cached result*, and the
+cache is not the document's text: Excel recomputes it on open, so a finding on
+it is a finding on a string no author wrote and no repair can change — and a
+re-audit after a recalculation could honestly disagree with the first. So a
+formula cell produces no unit, and one whose cache carries Arabic is named in
+`sources.unread` as `الأرقام!D3`. A cache holding no Arabic is not named, since
+there is nothing there this tool would have judged. `{"unread": []}` stops
+being HTML's alone.
+
+**The writer had to append where every previous one edited.** `<c s="3"/>`
+names a record in `cellXfs`, and forty cells across four sheets may name the
+same one; writing the repaired `readingOrder` into it would set the reading
+order of all forty, English included. So `sheet.rs` clones the record the cell
+already has, changes the one attribute, appends it, and repoints that cell's
+`@s` — and answers identical requests with one appended record, so two hundred
+cells needing the same fix grow `cellXfs` by one. Shared strings work the same
+way: the repaired text is a new `<si>`, cloned from the old one so its
+rich-text runs survive the edit, with the cell's `<v>` repointed at it and the
+original left for whatever else was pointing there.
+
+*The offsets had to leave the furigana out.* A `<t>` inside an `<rPh>` is a
+phonetic reading beside the text rather than part of it, so the reader skips
+it — and a rewriter that did not skip it too would apply a deletion computed
+against the string a reader sees to the annotation next to it.
+
+*Acceptance:* met. Thirty-four conformance cases pass with XLSX among the
+formats, twenty-eight of them without a line changing. Four refusals join the
+committed list — a native list and two paragraphs in different languages,
+which are Excel's alone, and a direction-relative alignment and an unevenly
+filled pair of font slots, which it now refuses beside PowerPoint and HTML —
+and `alignment-incoherent` is asserted on three formats where it was asserted
+on two. `tests/fixtures/quarterly-figures.xlsx` carries one instance of every
+defect the adapter can see, a formula whose cached result is Arabic, and two
+defined names; `quarterly-figures-correct.xlsx` is the workbook the tool must
+leave completely alone, and does. Both validate against the published
+ECMA-376 schemas, and so does the repaired copy. Through the writer, the
+repair leaves `xl/workbook.xml` byte-identical and every `<f>` where it was,
+and the two findings that survive it are the two repairs the format cannot
+express — listed in `repairs.skipped`, never claimed.
 
 ---
 

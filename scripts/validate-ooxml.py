@@ -21,7 +21,7 @@ The schemas are downloaded once from ecma-international.org and cached under
 Usage:
     uv run --with lxml scripts/validate-ooxml.py [document.pptx ...]
 
-With no arguments, every `.pptx` and `.docx` under `tests/fixtures/` is
+With no arguments, every `.pptx`, `.docx` and `.xlsx` under `tests/fixtures/` is
 checked; any other package is checked by naming it. `--self-test` checks the
 checker instead, over packages built in memory. Exits 0 when every package is
 clean, 1 otherwise.
@@ -333,7 +333,7 @@ def main(argv: list[str]) -> int:
         paths = sorted(
             os.path.join(fixtures, n)
             for n in os.listdir(fixtures)
-            if n.endswith((".pptx", ".docx")) and ".out." not in n
+            if n.endswith((".pptx", ".docx", ".xlsx")) and ".out." not in n
         )
     if not paths:
         print("no packages to validate", file=sys.stderr)

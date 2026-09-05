@@ -10,9 +10,10 @@ right-to-left, bidirectional and typography defects in documents. Single static
 binary: no Python, no Node, no Office, no runtime of any kind on the target
 machine.
 
-`audit` reads `.pptx`, `.docx` and `.html`/`.htm`. `repair` writes `.pptx`
-only: the other two are refused as readable formats without a writer, which is
-a usage error (exit `2`) and not a claim that the document was not understood.
+`audit` reads `.pptx`, `.docx`, `.xlsx` and `.html`/`.htm`. `repair` writes
+`.pptx` and `.xlsx`: the other two are refused as readable formats without a
+writer, which is a usage error (exit `2`) and not a claim that the document was
+not understood.
 
 Inspired by Sultan Alsafran's MIT-licensed `arabic-presentations` skill. No
 shared code. See [`CREDITS.md`](CREDITS.md).
@@ -79,13 +80,18 @@ axis, legend or data labels. Everything but the paragraph is a *container*: a
 unit of its own, judged from the text it lays out, whose one property is its
 direction. Echo them back; never parse them.
 
-A table is a container in both formats — `a:tblPr/@rtl` in PowerPoint,
-`w:tblPr/w:bidiVisual` in Word — and both say the same thing: the cells are
-displayed right to left with the file's own cell order unchanged. The
-paragraphs inside stay units in their own right, because neither format makes
-a cell's text inherit the table's column order, so both are reported
-separately. A Word cell's paragraph names its cell in `location.container`:
-`table 1 row 2 cell 3`.
+A table is a container in every format that has one — `a:tblPr/@rtl` in
+PowerPoint, `w:tblPr/w:bidiVisual` in Word, `sheetView/@rightToLeft` on an
+Excel worksheet — and they say the same thing: the cells are displayed right
+to left with the file's own cell order unchanged. The paragraphs inside stay
+units in their own right, and are reported separately. A Word cell's paragraph
+names its cell in `location.container`: `table 1 row 2 cell 3`.
+
+**Excel is the exception to "separately", and it is the format's rule rather
+than the adapter's.** PowerPoint and Word do not make a cell's text inherit its
+table's column order; `rightToLeft` is *also* the reading order every cell in
+the sheet falls back to, so an Excel cell that states no `readingOrder` of its
+own comes back `Inherited` naming the worksheet.
 
 A container's direction can be inherited — a Word table style states
 `w:bidiVisual` — and is judged the way any inherited value is: silent where it
@@ -115,6 +121,61 @@ it — search, spell-check and screen readers all read the padding, and it does
 not survive a change of width, font or size. `--strip-tatweel` deletes
 exactly the runs the finding listed and nothing else.
 
+### XLSX, where a cell is a paragraph and the sheet is the table
+
+A worksheet's `sheetView/@rightToLeft` decides which side column A sits on,
+which is what `a:tblPr/@rtl` and `w:tblPr/w:bidiVisual` say in the other two
+formats — so **a sheet is a `Table` container** and carries `<part>#tbl1`,
+while each cell is a paragraph carrying `<part>#p<n>`. A unit's
+`location.container` is the reference a person would type into the Name Box:
+`الأرقام!C2` for a cell, `sheet "الأرقام"` for the grid.
+
+Five things to know before reading a workbook's report:
+
+- **The grid is reported only where the sheet has two or more columns of
+  text.** With one column there is no question of which column a reader starts
+  in, so there is nothing for `container-direction` to be about. This is the
+  same threshold a `Columns` container has at `numCol >= 2`.
+- **A cell inherits the sheet's direction, and that is Excel's own rule rather
+  than an exception.** In PowerPoint and Word a cell's text does not inherit
+  its table's column order; `rightToLeft` is also the reading order every cell
+  in the sheet falls back to, so a cell stating no `readingOrder` comes back
+  `Inherited` naming the worksheet part, and ADR 0007 judges it from there.
+- **`readingOrder="0"` and `horizontal="general"` both come back unset.** The
+  first is *context dependent* — the same guess-from-the-first-strong-character
+  `dir="auto"` asks for. The second is Excel's default chosen by the cell's
+  **data type**, text at the start edge and numbers at the end, which is not an
+  edge anybody stated. Neither is a decision, so neither silences a rule.
+- **`sources.unread` names formula cells, and it is a `NOT RUN`.** A `<c><f>`
+  stores a *cached result* that Excel recomputes on open, so it is not the
+  document's text and produces no unit. One whose cache carries Arabic is named
+  — `الأرقام!D3` — so its absence from the findings can never look like a clean
+  reading. One holding no Arabic is not named: there is nothing there this tool
+  would have judged.
+- **`language-missing` fires on every Arabic cell of an untagged workbook, and
+  cannot be repaired.** SpreadsheetML has no language slot on a cell, a run, a
+  font or a style; `docProps/core.xml`'s `dc:language` is the only place a
+  workbook states one, so that is what every cell inherits — and `SetLanguage`
+  is refused, because one tag answers for the whole file and writing it to
+  satisfy the Arabic would relabel the English beside it. It shows in
+  `repairs.skipped`, never as a repair that failed.
+
+`complex-font-missing` never fires on a workbook, for HTML's reason: a cell has
+one font and it draws every script, so a filled Latin slot beside an empty
+complex-script one is not a document Excel can write. `literal-bullet` fires
+and `--convert-bullets` is refused, because Excel has no list to convert to.
+
+**Repairing a workbook appends rather than edits, and that is not an
+optimisation.** `<c s="3"/>` names a record in `cellXfs` that forty cells may
+share, so the repaired alignment is a *copy* of that record with the cell's
+`@s` repointed at it; every other cell keeps the record it had, byte for byte.
+Shared strings work the same way — a repaired string is a new `<si>`, cloned so
+its rich-text runs survive, with the old one left for whatever else was
+pointing there. `<f>` formulas and `xl/workbook.xml`'s `<definedNames>` come
+through untouched, and mechanically so: `xl/workbook.xml` is not a part a
+repair plan can name, and a cell repair edits `@s` or the content of a `<v>`
+and nothing beside it.
+
 ### HTML, where the direction is usually not in the document
 
 An `.html` page states direction in three places and the adapter reads all of
@@ -134,7 +195,9 @@ Three consequences worth knowing before you read a report:
   CSS the tool never saw**. Read `"sources": {"unread": [...]}` before
   concluding anything from an absent value. It is `{"unread": []}` for every
   `.pptx` and `.docx`, because a package holds everything that decides its own
-  text ([ADR 0009](docs/adr/0009-a-source-the-adapter-could-not-read-is-part-of-the-report.md)).
+  text; an `.xlsx` fills it with the formula cells whose cached result the tool
+  did not judge
+  ([ADR 0009](docs/adr/0009-a-source-the-adapter-could-not-read-is-part-of-the-report.md)).
 - **`dir="auto"` comes back as unset, and that is not harshness.** `auto` asks
   the browser to guess from the first strong character, which is what `Unset`
   means. It gets `مرحبا 2026` right and `2026 مرحبا` wrong, so a paragraph is
@@ -274,8 +337,11 @@ the *machine* rather than the document takes a port instead, the way
 preferences, and putting a source there would make an audit's result depend on
 which computer ran it without saying so anywhere.
 
-**Adding a format** — new crate implementing `DocumentReader`; add
-`DocumentWriter` only if the format can be faithfully edited in place.
+**Adding a format** — a new crate implementing `DocumentReader`, or a new
+module in an existing adapter crate where the *container* really is shared:
+XLSX lives in `mirsam-ooxml` beside PPTX and DOCX because it reuses `package`
+and `token` and names no element either of them does. Add `DocumentWriter` only
+if the format can be faithfully edited in place.
 
 **Resolving a font** — `mirsam-core` never opens one. `ports::FontSource`
 takes a family name and answers with bytes, `mirsam-fonts` implements it over
@@ -303,7 +369,8 @@ reason, and the committed list of those refusals is asserted, so a format that
 quietly stopped expressing something fails rather than passes.
 
 **Any change to what is reported or written** shows up in the golden corpus:
-`cargo test` compares every `.pptx`, `.docx` and `.html` under `tests/fixtures/` with
+`cargo test` compares every `.pptx`, `.docx`, `.xlsx` and `.html` under
+`tests/fixtures/` with
 its committed `<document>.expected.json` and fails on any difference. When the
 difference is intended, run `make golden`, read the diff, and commit the
 regenerated reports with the change that explains them. Never regenerate to
@@ -344,12 +411,14 @@ anything about.
 
 **A corpus document must be one an application opens.** The hand-built ones —
 `torture.pptx`, `clean.pptx`, `broken-arabic.pptx` from
-`scripts/make-torture-fixture.py`, and `quarterly-review.docx` and
-`quarterly-review-correct.docx` from `scripts/make-word-fixture.py` —
-regenerate with `make fixtures`, never by editing the package. `cargo test`
-asserts the structural invariants of every one of them
-(`corpus_packages.rs`: the OPC-level checks run over both formats, the
-PresentationML ones over the decks), and `make validate-fixtures` validates
+`scripts/make-torture-fixture.py`, `quarterly-review.docx` and
+`quarterly-review-correct.docx` from `scripts/make-word-fixture.py`, and
+`quarterly-figures.xlsx` and `quarterly-figures-correct.xlsx` from
+`scripts/make-excel-fixture.py` — regenerate with `make fixtures`, never by
+editing the package. `cargo test` asserts the structural invariants of every
+one of them (`corpus_packages.rs`: the OPC-level checks run over every packaged
+format, the PresentationML ones over the decks), and `make validate-fixtures`
+validates
 all of them against the published ECMA-376 schemas. A document the application
 offers to repair cannot answer "does it open the repaired file without a
 prompt", which is the M1 application check.

@@ -175,8 +175,9 @@ crates/
                    argument to Engine::with_fonts and not a RepairOptions
                    field, and why a caller that does not supply one has to
                    report the checks as NOT RUN
-  mirsam-ooxml/    adapter — PPTX and DOCX; XLSX will share the two modules
-                   below that name no element: the package and the scaffold
+  mirsam-ooxml/    adapter — PPTX, DOCX and XLSX. The three share the two
+                   modules below that name no element — the package and the
+                   scaffold — and not one element name with each other
     package.rs     ZIP access and the byte-preserving rewrite (raw entry copy)
     token.rs       the same guarantee inside a part: read to events, splice an
                    attribute in its raw bytes, insert a child at the rank a
@@ -205,6 +206,18 @@ crates/
                    Resolved the same way inherit.rs resolves PowerPoint's,
                    and sharing its theme reader, because a fontScheme is
                    DrawingML wherever it is stored
+    xlsx.rs        SpreadsheetML vocabulary: a cell is a paragraph, a
+                   worksheet is the Table around it, and a formula's cached
+                   value is a source that was not read rather than text.
+                   DocumentReader and DocumentWriter
+    workbook.rs    Excel's chain, which starts outside the cell: cellXfs is
+                   the record @s names, cellStyleXfs the named style behind
+                   it, and sheetView/@rightToLeft the sheet's word for every
+                   cell that states no reading order of its own
+    sheet.rs       SpreadsheetML's repair vocabulary, and the one that has to
+                   *append*: a format record is shared between cells, so a
+                   repair clones it and repoints one @s rather than
+                   re-formatting everything else pointing there
   mirsam-html/     adapter — the web. The first format that is not a package,
                    and the first whose direction is usually not in the document
     dom.rs         the tree html5ever builds, into a sink this crate owns.

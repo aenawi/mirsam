@@ -13,10 +13,10 @@
 //! suite reads. Each invariant below is one that a document in this corpus
 //! actually violated.
 //!
-//! Three are the OPC container's and hold for every format the corpus carries,
-//! Word's `.docx` included — the package layer is the one the second format
-//! reuses rather than reimplements, so a check written only against `.pptx`
-//! would leave half of what it guards untested:
+//! Three are the OPC container's and hold for every packaged format the corpus
+//! carries — Word's `.docx` and Excel's `.xlsx` included, because the package
+//! layer is the one those formats reuse rather than reimplement, and a check
+//! written only against `.pptx` would leave most of what it guards untested:
 //!
 //! * every part is declared in `[Content_Types].xml`
 //! * every relationship resolves to a part that is present
@@ -65,7 +65,7 @@ fn corpus(extensions: &[&str]) -> Vec<PathBuf> {
 
 /// Every corpus document, whatever format it is: what the OPC-level checks ask.
 fn documents() -> Vec<PathBuf> {
-    corpus(&["pptx", "docx"])
+    corpus(&["pptx", "docx", "xlsx"])
 }
 
 /// The presentations alone: what the PresentationML checks ask.

@@ -75,6 +75,7 @@ golden: ## Regenerate the golden corpus reports; review the diff before committi
 fixtures: ## Regenerate the hand-built corpus documents, then their reports
 	@python3 scripts/make-torture-fixture.py
 	@python3 scripts/make-word-fixture.py
+	@python3 scripts/make-excel-fixture.py
 	@$(MAKE) --no-print-directory golden
 
 fonts: ## Regenerate the hand-built fonts the shaping tests run against

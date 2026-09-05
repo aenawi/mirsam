@@ -38,7 +38,7 @@ use mirsam_core::{
     TextUnit, UnitKind,
 };
 use mirsam_html::HtmlDocument;
-use mirsam_ooxml::{DocxDocument, Package, PptxDocument};
+use mirsam_ooxml::{DocxDocument, Package, PptxDocument, XlsxDocument};
 use std::collections::BTreeSet;
 use std::fs::{self, File};
 use std::io::Write;
@@ -373,7 +373,12 @@ trait Vocabulary: Sync {
 /// Every adapter this build has. A case runs against all of them; adding a
 /// format here is how a new adapter is held to the same contract.
 fn vocabularies() -> Vec<Box<dyn Vocabulary>> {
-    vec![Box::new(Pptx), Box::new(Docx), Box::new(Html)]
+    vec![
+        Box::new(Pptx),
+        Box::new(Docx),
+        Box::new(Html),
+        Box::new(Xlsx),
+    ]
 }
 
 // ------------------------------------------------------------ PresentationML
@@ -1043,6 +1048,345 @@ impl Vocabulary for Html {
     }
 }
 
+// ------------------------------------------------------------ SpreadsheetML
+
+struct Xlsx;
+
+const SPREADSHEETML: &str = r#"xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships""#;
+
+/// The `xl/styles.xml` a document's cells are built against, accumulated while
+/// they are written.
+///
+/// Excel keeps a cell's formatting outside the cell, so a vocabulary that
+/// wanted to state one paragraph's alignment has to state it here and leave the
+/// cell holding an index. Index `0` of each table is what a cell that states
+/// nothing resolves to, and it states nothing itself.
+#[derive(Default)]
+struct Styles {
+    fonts: Vec<String>,
+    records: Vec<String>,
+}
+
+impl Styles {
+    fn new() -> Self {
+        Self {
+            // A font naming no typeface, so a cell that chose none resolves to
+            // `Unset` rather than to whatever this file happened to write.
+            fonts: vec!["<font/>".into()],
+            records: vec![r#"<xf numFmtId="0" fontId="0" xfId="0"/>"#.into()],
+        }
+    }
+
+    /// The `@s` a cell stating `p`'s formatting carries.
+    fn record_for(&mut self, p: &Paragraph) -> Result<usize, Inexpressible> {
+        let font = match Xlsx::font(p)? {
+            Some(typeface) => {
+                self.fonts
+                    .push(format!(r#"<font><name val="{typeface}"/></font>"#));
+                self.fonts.len() - 1
+            }
+            None => 0,
+        };
+        let mut alignment = String::new();
+        if let Some(value) = p.alignment {
+            alignment.push_str(&format!(r#" horizontal="{}""#, Xlsx::horizontal(value)?));
+        }
+        if let Some(direction) = p.direction {
+            alignment.push_str(&format!(
+                r#" readingOrder="{}""#,
+                Xlsx::reading_order(direction)
+            ));
+        }
+        if font == 0 && alignment.is_empty() {
+            return Ok(0);
+        }
+        self.records.push(format!(
+            r#"<xf numFmtId="0" fontId="{font}" xfId="0" applyFont="1" applyAlignment="1"><alignment{alignment}/></xf>"#
+        ));
+        Ok(self.records.len() - 1)
+    }
+
+    /// The part, with the named cell style the chain states.
+    fn part(&self, chain: &Chain) -> Result<String, Inexpressible> {
+        let mut alignment = String::new();
+        if let Some(value) = chain.alignment {
+            alignment.push_str(&format!(r#" horizontal="{}""#, Xlsx::horizontal(value)?));
+        }
+        let named = if alignment.is_empty() {
+            r#"<xf numFmtId="0" fontId="0"/>"#.to_string()
+        } else {
+            format!(
+                r#"<xf numFmtId="0" fontId="0" applyAlignment="1"><alignment{alignment}/></xf>"#
+            )
+        };
+        Ok(format!(
+            r#"<styleSheet {SPREADSHEETML}><fonts count="{}">{}</fonts><cellStyleXfs count="1">{named}</cellStyleXfs><cellXfs count="{}">{}</cellXfs></styleSheet>"#,
+            self.fonts.len(),
+            self.fonts.concat(),
+            self.records.len(),
+            self.records.concat(),
+        ))
+    }
+}
+
+impl Xlsx {
+    /// Excel's spelling of an alignment, or the reason it has none.
+    ///
+    /// `start` and `end` are the two it lacks, exactly as PowerPoint lacks
+    /// them: `alignment/@horizontal` names physical edges, and `general` — the
+    /// nearest thing — is a default chosen by the cell's *data type* rather
+    /// than an edge anybody stated.
+    fn horizontal(alignment: Alignment) -> Result<&'static str, Inexpressible> {
+        Ok(match alignment {
+            Alignment::Left => "left",
+            Alignment::Right => "right",
+            Alignment::Center => "center",
+            Alignment::Justify => "justify",
+            Alignment::Distributed => "distributed",
+            Alignment::Start | Alignment::End => {
+                return Err(Inexpressible(
+                    "Excel's alignment/@horizontal names physical edges and has no \
+                     direction-relative spelling; `general` is a default chosen by the \
+                     cell's data type, not an edge",
+                ));
+            }
+        })
+    }
+
+    fn reading_order(direction: Direction) -> &'static str {
+        match direction {
+            Direction::Rtl => "2",
+            Direction::Ltr => "1",
+        }
+    }
+
+    /// The one typeface a cell has, or the reason a pair of slots cannot be
+    /// stated.
+    ///
+    /// The same refusal HTML gives, for the same reason arrived at from the
+    /// other end: a cell's font is one `name@val` and it draws every script in
+    /// the cell, so a filled Latin slot beside an empty complex-script one is
+    /// not a workbook Excel can write.
+    fn font(p: &Paragraph) -> Result<Option<&'static str>, Inexpressible> {
+        match (p.latin_font, p.complex_font) {
+            (None, None) => Ok(None),
+            (None, Some(typeface)) => Ok(Some(typeface)),
+            (Some(latin), Some(complex)) if latin == complex => Ok(Some(latin)),
+            _ => Err(Inexpressible(
+                "a cell has one font and it draws every script in the cell; it cannot \
+                 fill a Latin slot and leave the complex-script one empty, nor state two \
+                 different typefaces",
+            )),
+        }
+    }
+
+    /// A list marker Excel produces itself, which there is no such thing as.
+    fn bullet(p: &Paragraph) -> Result<(), Inexpressible> {
+        if p.bullet {
+            return Err(Inexpressible(
+                "Excel has no list feature: a cell holds a string, and a marker at the \
+                 front of one is a character somebody typed",
+            ));
+        }
+        Ok(())
+    }
+
+    /// The one language tag a workbook can state, or the reason it cannot state
+    /// these.
+    ///
+    /// SpreadsheetML has no language slot on a cell, a run, a font or a style.
+    /// `docProps/core.xml` is the only place a workbook says what language it
+    /// is in, and it says it once — so a document whose paragraphs disagree is
+    /// one Excel cannot write.
+    fn language(doc: &Document) -> Result<Option<&'static str>, Inexpressible> {
+        let mut tags: Vec<&'static str> = doc
+            .paragraphs
+            .iter()
+            .chain(doc.tables.iter().map(|t| &t.cell))
+            .filter_map(|p| p.language)
+            .collect();
+        tags.sort_unstable();
+        tags.dedup();
+        match tags.len() {
+            0 => Ok(None),
+            1 => Ok(Some(tags[0])),
+            _ => Err(Inexpressible(
+                "a workbook states its language once, in its core properties, because \
+                 there is no slot for one on a cell; two paragraphs in different \
+                 languages is not a workbook Excel can write",
+            )),
+        }
+    }
+
+    /// A cell holding one paragraph's text, at `column` of `row`.
+    ///
+    /// An inline string rather than a shared one, because a shared string is
+    /// storage the case has no opinion about and one more part to get wrong.
+    fn cell(
+        styles: &mut Styles,
+        p: &Paragraph,
+        row: usize,
+        column: usize,
+    ) -> Result<String, Inexpressible> {
+        ooxml::run(p)?;
+        ooxml::inset(p)?;
+        Self::bullet(p)?;
+        let record = styles.record_for(p)?;
+        let style = if record == 0 {
+            String::new()
+        } else {
+            format!(r#" s="{record}""#)
+        };
+        let reference = format!("{}{row}", (b'A' + column as u8) as char);
+        Ok(format!(
+            r#"<c r="{reference}"{style} t="inlineStr"><is><t>{}</t></is></c>"#,
+            escape(p.text)
+        ))
+    }
+
+    /// One worksheet: the direction of its grid, and its rows of cells.
+    fn worksheet(direction: Option<Direction>, rows: &[String]) -> String {
+        let views = match direction {
+            Some(direction) => format!(
+                r#"<sheetViews><sheetView workbookViewId="0" rightToLeft="{}"/></sheetViews>"#,
+                u8::from(direction == Direction::Rtl)
+            ),
+            None => String::new(),
+        };
+        format!(
+            "<worksheet {SPREADSHEETML}>{views}<sheetData>{}</sheetData></worksheet>",
+            rows.concat()
+        )
+    }
+}
+
+impl Packaged for Xlsx {
+    fn parts(&self, doc: &Document) -> Result<Vec<(String, String)>, Inexpressible> {
+        ooxml::reversed(doc)?;
+        let language = Self::language(doc)?;
+        let mut styles = Styles::new();
+        let mut sheets: Vec<String> = Vec::new();
+
+        // The document's paragraphs, one per row down column A. One column, so
+        // there is no column order for the adapter to report on — which is what
+        // makes this the same situation the other two formats write as loose
+        // paragraphs rather than as a grid.
+        if !doc.paragraphs.is_empty() {
+            let mut rows = Vec::new();
+            for (index, paragraph) in doc.paragraphs.iter().enumerate() {
+                let row = index + 1;
+                rows.push(format!(
+                    r#"<row r="{row}">{}</row>"#,
+                    Self::cell(&mut styles, paragraph, row, 0)?
+                ));
+            }
+            sheets.push(Self::worksheet(doc.chain.direction, &rows));
+        }
+
+        // Each table is a sheet of its own, its cells across the columns of one
+        // row: a worksheet *is* the grid whose direction decides which side
+        // column A sits on, so there is nowhere else for a table to go.
+        for table in &doc.tables {
+            let mut cells = String::new();
+            for (column, text) in table.cells.iter().enumerate() {
+                let paragraph = Paragraph {
+                    text,
+                    ..table.cell.clone()
+                };
+                cells.push_str(&Self::cell(&mut styles, &paragraph, 1, column)?);
+            }
+            sheets.push(Self::worksheet(
+                table.direction.or(doc.chain.direction),
+                &[format!(r#"<row r="1">{cells}</row>"#)],
+            ));
+        }
+
+        // A workbook with no sheet at all is not a workbook, so an empty
+        // document gets one empty sheet.
+        if sheets.is_empty() {
+            sheets.push(Self::worksheet(doc.chain.direction, &[]));
+        }
+
+        let mut entries = String::new();
+        let mut links: Vec<(&str, String)> = Vec::new();
+        let mut overrides: Vec<(String, &str)> =
+            vec![("/xl/workbook.xml".into(), "spreadsheetml.sheet.main+xml")];
+        let mut parts: Vec<(String, String)> = Vec::new();
+        for (index, sheet) in sheets.iter().enumerate() {
+            let n = index + 1;
+            entries.push_str(&format!(
+                r#"<sheet name="Sheet{n}" sheetId="{n}" r:id="rId{n}"/>"#
+            ));
+            links.push(("worksheet", format!("worksheets/sheet{n}.xml")));
+            overrides.push((
+                format!("/xl/worksheets/sheet{n}.xml"),
+                "spreadsheetml.worksheet+xml",
+            ));
+            parts.push((format!("xl/worksheets/sheet{n}.xml"), sheet.clone()));
+        }
+        links.push(("styles", "styles.xml".into()));
+        overrides.push(("/xl/styles.xml".into(), "spreadsheetml.styles+xml"));
+
+        let borrowed: Vec<(&str, &str)> = links
+            .iter()
+            .map(|(kind, target)| (*kind, target.as_str()))
+            .collect();
+        let declared: Vec<(&str, &str)> = overrides
+            .iter()
+            .map(|(part, kind)| (part.as_str(), *kind))
+            .collect();
+
+        let mut all = vec![
+            ("[Content_Types].xml".to_string(), content_types(&declared)),
+            (
+                "_rels/.rels".to_string(),
+                relationships(&[("officeDocument", "xl/workbook.xml")]),
+            ),
+            (
+                "xl/workbook.xml".to_string(),
+                format!("<workbook {SPREADSHEETML}><sheets>{entries}</sheets></workbook>"),
+            ),
+            (
+                "xl/_rels/workbook.xml.rels".to_string(),
+                relationships(&borrowed),
+            ),
+        ];
+        all.extend(parts);
+        all.push(("xl/styles.xml".to_string(), styles.part(&doc.chain)?));
+        if let Some(tag) = language {
+            all.push((
+                "docProps/core.xml".to_string(),
+                format!(
+                    r#"<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:language>{tag}</dc:language></cp:coreProperties>"#
+                ),
+            ));
+        }
+        Ok(all)
+    }
+}
+
+impl Vocabulary for Xlsx {
+    fn format(&self) -> &'static str {
+        "xlsx"
+    }
+
+    fn extension(&self) -> &'static str {
+        "xlsx"
+    }
+
+    fn write(&self, dir: &Path, doc: &Document) -> Result<Written, Inexpressible> {
+        Ok(zip_package(dir, self.extension(), &self.parts(doc)?))
+    }
+
+    fn parts_of(&self, path: &Path) -> Vec<String> {
+        package_parts(path)
+    }
+
+    fn open(&self, path: &Path) -> mirsam_core::Result<Box<dyn DocumentReader>> {
+        Ok(Box::new(XlsxDocument::open(path)?))
+    }
+}
+
 // ------------------------------------------------------------ package writing
 
 /// A format that is a ZIP of XML parts — which both OOXML formats are, and
@@ -1305,6 +1649,28 @@ fn agree_on(doc: &Document) -> Vec<&'static str> {
     expected
 }
 
+/// The same, among the formats that *can* state `doc`.
+///
+/// The claim [`agree_on`] makes, minus the one it makes about every format
+/// having a vocabulary for the situation. Used only where a refusal is
+/// committed in [`every_refusal_is_one_the_design_intended`], so a format that
+/// quietly stopped expressing something still fails there rather than here.
+fn agree_among(doc: &Document) -> Vec<&'static str> {
+    let readings = read(doc);
+    let expected = readings[0].rules();
+    for reading in &readings[1..] {
+        assert_eq!(
+            reading.rules(),
+            expected,
+            "{} and {} disagree about the same situation:\n{:#?}",
+            readings[0].format,
+            reading.format,
+            reading.units,
+        );
+    }
+    expected
+}
+
 // ------------------------------------------------------------- the port's own
 
 #[test]
@@ -1380,7 +1746,7 @@ fn a_paragraph_carries_an_ordinal_and_a_container_carries_none() {
     // one. A container is not at a paragraph position, and claiming one would
     // send a reviewer to a paragraph that is not the thing reported on.
     let doc = Document::of([Paragraph::of(ARABIC), Paragraph::of(ARABIC)])
-        .with_table(Table::of(&["المؤشر"]));
+        .with_table(Table::of(&["المؤشر", "الربع"]));
     for reading in read_all(&doc) {
         for unit in &reading.units {
             match unit.kind {
@@ -1529,7 +1895,8 @@ fn a_table_is_a_container_beside_the_paragraphs_in_its_cells() {
 
 #[test]
 fn a_column_order_the_table_states_is_explicit_and_one_it_does_not_is_unset() {
-    let stated = Document::default().with_table(Table::of(&["المؤشر"]).direction(Direction::Rtl));
+    let stated =
+        Document::default().with_table(Table::of(&["المؤشر", "الربع"]).direction(Direction::Rtl));
     for reading in read_all(&stated) {
         assert_eq!(
             reading.only(UnitKind::Table).props.direction,
@@ -1539,7 +1906,7 @@ fn a_column_order_the_table_states_is_explicit_and_one_it_does_not_is_unset() {
         );
     }
 
-    let unstated = Document::default().with_table(Table::of(&["المؤشر"]));
+    let unstated = Document::default().with_table(Table::of(&["المؤشر", "الربع"]));
     for reading in read_all(&unstated) {
         assert!(
             reading.only(UnitKind::Table).props.direction.is_unset(),
@@ -1553,8 +1920,10 @@ fn a_column_order_the_table_states_is_explicit_and_one_it_does_not_is_unset() {
 fn a_list_the_format_produces_itself_is_a_native_bullet_in_every_format() {
     // What separates a real list from a glyph somebody typed, which is the one
     // distinction `literal-bullet` rests on.
+    // `read` and not `read_all`: a native list is one of the situations Excel
+    // has no vocabulary for, and the refusal is committed below.
     let doc = Document::one(Paragraph::of(ARABIC).bullet());
-    for reading in read_all(&doc) {
+    for reading in read(&doc) {
         assert_eq!(
             reading.only(UnitKind::Paragraph).props.bullet,
             Bullet::Native,
@@ -1727,7 +2096,7 @@ fn a_typed_bullet_glyph_is_reported_in_every_format_and_a_real_list_is_not() {
     assert!(agree_on(&typed).contains(&"literal-bullet"));
 
     let native = Document::one(Paragraph::correct_arabic().bullet());
-    assert!(!agree_on(&native).contains(&"literal-bullet"));
+    assert!(!agree_among(&native).contains(&"literal-bullet"));
 }
 
 #[test]
@@ -1949,6 +2318,11 @@ fn every_refusal_is_one_the_design_intended() {
         boxes: &["المؤشر", "الربع الرابع"],
         direction: None,
     });
+    let native_list = Document::one(Paragraph::of(ARABIC).bullet());
+    let two_languages = Document::of([
+        Paragraph::of(ARABIC).language("ar-SA"),
+        Paragraph::of(ARABIC).language("ar-AE"),
+    ]);
 
     let refusing = |doc: &Document| {
         refusals(doc)
@@ -1964,9 +2338,9 @@ fn every_refusal_is_one_the_design_intended() {
     );
     assert_eq!(
         refusing(&relative),
-        ["pptx"],
-        "a direction-relative edge is PowerPoint's alone to refuse: a:pPr/@algn \
-         names physical edges"
+        ["pptx", "xlsx"],
+        "a direction-relative edge is refused by the two formats whose alignment \
+         names physical edges: a:pPr/@algn and alignment/@horizontal"
     );
     assert_eq!(
         refusing(&distributed),
@@ -1975,29 +2349,43 @@ fn every_refusal_is_one_the_design_intended() {
     );
     assert_eq!(
         refusing(&one_slot_filled),
-        ["html"],
-        "CSS has one font stack per element, so a filled Latin slot beside an \
-         empty complex-script one is not a document the web can write"
+        ["html", "xlsx"],
+        "two font slots are PowerPoint's and Word's alone: CSS gives an element \
+         one stack and Excel gives a cell one typeface, and either answers for \
+         every script, so a filled Latin slot beside an empty complex-script one \
+         is not a document those two can write"
     );
     assert_eq!(
         refusing(&delimited_run),
-        ["pptx", "docx"],
+        ["pptx", "docx", "xlsx"],
         "a run that is a bidi boundary is the web's alone: OOXML's runs carry \
          properties and say nothing about isolation or override"
     );
     for inset in [&physical_inset, &logical_inset] {
         assert_eq!(
             refusing(inset),
-            ["pptx", "docx"],
+            ["pptx", "docx", "xlsx"],
             "a paragraph inset from a named edge is the web's alone: OOXML's \
              indents are direction-relative and have no physical spelling"
         );
     }
     assert_eq!(
         refusing(&boxes_reversed),
-        ["pptx", "docx"],
+        ["pptx", "docx", "xlsx"],
         "displaying a container's boxes in the reverse of the stored order is \
-         the web's alone: the other two state a direction and nothing else"
+         the web's alone: the other three state a direction and nothing else"
+    );
+    assert_eq!(
+        refusing(&native_list),
+        ["xlsx"],
+        "a list is Excel's alone to refuse: a cell holds a string, and there is \
+         no list feature for a marker in front of one to come from"
+    );
+    assert_eq!(
+        refusing(&two_languages),
+        ["xlsx"],
+        "a workbook states one language, in its core properties, because \
+         SpreadsheetML has no language slot on a cell"
     );
 
     // Everything else every format states.
@@ -2006,8 +2394,7 @@ fn every_refusal_is_one_the_design_intended() {
         Document::one(Paragraph::correct_arabic()),
         Document::one(Paragraph::of(ARABIC).alignment(Alignment::Center)),
         Document::one(Paragraph::of(ARABIC).alignment(Alignment::Justify)),
-        Document::one(Paragraph::of(ARABIC).bullet()),
-        Document::default().with_table(Table::of(&["المؤشر"])),
+        Document::default().with_table(Table::of(&["المؤشر", "الربع"])),
         Document::one(Paragraph::of(ARABIC)).under(Chain::stating(Direction::Rtl)),
     ] {
         assert!(
@@ -2030,7 +2417,7 @@ fn a_hard_left_edge_under_arabic_is_reported_by_every_format_that_can_state_it()
     let readings = read(&doc);
     assert_eq!(
         readings.iter().map(|r| r.format).collect::<Vec<_>>(),
-        ["pptx", "html"],
+        ["pptx", "html", "xlsx"],
         "the formats with a physical left edge"
     );
     for reading in &readings {
