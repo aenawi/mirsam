@@ -31,6 +31,19 @@ Writes into crates/mirsam-core/tests/fonts/:
 Three fonts, one difference each, so a test that separates them is proving
 the detection and not the shaper.
 
+Each names itself distinctly — `Mirsam Joining`, `Mirsam Nonjoining`,
+`Mirsam Partial` — so the directory doubles as a machine for `mirsam-fonts`
+to index: three files, three families, and a resolver that must hand back the
+right bytes for each. A fourth file exists only for that:
+
+  bold.ttf
+      `Mirsam Joining` again, styled `Bold`, with no GSUB, and named so that
+      it sorts before `joining.ttf`. A family is spread across files and they
+      all state the family name; a document naming `Mirsam Joining` means the
+      regular face. A source that took whichever file it met first answers
+      with this one and shapes nothing. macOS's Arial is eleven files in
+      exactly this shape, and only one of them has any Arabic.
+
 The glyph order is the whole trick, and the tests depend on it:
 
     0            .notdef
@@ -192,12 +205,22 @@ def cmap() -> bytes:
     return header + subtable
 
 
-def name() -> bytes:
+def name(family: str, subfamily: str) -> bytes:
+    """The naming table.
+
+    Each shaping fixture states a family of its own so that a font *source*
+    can be tested against them: three names in one directory, and a resolver
+    that hands back the right bytes for each. `bold.ttf` is the exception and
+    the point of the exception — it shares `Mirsam Joining` and differs only
+    in this table — so a resolver handed a family name has to choose the
+    regular face and can be caught choosing by filename instead.
+    """
+    full = family if subfamily == "Regular" else f"{family} {subfamily}"
     records = [
-        (1, "Mirsam Shaping Test"),
-        (2, "Regular"),
-        (4, "Mirsam Shaping Test"),
-        (6, "MirsamShapingTest"),
+        (1, family),
+        (2, subfamily),
+        (4, full),
+        (6, full.replace(" ", "")),
     ]
     strings = b""
     entries = b""
@@ -344,7 +367,7 @@ def assemble(tables: dict[str, bytes]) -> bytes:
     return font[:at] + struct.pack(">I", adjustment) + font[at + 4 :]
 
 
-def build(shaping: bytes | None) -> bytes:
+def build(shaping: bytes | None, family: str, subfamily: str) -> bytes:
     tables = {
         "OS/2": os2(),
         "cmap": cmap(),
@@ -354,7 +377,7 @@ def build(shaping: bytes | None) -> bytes:
         "hmtx": hmtx(),
         "loca": loca(),
         "maxp": maxp(),
-        "name": name(),
+        "name": name(family, subfamily),
         "post": post(),
     }
     if shaping is not None:
@@ -368,21 +391,34 @@ def build(shaping: bytes | None) -> bytes:
 # ones a real font can leave alone for the reason `partial.ttf` documents.
 PARTIAL_FINA_FROM = 0x0633
 
+# filename -> (family the file names itself, style within it, its GSUB)
+#
+# `bold.ttf` is not a shaping fixture. It is a second file claiming
+# `Mirsam Joining`, sorting before `joining.ttf`, and carrying no GSUB — so a
+# font source that answered a family name with whichever file it met first
+# comes back with a font that shapes nothing, and says so in a test rather
+# than on a user's deck. This is Arial's situation on macOS reduced to its
+# principle: eleven files state that family, and only one of them is the font
+# a document naming `Arial` is asking for.
 FONTS = {
-    "joining.ttf": gsub(),
-    "nonjoining.ttf": None,
-    "partial.ttf": gsub(fina_from=PARTIAL_FINA_FROM),
+    "bold.ttf": ("Mirsam Joining", "Bold", None),
+    "joining.ttf": ("Mirsam Joining", "Regular", gsub()),
+    "nonjoining.ttf": ("Mirsam Nonjoining", "Regular", None),
+    "partial.ttf": ("Mirsam Partial", "Regular", gsub(fina_from=PARTIAL_FINA_FROM)),
 }
 
 
 def main() -> None:
     os.makedirs(OUT_DIR, exist_ok=True)
-    for filename, shaping in FONTS.items():
+    for filename, (family, subfamily, shaping) in FONTS.items():
         path = os.path.join(OUT_DIR, filename)
-        data = build(shaping)
+        data = build(shaping, family, subfamily)
         with open(path, "wb") as handle:
             handle.write(data)
-        print(f"wrote {path} ({len(data)} bytes, {NUM_GLYPHS} glyphs)")
+        print(
+            f"wrote {path} ({len(data)} bytes, {NUM_GLYPHS} glyphs, "
+            f"{family!r} {subfamily!r})"
+        )
 
 
 if __name__ == "__main__":

@@ -134,6 +134,15 @@ not a CLI flag with logic behind it.
 **Adding a format** — new crate implementing `DocumentReader`; add
 `DocumentWriter` only if the format can be faithfully edited in place.
 
+**Resolving a font** — `mirsam-core` never opens one. `ports::FontSource`
+takes a family name and answers with bytes, `mirsam-fonts` implements it over
+the platform's font directories, and `shape` and `coverage` work on what comes
+back. A source answering `None` means this machine has no such font, which is
+a reportable state and not an error. Note which way the claim runs: a font
+that is *here* and cannot draw the text will not draw it anywhere, because a
+`cmap` travels with the font — but a font that is here proves nothing about
+the reader's machine, and no report may suggest otherwise.
+
 **A new adapter must pass the conformance suite unchanged.**
 `crates/mirsam-ooxml/tests/conformance.rs` states each situation once, in the
 shared model's vocabulary, and runs it against every adapter through
@@ -160,15 +169,28 @@ A report for a format the tool reads but cannot write holds the refusal
 `repair` gave and the exit code it used, in place of a repair report — so the
 day a writer lands, it shows up as a diff on a real document.
 
-**The shaping fixtures are fonts, and they are generated too.** The three
+**The shaping fixtures are fonts, and they are generated too.** The four
 under `crates/mirsam-core/tests/fonts/` are written byte by byte by
 `scripts/make-shaping-fixture.py` — no `fontTools`, for the reason the
 document generators avoid `python-pptx` — and regenerate with `make fonts`.
-They differ in one thing each: `joining.ttf` carries `init`/`medi`/`fina`,
+Three differ in one thing each: `joining.ttf` carries `init`/`medi`/`fina`,
 `nonjoining.ttf` has no `GSUB` at all, `partial.ttf` shapes everything except
 the final forms of the right-joining letters. Their glyph order is public and
 the tests name exact glyph ids against it, so changing the generator's layout
-means changing the tests with it.
+means changing the tests with it. The fourth, `bold.ttf`, is not a shaping
+fixture: it claims the family `Mirsam Joining` a second time, sorts before
+`joining.ttf` and shapes nothing, so a font source answering a family name
+with whichever file it met first fails a test rather than a user's deck. That
+is macOS's Arial in miniature — eleven files state that family, and only
+`Arial.ttf` has any Arabic.
+
+**The Unicode name table is generated as well.** `charname.rs` comes from
+`scripts/make-char-names.py`, which reads the UCD Python itself ships — no
+network, no third-party module — and refreshes with `make names`. Never edit
+it by hand. It answers `None` outside the four logical-order Arabic blocks
+rather than inventing a name, and `coverage::judges` is built on that
+refusal: a character the table cannot name is one nothing downstream claims
+anything about.
 
 **A corpus document must be one an application opens.** The hand-built ones —
 `torture.pptx`, `clean.pptx`, `broken-arabic.pptx` from

@@ -38,6 +38,7 @@ Neither knows the other's vocabulary.
 |---|---|---|
 | `DocumentReader` | driven | every format adapter |
 | `DocumentWriter` | driven | only formats that can be faithfully edited |
+| `FontSource` | driven | `mirsam-fonts` |
 | CLI | driving | `mirsam-cli` |
 
 `DocumentWriter` is deliberately separate from `DocumentReader`. PDF can be
@@ -155,9 +156,14 @@ crates/
                    required to take — the expectation, from the text alone
     shape.rs       what a font actually does with it: rustybuzz over caller-
                    supplied bytes, reported letter by letter and never judged
+    coverage.rs    the question underneath shaping — has the font the letter
+                   at all — over the characters a complex-script slot answers
+                   for, and no others
+    charname.rs    the Arabic script's Unicode names, so a coverage finding
+                   reads U+067E ARABIC LETTER PEH. Generated; make names
     diagnostic.rs  Severity, Diagnostic, Evidence, Report
     fix.rs         format-agnostic repairs
-    ports.rs       DocumentReader / DocumentWriter
+    ports.rs       DocumentReader / DocumentWriter / FontSource
     rules/         the rule set
   mirsam-ooxml/    adapter — PPTX and DOCX; XLSX will share the two modules
                    below that name no element: the package and the scaffold
@@ -189,6 +195,15 @@ crates/
                    Resolved the same way inherit.rs resolves PowerPoint's,
                    and sharing its theme reader, because a fontScheme is
                    DrawingML wherever it is stored
+  mirsam-fonts/    adapter — which file on this machine draws the typeface a
+                   document names. The one piece of the shaping and coverage
+                   checks that is about the world rather than about Arabic
+    lib.rs         the platform's font directories, indexed by family name,
+                   built once and lazily; the regular face wins a contested
+                   family, because a document naming Arial means Arial.ttf
+    sfnt.rs        each file's naming table read on its own — a table
+                   directory and a few kilobytes, not half a gigabyte of
+                   outlines — with ttf-parser decoding the records
   mirsam-cli/      driving adapter — argument parsing and rendering only
     tests/golden.rs  the golden corpus: every .pptx and .docx under
                    tests/fixtures/ against its committed report of what the

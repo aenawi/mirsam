@@ -237,6 +237,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "mirsam-fonts"
+version = "0.1.0"
+dependencies = [
+ "mirsam-core",
+ "ttf-parser",
+]
+
+[[package]]
 name = "mirsam-ooxml"
 version = "0.1.0"
 dependencies = [

@@ -80,6 +80,10 @@ fixtures: ## Regenerate the hand-built corpus documents, then their reports
 fonts: ## Regenerate the hand-built fonts the shaping tests run against
 	@python3 scripts/make-shaping-fixture.py
 
+names: ## Regenerate the Unicode name table from the UCD Python ships
+	@python3 scripts/make-char-names.py
+	@cargo fmt --all
+
 validate-fixtures: ## Validate every corpus document against the ECMA-376 schemas (needs uv)
 	@command -v uv >/dev/null 2>&1 || { \
 		echo "uv not installed; alternatively: pip install lxml && python3 scripts/validate-ooxml.py"; \
@@ -108,5 +112,5 @@ install: ## Install mirsam into ~/.cargo/bin
 	@cargo install --path crates/mirsam-cli
 
 .PHONY: help build test fmt fmt-check lint doc clean version check-version \
-        codename release-name msrv audit-deps golden fixtures fonts \
+        codename release-name msrv audit-deps golden fixtures fonts names \
         validate-fixtures corpus verify pre-push hooks-install install
