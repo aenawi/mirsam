@@ -127,7 +127,7 @@
       "+<a:bodyPr numCol=\"2\" rtlCol=\"1\"/>"
     ]
   },
-  "deck": "broken-arabic.pptx",
+  "document": "broken-arabic.pptx",
   "exit_codes": {
     "audit": 1,
     "audit --strict": 1,

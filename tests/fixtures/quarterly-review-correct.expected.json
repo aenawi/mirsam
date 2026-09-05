@@ -1,0 +1,28 @@
+{
+  "audit": {
+    "blocking": false,
+    "diagnostics": [],
+    "file": "quarterly-review-correct.docx",
+    "format": "docx",
+    "strict": false,
+    "summary": {
+      "arabic_units": 14,
+      "errors": 0,
+      "mixed_units": 3,
+      "notes": 0,
+      "units_scanned": 17,
+      "warnings": 0
+    }
+  },
+  "changed_parts": null,
+  "document": "quarterly-review-correct.docx",
+  "exit_codes": {
+    "audit": 0,
+    "audit --strict": 0,
+    "repair": 2,
+    "repair --strict": 2
+  },
+  "repair": {
+    "refused": ".docx can be audited but not yet repaired; `mirsam audit` reads it, and the writer is scheduled in docs/ROADMAP.md"
+  }
+}

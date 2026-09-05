@@ -820,9 +820,88 @@ there — and the corpus still has no `.docx`, which is 3.5's to add.
 
 [ADR 0007]: adr/0007-an-inherited-default-is-not-a-choice.md
 
-### 3.5 Conformance suite `[~]`
+### 3.5 Conformance suite `[x]`
 One suite both adapters run unchanged. If DOCX needs a core change to pass, the
 abstraction was wrong — fix the abstraction, not the test.
+
+Every test file before this one asks whether an adapter reads its own format.
+`crates/mirsam-ooxml/tests/conformance.rs` asks the question M3 was actually
+testing: **do the adapters agree?** A case states a situation once, in the
+shared model's own vocabulary — "a paragraph of Arabic with no direction
+declared, under a chain that states nothing" — and each format lowers it into
+a real package on disk, which the suite opens through `DocumentReader` and
+nothing else. **No case that asserts what the tool reports names an element,
+an attribute or a format** — the only assertions that name one are the two
+refusals below, which exist to say where the formats differ. A case that had
+to know which adapter it was looking at would be the hexagon leaking, and the
+thing to fix would be the abstraction rather than the case, which is what this
+item says.
+
+*Twenty-seven cases in four groups.* The port's own contract — a stable
+format name, a location naming a part the package really holds, unique ids
+stable across two scans, an ordinal on a paragraph and none on a container,
+text that comes back in logical order carrying nothing the reader invented.
+The shared model — `Explicit` where the unit states a value, `Unset` where
+nothing does, `Inherited` with an origin a reviewer can open where the chain
+supplies one, a table as a container beside the paragraphs in its cells. Then
+the load-bearing group, which asserts the same *rules* fire on the same
+situation in both formats: undeclared Arabic, Arabic declared left-to-right,
+correct Arabic, English, a table with and without a column order, a chain that
+agrees and a chain that contradicts, a typed bullet, a bidi control, a
+pre-shaped run, an empty complex-script slot.
+
+*The answer to "did DOCX need a core change to pass" is no, and the suite was
+written to be able to say so.* Nothing in `mirsam-core` moved for this item.
+The one thing that did move was the corpus, which is the other half of the
+claim: a suite that only reads packages it built itself proves the two
+adapters agree about XML this repository wrote.
+
+**The formats are not identical, and pretending otherwise would be the second
+way to make the file lie.** Word's `w:jc` is direction-relative — its
+`left` is the *start* edge ([ECMA-376] Part 1 §17.18.44) — so a hard left edge
+cannot be written in Word at all. DrawingML is the exact mirror: `a:pPr/@algn`
+names physical edges and has no direction-relative spelling. Neither is a gap
+in an adapter, and neither may be silently skipped, so a vocabulary that cannot
+state a situation returns `Inexpressible` **with the reason**, the case runs
+against the formats that can, and `every_refusal_is_one_the_design_intended`
+holds the whole list of refusals against the committed one. It is two entries
+long, they are the same fact seen from either side, and a format that quietly
+stopped expressing anything else fails there rather than passing. That is also
+what settles the one asymmetry a user could mistake for missing coverage:
+`alignment-incoherent` is structurally silent on Word because Word has no way
+to write the defect, and a case named for that fact
+(`a_hard_left_edge_under_arabic_is_reported_by_the_format_that_can_state_it`)
+asserts it, rather than leaving it to a paragraph of `AGENTS.md`.
+
+*Two Word documents joined the golden corpus*, built by
+`scripts/make-word-fixture.py` the way `make-torture-fixture.py` builds the
+decks — hand-written XML in a hand-written container, deterministic, and
+schema-valid against `wml.xsd`. `quarterly-review.docx` carries every defect
+the reader can find next to text that is correct and text that is English;
+`quarterly-review-correct.docx` is the same document authored properly and
+must be left completely alone, which is what makes exit code `0` provable for
+`.docx` and not only for `.pptx`. Both exercise Word's own chain, because a
+document that never inherits anything would let a broken `StyleSheet` pass:
+`Normal` states the document's right-to-left default, `EnglishBody`
+contradicts the Arabic under it, and `RtlTable` supplies a column order the
+table does not state.
+
+**`repair` refuses a `.docx`, and the corpus now records the refusal rather
+than working around it.** A report for a readable format with no writer holds
+the sentence the binary printed and the exit code it used — `2`, a usage
+error, because the audit above it read the file perfectly well. The day the
+Word writer lands, that shows up as a diff on a real document instead of as a
+test somebody remembered to update. The three OPC-level invariants in
+`corpus_packages.rs` — content types, relationships resolving, ASCII item
+names — now run over every corpus document rather than the decks alone, which
+is the package layer being held to the guarantee the second format reuses it
+for; the checks that name `p:spTree` or a notes master stay with the decks.
+
+*Acceptance:* `cargo test` runs the conformance suite against both adapters
+with no case skipped and no adapter special-cased, and `make golden`
+regenerates a corpus that now holds documents of both formats. The five
+committed reports changed in one line each — the key naming the file is
+`document` rather than `deck`, because the corpus is no longer only decks.
 
 ---
 

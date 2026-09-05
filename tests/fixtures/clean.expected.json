@@ -15,7 +15,7 @@
     }
   },
   "changed_parts": {},
-  "deck": "clean.pptx",
+  "document": "clean.pptx",
   "exit_codes": {
     "audit": 0,
     "audit --strict": 0,

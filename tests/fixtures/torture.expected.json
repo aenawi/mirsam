@@ -216,7 +216,7 @@
       "+<a:t>بند أول"
     ]
   },
-  "deck": "torture.pptx",
+  "document": "torture.pptx",
   "exit_codes": {
     "audit": 1,
     "audit --strict": 1,

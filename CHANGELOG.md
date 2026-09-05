@@ -11,6 +11,30 @@ Working towards byte-preserving `repair` for PPTX. See
 
 ### Added
 
+- **One conformance suite, both adapters.**
+  `crates/mirsam-ooxml/tests/conformance.rs` states each situation once, in the
+  shared text model's vocabulary, and runs it against PPTX and DOCX through
+  `DocumentReader` alone: the same situation must come back as the same
+  finding, with the same evidence, whichever application wrote the file. No
+  case that asserts what the tool reports names an element, an attribute or a
+  format. No line of `mirsam-core` changed to make DOCX pass, which is what the
+  suite existed to find out. Where a format genuinely cannot state a situation
+  — Word's `w:jc` is direction-relative, DrawingML's `a:pPr/@algn` is physical
+  — the vocabulary returns the reason and the committed list of refusals is
+  asserted, so nothing is silently skipped.
+- **Two Word documents joined the golden corpus**, built by
+  `scripts/make-word-fixture.py`: `quarterly-review.docx` carries every defect
+  the reader can find beside text that is correct and text that is English,
+  and `quarterly-review-correct.docx` is the same document authored properly,
+  which the tool must leave completely alone. Both exercise Word's style
+  chain. `make validate-fixtures` now validates `.docx` against `wml.xsd` as
+  well, and the OPC-level invariants in `corpus_packages.rs` run over every
+  corpus document rather than the decks alone.
+- The golden corpus records the **refusal** `repair` gives a readable format
+  with no writer — the message and the exit code — in place of a repair
+  report, so the day the Word writer lands it shows up as a diff on a real
+  document. The key naming the file in an expected report is now `document`
+  rather than `deck`; the corpus is no longer only decks.
 - **Word tables are audited.** A `w:tbl` is now a container unit of its own —
   `word/document.xml#tbl1`, the same shape a PowerPoint table carries — and
   `container-direction` reports one whose cells read right to left without the

@@ -134,21 +134,42 @@ not a CLI flag with logic behind it.
 **Adding a format** — new crate implementing `DocumentReader`; add
 `DocumentWriter` only if the format can be faithfully edited in place.
 
-**Any change to what is reported or written** shows up in the golden corpus:
-`cargo test` compares every deck under `tests/fixtures/` with its committed
-`<deck>.expected.json` and fails on any difference. When the difference is
-intended, run `make golden`, read the diff, and commit the regenerated
-reports with the change that explains them. Never regenerate to make a
-failure you do not understand go away. A new deck is one file dropped into
-that directory plus `make golden`.
+**A new adapter must pass the conformance suite unchanged.**
+`crates/mirsam-ooxml/tests/conformance.rs` states each situation once, in the
+shared model's vocabulary, and runs it against every adapter through
+`DocumentReader` — the same situation must come back as the same finding
+whichever application wrote the file. No case that asserts what the tool
+reports names an element, an attribute or a format, and none may: a case that
+had to know which adapter it was looking at is the hexagon leaking, and the
+thing to fix is the abstraction, not the case. A format that genuinely cannot
+state a situation — Word has no way to write a hard left edge, DrawingML no
+way to write a direction-relative one — returns `Inexpressible` with the
+reason, and the committed list of those refusals is asserted, so a format that
+quietly stopped expressing something fails rather than passes.
 
-**A corpus deck must be a deck an application opens.** The hand-built decks —
-`torture.pptx`, `clean.pptx`, `broken-arabic.pptx` — come from
-`scripts/make-torture-fixture.py`; regenerate with `make fixtures`, never by
-editing the `.pptx`. `cargo test` asserts the structural invariants of every
-deck (`corpus_packages.rs`), and `make validate-fixtures` validates all of
-them against the published ECMA-376 schemas. A deck PowerPoint offers to
-repair cannot answer "does PowerPoint open the repaired file without a
+**Any change to what is reported or written** shows up in the golden corpus:
+`cargo test` compares every `.pptx` and `.docx` under `tests/fixtures/` with
+its committed `<document>.expected.json` and fails on any difference. When the
+difference is intended, run `make golden`, read the diff, and commit the
+regenerated reports with the change that explains them. Never regenerate to
+make a failure you do not understand go away. A new document is one file
+dropped into that directory plus `make golden`. Two corpus documents may not
+share a stem: the report is named for it.
+
+A report for a format the tool reads but cannot write holds the refusal
+`repair` gave and the exit code it used, in place of a repair report — so the
+day a writer lands, it shows up as a diff on a real document.
+
+**A corpus document must be one an application opens.** The hand-built ones —
+`torture.pptx`, `clean.pptx`, `broken-arabic.pptx` from
+`scripts/make-torture-fixture.py`, and `quarterly-review.docx` and
+`quarterly-review-correct.docx` from `scripts/make-word-fixture.py` —
+regenerate with `make fixtures`, never by editing the package. `cargo test`
+asserts the structural invariants of every one of them
+(`corpus_packages.rs`: the OPC-level checks run over both formats, the
+PresentationML ones over the decks), and `make validate-fixtures` validates
+all of them against the published ECMA-376 schemas. A document the application
+offers to repair cannot answer "does it open the repaired file without a
 prompt", which is the M1 application check.
 
 ### Non-negotiable invariants
