@@ -32,14 +32,29 @@ mod exit {
     pub const UNREADABLE: u8 = 3;
 }
 
+/// Shown by `--version` only. `-V` stays the bare version, so scripts that
+/// parse it keep working; the attribution is something a reader asks for, never
+/// something printed ahead of a report a pipe is waiting on.
+const LONG_VERSION: &str = concat!(
+    env!("CARGO_PKG_VERSION"),
+    "\nCopyright (C) 2026 Hashem Aldhaheri and contributors",
+    "\nLicense: ",
+    env!("CARGO_PKG_LICENSE"),
+    " — see LICENSE and CREDITS.md",
+    "\n",
+    env!("CARGO_PKG_REPOSITORY"),
+);
+
 #[derive(Parser)]
 #[command(
     name = "mirsam",
     version,
+    long_version = LONG_VERSION,
     about = "Audit and repair Arabic RTL, bidi and typography in documents",
     long_about = "mirsam resolves what Arabic text will actually look like when rendered, \
                   using the Unicode bidirectional algorithm, and reports a defect only when \
-                  the resolved order is wrong — not merely when an attribute is absent."
+                  the resolved order is wrong — not merely when an attribute is absent.",
+    arg_required_else_help = true
 )]
 struct Cli {
     #[command(subcommand)]

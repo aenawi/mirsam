@@ -558,6 +558,15 @@ read-only PDF adapter. See [`docs/PLAN.md`](docs/PLAN.md) and
 
 ### Changed
 
+- **`--version` carries attribution, and a bare invocation prints help.** The
+  long form names the copyright holder, the licence and the repository;
+  `-V` stays the bare `mirsam 0.1.0`, so anything parsing it is unaffected. The
+  strings come from Cargo metadata rather than a second copy that can drift
+  from `Cargo.toml`. Attribution is something a reader asks for, so no run that
+  produces a report prints a banner ahead of it — a header on stdout is a
+  header in whatever the pipe on the other end is parsing. `mirsam` with no
+  arguments now prints the help to *stderr* and exits `2` (`exit::USAGE`),
+  which leaves stdout empty for the same reason.
 - **The conformance suite states a table of two cells where it stated one.** A
   one-cell table has no column order in any format; PowerPoint and Word happen
   to emit a container for it anyway, and Excel does not, because a worksheet's
