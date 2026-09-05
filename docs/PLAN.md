@@ -734,8 +734,91 @@ item's.
 
 [ECMA-376]: https://ecma-international.org/publications-and-standards/standards/ecma-376/
 
-### 3.4 Tables `[ ]`
+### 3.4 Tables `[x]`
 `w:bidiVisual` only where semantic reading order is RTL.
+
+A Word table is the container 2.4 already built. `w:tblPr/w:bidiVisual` says
+the cells are displayed right to left with the file's own ordering unchanged —
+"the first logical cell with text is stored first in the file format, and
+displayed on the rightmost" ([ECMA-376] Part 1 §17.4.1) — which is word for
+word what `a:tblPr/@rtl` says in DrawingML. So a `w:tbl` lowers onto
+`UnitKind::Table` under the same id shape (`word/document.xml#tbl1`), and
+`container-direction` asks the only question the item states: **does the text
+in this table read right to left, and does its column order agree?** Nothing
+in `mirsam-core` needed a new concept for that, which is what M3 is testing.
+
+The paragraphs in the cells stay units in their own right, because Word does
+not make a cell's text inherit the table's column order. What each gains is a
+location naming its cell — `table 1 row 2 cell 3` — which is the one thing
+Word names around body text and, on a table of any size, the difference
+between a finding a reviewer can act on and a hunt. `w:tbl` nests, so tables
+are held on a stack exactly as 3.2 holds paragraphs, and a nested table's text
+belongs to both containers: each judges it under its own direction.
+
+**A table style can state `w:bidiVisual`, so table styles could not stay out
+of `style.rs`.** `CT_TblPrBase` carries it, which means a table that names a
+right-to-left table style is laid out right to left while its own `w:tblPr`
+says nothing. Reading that as undeclared would report `container-direction` on
+every correctly-styled Arabic table in the document — invariant 2 reached
+through the adapter, which is the trap 3.2 and 3.3 each spent an item
+avoiding. `StyleSheet::resolve_table` walks the chain the table names, or the
+document's default table style for a table naming none, and records the answer
+as `Inherited` with the style that stated it.
+
+*That makes a container inherit, which nothing did before, and ADR 0007's
+consequences said no container would.* The rule had an arm for it that
+returned silence unconditionally, on the stated premise that a container's
+direction "is stated on the container or not at all". 3.4 makes that premise
+false, so the arm now does what [ADR 0007] §1 decides for every other
+inherited value: **agrees with the text, silent; contradicts it, reported
+exactly as an absent one**, at the severity an absent one carries (§3), naming
+the style that supplied it (§5), and repaired on the table rather than on the
+style (§6). This is the one core change in M3 so far. It adds no Word
+vocabulary — it is `Resolved<Direction>` and `bidi::dominant_direction`, both
+already there — and it applies to a PowerPoint container the day one can
+inherit. The ADR carries a dated note recording it.
+
+Word's hierarchy also puts a table style *below* the paragraph style and above
+`w:docDefaults` ([ECMA-376] Part 1 §17.7.2), so a cell's paragraph reaches one
+too, and `StyleSheet::resolve` gained that hop. **`w:tblStylePr` is still not
+read**: a table style's conditional formatting applies only to the parts
+`w:tblLook` turns on and only at the cell positions it names, and reading it
+without that mask would put a header row's formatting on every cell. Only the
+unconditional `w:pPr` and `w:rPr` are taken, which is what Word applies
+everywhere in the table. 3.3's case putting a whole `w:pPr` in a
+`w:tblStylePr` still holds and still asserts it.
+
+*One defect fixed on the way past.* `w:tblPrChange` holds a table's column
+order as it stood **before** a tracked change, in the same element that states
+it now and written after it — so the reader would have taken the layout
+somebody has already corrected. The same is true one level down of
+`w:pPrChange`, which 3.2 was reading: a paragraph whose alignment was revised
+reported the value it no longer has. Every `*Change` in the family is now
+skipped, on the same depth counter `w:sectPr` and `mc:Fallback` use.
+
+*Acceptance:* thirteen new cases across
+`crates/mirsam-ooxml/tests/docx.rs` and `tests/style.rs`, and two in
+`mirsam-core`. Four are load-bearing.
+`an_arabic_table_laid_out_left_to_right_is_the_flagship_table_finding` is the
+item's own sentence run in both directions — the Arabic table with no
+`w:bidiVisual` is reported, and the same table with one, and an English table
+with none, are both silent.
+`a_table_style_supplies_the_column_order_the_table_did_not_state` is the false
+positive that made table styles necessary, and
+`a_style_chain_answers_the_table_and_a_contradicting_answer_is_still_reported`
+is the other half of the same walk, which a reader that resolved the chain and
+then trusted it would fail.
+`a_superseded_direction_in_a_revision_record_is_not_the_tables` puts a
+`w:bidiVisual w:val="0"` inside a `w:tblPrChange` beside the live one, and a
+scanner matching the element without the guard reads the corrected layout as
+current. `a_drawingml_table_is_not_a_word_table` is `token.rs`'s claim run
+once more in this direction.
+
+The golden corpus did not move: no `.pptx` reads differently for any of it —
+no PowerPoint container can inherit, so the rule's changed arm is unreachable
+there — and the corpus still has no `.docx`, which is 3.5's to add.
+
+[ADR 0007]: adr/0007-an-inherited-default-is-not-a-choice.md
 
 ### 3.5 Conformance suite `[~]`
 One suite both adapters run unchanged. If DOCX needs a core change to pass, the

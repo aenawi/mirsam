@@ -11,6 +11,21 @@ Working towards byte-preserving `repair` for PPTX. See
 
 ### Added
 
+- **Word tables are audited.** A `w:tbl` is now a container unit of its own —
+  `word/document.xml#tbl1`, the same shape a PowerPoint table carries — and
+  `container-direction` reports one whose cells read right to left without the
+  `w:tblPr/w:bidiVisual` that reverses its columns, and stays silent where the
+  column order already agrees with the text. The paragraphs in the cells stay
+  units in their own right and now say which cell they are in:
+  `location.container` reads `table 1 row 2 cell 3`. Nested tables are each a
+  container, and the text of an inner one is laid out by the outer as well.
+- A table's column order is resolved through the **table style chain** — the
+  style its `w:tblStyle` names, the `w:basedOn` walk above it, or the
+  document's default table style — and a table style now also answers the
+  paragraphs in its cells, below their own style and above `w:docDefaults`
+  ([ECMA-376] Part 1 §17.7.2). Conditional formatting (`w:tblStylePr`) is
+  still not read: it applies only where `w:tblLook` and a cell's position say
+  it does.
 - **`mirsam-ooxml::style`** — Word's style chain. A property a paragraph does
   not state is now taken from the character style its run names, the paragraph
   style it names (or the document's default one, where it names none), the
@@ -48,6 +63,23 @@ Working towards byte-preserving `repair` for PPTX. See
   read a document's booleans through one definition rather than Word's reader
   depending on PowerPoint's.
 
+- **A container's direction can now be inherited, and an inherited one that
+  contradicts the text is reported.** `container-direction` used to treat any
+  inherited direction as the design and stay silent, because no adapter could
+  produce one. A Word table style can, so the rule applies
+  [ADR 0007](docs/adr/0007-an-inherited-default-is-not-a-choice.md) §1's
+  agreement test: a column order that agrees with the text is silent, one that
+  contradicts it is reported exactly as an absent one and names the style that
+  supplied it. No `.pptx` reads differently — no PowerPoint container can
+  inherit.
+- Revision records are no longer read as the document. `w:pPrChange`,
+  `w:tblPrChange` and the rest of the `*Change` family hold the properties as
+  they stood *before* a tracked change, in the same elements that state them
+  now and written after them — so a paragraph whose alignment had been revised
+  reported the value it no longer has, and a table would have taken its column
+  order from a layout somebody had already corrected.
+
+[ECMA-376]: https://ecma-international.org/publications-and-standards/standards/ecma-376/
 [MS-OE376]: https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oe376/26ecf09a-0f0b-4574-9907-ebd1ddf3015f
 
 - **`mirsam-ooxml::package`** — the shared OOXML package layer, and the

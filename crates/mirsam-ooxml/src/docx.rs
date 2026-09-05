@@ -8,7 +8,35 @@
 //! What is read here is the paragraph and the properties the rules judge:
 //! `w:p`, its `w:pPr/w:bidi` and `w:pPr/w:jc`, and from the run properties the
 //! complex-script language `w:lang/@w:bidi` and the fonts `w:rFonts/@w:cs` and
-//! `@w:ascii`.
+//! `@w:ascii`. A `w:tbl` is a unit of its own beside them.
+//!
+//! ## A table is a container, and `w:bidiVisual` is its direction
+//!
+//! `w:tblPr/w:bidiVisual` says the cells are displayed right to left: the
+//! ordering in the file is unchanged, and "the first logical cell with text is
+//! stored first in the file format, and displayed on the rightmost"
+//! ([ECMA-376] Part 1 §17.4.1). That is the same statement DrawingML spells
+//! `a:tblPr/@rtl`, so a Word table lowers onto the same [`UnitKind::Table`]
+//! container the PowerPoint adapter produces, under the same id shape
+//! (`word/document.xml#tbl1`), and `container-direction` judges it from the
+//! text it lays out. **A table needs `w:bidiVisual` exactly where the text in
+//! it reads right to left**, which is the rule's question and not this
+//! adapter's.
+//!
+//! The paragraphs in the cells stay units in their own right: Word does not
+//! make a cell's text inherit the table's column order, so both have to be
+//! right and both are reported separately. What each of them gains here is a
+//! location that names its cell — `table 1 row 2 cell 3` — because a finding
+//! on one paragraph of a large table is otherwise a hunt.
+//!
+//! ## Revision records are not the document
+//!
+//! `w:pPrChange`, `w:tblPrChange` and the rest of the `*Change` family hold
+//! the properties as they stood *before* a tracked change, in the same
+//! elements that state them now and written after them. Reading one would
+//! report a value the author has already replaced — and on a table, would take
+//! the column order from the layout somebody has just corrected. Everything
+//! inside one is skipped.
 //!
 //! ## `w:jc` is direction-relative, so this adapter never reports a hard left
 //!
@@ -52,6 +80,7 @@
 //! forbids.
 //!
 //! [`DocumentWriter`]: mirsam_core::ports::DocumentWriter
+//! [ECMA-376]: https://ecma-international.org/publications-and-standards/standards/ecma-376/
 //! [MS-OE376]: https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oe376/26ecf09a-0f0b-4574-9907-ebd1ddf3015f
 
 use crate::inherit::{ThemeFont, ThemeScript};
@@ -60,7 +89,9 @@ use crate::style::{StyleSheet, theme_reference};
 use crate::token::is_true;
 use mirsam_core::error::{Error, Result};
 use mirsam_core::ports::DocumentReader;
-use mirsam_core::text::{Alignment, Bullet, Direction, Location, Properties, Resolved, TextUnit};
+use mirsam_core::text::{
+    Alignment, Bullet, Direction, Location, Properties, Resolved, TextUnit, UnitKind,
+};
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::{Reader, XmlVersion};
 use std::path::{Path, PathBuf};
@@ -119,6 +150,98 @@ fn unit_id(part: &str, index: usize) -> String {
     format!("{part}#p{index}")
 }
 
+/// The unit id this adapter issues for a table: the part name and the table's
+/// 1-based ordinal. The same shape `ppt/slides/slide1.xml#tbl2` carries, so a
+/// consumer that already echoes PowerPoint's ids needs nothing new for Word's.
+fn table_id(part: &str, index: usize) -> String {
+    format!("{part}#tbl{index}")
+}
+
+/// Accumulates a table while the rows, cells and paragraphs inside it are
+/// being parsed.
+///
+/// Held on a stack for the reason [`ParagraphBuilder`] is: `w:tbl` nests — a
+/// table sits in a cell of another — and a single slot would let the inner
+/// `</w:tbl>` emit the inner table and leave the outer one with nothing to
+/// close.
+struct TableBuilder {
+    /// The ordinal the unit id carries, fixed when the table opens.
+    index: usize,
+    /// Every paragraph this table lays out, one per line — including the ones
+    /// in a table nested inside it, because the outer table lays those out
+    /// too. Each table judges that text under its own direction, and both
+    /// have to be right.
+    text: String,
+    /// `w:tblPr/w:bidiVisual`, or what the table style chain supplies.
+    direction: Resolved<Direction>,
+    /// `w:tblPr/w:tblStyle/@w:val`: the table style this resolves against.
+    style: Option<String>,
+    /// 1-based `w:tr` and `w:tc` ordinals, for the location a paragraph in a
+    /// cell carries.
+    row: usize,
+    cell: usize,
+}
+
+impl TableBuilder {
+    fn new(index: usize) -> Self {
+        Self {
+            index,
+            text: String::new(),
+            direction: Resolved::Unset,
+            style: None,
+            row: 0,
+            cell: 0,
+        }
+    }
+
+    fn push(&mut self, paragraph: &str) {
+        if !self.text.is_empty() {
+            self.text.push('\n');
+        }
+        self.text.push_str(paragraph);
+    }
+
+    /// Where in this table a paragraph opening now sits, for the location the
+    /// finding on it carries.
+    ///
+    /// `None` until a cell has actually opened: a `w:p` between rows is not
+    /// something the schema allows, and inventing coordinates for one would
+    /// put a claim in a report that nothing in the file supports.
+    fn cell_location(&self) -> Option<String> {
+        (self.row > 0 && self.cell > 0)
+            .then(|| format!("table {} row {} cell {}", self.index, self.row, self.cell))
+    }
+
+    /// The unit, unless the table laid out no text at all.
+    ///
+    /// The style chain is walked here rather than when `w:tblStyle` is read,
+    /// because a stylesheet is what answers it and the caller holds that.
+    fn finish(mut self, part: &str, styles: Option<&StyleSheet>) -> Option<TextUnit> {
+        if self.text.trim().is_empty() {
+            return None;
+        }
+        if let Some(styles) = styles {
+            styles.resolve_table(self.style.as_deref(), &mut self.direction);
+        }
+        Some(
+            TextUnit::new(table_id(part, self.index), self.text)
+                .with_kind(UnitKind::Table)
+                .with_props(Properties {
+                    direction: self.direction,
+                    ..Default::default()
+                })
+                .with_location(Location {
+                    part: part.to_string(),
+                    paragraph: None,
+                    // The table *is* the unit; there is nothing enclosing it
+                    // that Word names. A cell inside it is named on the
+                    // paragraphs the cell holds.
+                    container: None,
+                }),
+        )
+    }
+}
+
 /// Accumulates the properties of the paragraph currently being parsed.
 ///
 /// Held on a stack rather than in a single slot, because WordprocessingML
@@ -147,6 +270,9 @@ struct ParagraphBuilder {
     /// a theme answers it, and which one that is is not known until the
     /// paragraph closes.
     complex_named: Option<String>,
+    /// The table cell this paragraph sits in — `table 1 row 2 cell 3` — fixed
+    /// when the paragraph opens, so a nested table cannot rewrite it.
+    cell: Option<String>,
 }
 
 impl ParagraphBuilder {
@@ -159,7 +285,11 @@ impl ParagraphBuilder {
     /// that do not implement themes. Both are the paragraph's own statement,
     /// so both outrank every style — a chain that overwrote them would report
     /// a style's font on a paragraph that named one itself.
-    fn settle(&mut self, styles: Option<&StyleSheet>) {
+    ///
+    /// `table` is `Some` when this paragraph is inside a table, holding the
+    /// style that table names; see [`StyleSheet::resolve`] for where in the
+    /// chain it sits.
+    fn settle(&mut self, styles: Option<&StyleSheet>, table: Option<Option<&str>>) {
         self.props.complex_font = match (
             self.complex_reference
                 .and_then(|r| styles.and_then(|s| s.theme_font(r))),
@@ -173,6 +303,7 @@ impl ParagraphBuilder {
             styles.resolve(
                 self.style.as_deref(),
                 self.run_style.as_deref(),
+                table,
                 &mut self.props,
             );
         }
@@ -186,8 +317,9 @@ impl ParagraphBuilder {
                 part: part.to_string(),
                 paragraph: Some(index),
                 // Word names no enclosing shape for body text. A table cell
-                // would be one, and tables are PLAN §3.4.
-                container: None,
+                // is the one thing it does name, and a finding that does not
+                // say which cell sends a reviewer through the whole table.
+                container: self.cell,
             })
     }
 }
@@ -200,6 +332,10 @@ struct PartScan {
     open: Vec<ParagraphBuilder>,
     /// Paragraphs opened so far, which is what a unit id's ordinal counts.
     seen: usize,
+    /// Open tables, outermost first. See [`TableBuilder`].
+    tables: Vec<TableBuilder>,
+    /// Tables opened so far, which is what a table id's ordinal counts.
+    tables_seen: usize,
     in_text: bool,
     /// Open `w:sectPr` elements. A section's `w:bidi` and `w:jc` are the
     /// section's, not the paragraph's — and the last section's `w:sectPr`
@@ -213,12 +349,35 @@ struct PartScan {
     /// text box's content appears once in each. Reading both would produce two
     /// units for one paragraph, and so report every defect in it twice.
     fallback: usize,
+    /// Open revision records — `w:pPrChange`, `w:tblPrChange` and the rest of
+    /// the `*Change` family.
+    ///
+    /// A revision record holds the properties as they were *before* a tracked
+    /// change, in the same elements that state them now, and it is written
+    /// after them: `w:pPr/w:pPrChange/w:pPr/w:jc` is the alignment the author
+    /// replaced. Reading one would report the superseded value as the
+    /// document's, and on a `w:tblPr/w:tblPrChange` it would take the table's
+    /// direction from the layout somebody has already corrected.
+    revision: usize,
 }
+
+/// Revision records: elements holding the properties a tracked change
+/// replaced. Every `*Change` in the schema that carries a property this
+/// adapter reads, plus the section one for symmetry with `w:sectPr`.
+const REVISION_RECORDS: [&str; 7] = [
+    "w:pPrChange",
+    "w:rPrChange",
+    "w:sectPrChange",
+    "w:tblPrChange",
+    "w:tblPrExChange",
+    "w:tcPrChange",
+    "w:trPrChange",
+];
 
 impl PartScan {
     /// Whether events at this point describe content this adapter reads.
     fn reading(&self) -> bool {
-        self.fallback == 0
+        self.fallback == 0 && self.revision == 0
     }
 
     /// The innermost open paragraph, if any.
@@ -233,11 +392,23 @@ impl PartScan {
     }
 
     fn close_paragraph(&mut self, part: &str, styles: Option<&StyleSheet>) {
-        if let Some(mut b) = self.open.pop()
-            && !b.text.trim().is_empty()
-        {
-            b.settle(styles);
-            self.units.push(b.finish(part));
+        let Some(mut b) = self.open.pop() else { return };
+        // Every open table lays this text out, the outer ones included: a
+        // table nested in a cell puts its text on both.
+        for table in &mut self.tables {
+            table.push(&b.text);
+        }
+        if b.text.trim().is_empty() {
+            return;
+        }
+        let table = self.tables.last().map(|t| t.style.clone());
+        b.settle(styles, table.as_ref().map(Option::as_deref));
+        self.units.push(b.finish(part));
+    }
+
+    fn close_table(&mut self, part: &str, styles: Option<&StyleSheet>) {
+        if let Some(table) = self.tables.pop() {
+            self.units.extend(table.finish(part, styles));
         }
     }
 
@@ -257,10 +428,62 @@ impl PartScan {
                 // paragraph does not shift the ordinals after it.
                 self.seen += 1;
                 if has_content {
+                    let cell = self.tables.last().and_then(TableBuilder::cell_location);
                     self.open.push(ParagraphBuilder {
                         index: self.seen,
+                        cell,
                         ..Default::default()
                     });
+                }
+            }
+            // Counted like `w:p`, for the same reason. A self-closing `w:tbl`
+            // lays out nothing and so opens no builder; the `End` that would
+            // have closed it never arrives.
+            "w:tbl" => {
+                self.tables_seen += 1;
+                if has_content {
+                    self.tables.push(TableBuilder::new(self.tables_seen));
+                }
+            }
+            "w:tr" => {
+                if let Some(t) = self.tables.last_mut() {
+                    t.row += 1;
+                    t.cell = 0;
+                }
+            }
+            "w:tc" => {
+                if let Some(t) = self.tables.last_mut() {
+                    t.cell += 1;
+                }
+            }
+            // `w:tblPr/w:bidiVisual` reverses the columns: the first cell in
+            // the file is the one displayed on the right ([ECMA-376] Part 1
+            // §17.4.1). That is the same statement DrawingML spells
+            // `a:tblPr/@rtl`, so it lowers onto the same container direction.
+            //
+            // Matched on the element rather than the path because it occurs in
+            // exactly two places — a table's `w:tblPr` and a table style's —
+            // and only the first has a table open here. A revision record is
+            // the third, and `reading()` has already ruled it out.
+            "w:bidiVisual" => {
+                let direction = if on_off_element(e) {
+                    Direction::Rtl
+                } else {
+                    Direction::Ltr
+                };
+                if let Some(t) = self.tables.last_mut() {
+                    t.direction = Resolved::Explicit(direction);
+                }
+            }
+            // The table style this table resolves against; what it supplies is
+            // [`crate::style`]'s to say. First writer wins, as everywhere else
+            // here — a `w:tblPr` states it once.
+            "w:tblStyle" => {
+                let id = non_empty_attribute(e, "w:val");
+                if let Some(t) = self.tables.last_mut()
+                    && t.style.is_none()
+                {
+                    t.style = id;
                 }
             }
             "w:bidi" if !in_section => {
@@ -434,6 +657,7 @@ impl DocxDocument {
                     match e.name().as_ref() {
                         "mc:Fallback" => state.fallback += 1,
                         "w:sectPr" => state.section += 1,
+                        name if REVISION_RECORDS.contains(&name) => state.revision += 1,
                         _ => {}
                     }
                     if state.reading() {
@@ -473,10 +697,14 @@ impl DocxDocument {
                 Ok(Event::End(e)) => match e.name().as_ref() {
                     "mc:Fallback" => state.fallback = state.fallback.saturating_sub(1),
                     "w:sectPr" => state.section = state.section.saturating_sub(1),
+                    name if REVISION_RECORDS.contains(&name) => {
+                        state.revision = state.revision.saturating_sub(1);
+                    }
                     "w:t" if state.reading() => state.in_text = false,
                     // Guarded, because a `w:p` inside a fallback would
                     // otherwise close the paragraph that encloses it.
                     "w:p" if state.reading() => state.close_paragraph(part, styles),
+                    "w:tbl" if state.reading() => state.close_table(part, styles),
                     _ => {}
                 },
 

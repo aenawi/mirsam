@@ -165,6 +165,20 @@ what to conclude once the value is found.
 - Container findings (`container-direction`) are unaffected: a table's or a
   chart axis's direction has no inheritance chain of this shape, and ADR 0006
   judges it from the text it lays out.
+
+  **Superseded, 2026-09-05, when 3.4 landed.** One does. A Word table style
+  states `w:tblPr/w:bidiVisual`, so a `w:tbl` whose own properties say nothing
+  about its column order is laid out by a source above it, and reading that as
+  undeclared would report every correctly-styled Arabic table in a document —
+  the false positive §1 exists to prevent, reached through the container rather
+  than the paragraph. `container-direction` had an arm returning silence on
+  `Inherited` unconditionally, on this bullet's premise; it now applies §1's
+  agreement test like every other rule. An inherited column order that agrees
+  with the text is silent, one that contradicts it is reported exactly as an
+  absent one at the severity §3 gives an absent one, it names its source per
+  §5, and the repair still writes to the container per §6. Nothing in the
+  decision above changed — only this prediction about which units could reach
+  it. The full account is in [`PLAN.md`](../PLAN.md) §3.4.
 - **Cost:** invariant 2 is now a conditional rather than an absolute, and a
   conditional is easier to get wrong. The condition is narrow and mechanical
   — does the inherited value agree with `bidi::dominant_direction` — and it

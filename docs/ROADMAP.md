@@ -78,10 +78,15 @@ DOCX reuses the OOXML package layer; only the vocabulary differs
   `mirsam-core` changed to make it. `w:jc` turned out to be direction-relative
   in Word whatever the standard says, so `alignment-incoherent` is
   structurally silent on DOCX — see [`PLAN.md`](PLAN.md) §3.2.
+- **Landed:** style-chain inheritance (`docDefaults` → style → direct
+  formatting), plus the table styles a table and its cells reach — see
+  [`PLAN.md`](PLAN.md) §3.3 and §3.4.
+- **Landed:** tables. `w:bidiVisual` is reported missing only where the cells
+  genuinely read right to left. A table style can supply it, which made a
+  container the first unit able to inherit its direction — so ADR 0007's
+  agreement test now covers containers too; see [`PLAN.md`](PLAN.md) §3.4.
 - The writer. Until it exists `repair` refuses a `.docx` as a readable format
   without one, rather than as an unknown extension.
-- Style-chain inheritance (`docDefaults` → style → direct formatting).
-- Tables: `w:bidiVisual` for genuinely RTL column order.
 - Numbering and fields.
 
 **Done when** the adapter passes the shared conformance suite unchanged —

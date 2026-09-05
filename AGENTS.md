@@ -78,6 +78,20 @@ axis, legend or data labels. Everything but the paragraph is a *container*: a
 unit of its own, judged from the text it lays out, whose one property is its
 direction. Echo them back; never parse them.
 
+A table is a container in both formats — `a:tblPr/@rtl` in PowerPoint,
+`w:tblPr/w:bidiVisual` in Word — and both say the same thing: the cells are
+displayed right to left with the file's own cell order unchanged. The
+paragraphs inside stay units in their own right, because neither format makes
+a cell's text inherit the table's column order, so both are reported
+separately. A Word cell's paragraph names its cell in `location.container`:
+`table 1 row 2 cell 3`.
+
+A container's direction can be inherited — a Word table style states
+`w:bidiVisual` — and is judged the way any inherited value is: silent where it
+agrees with the text, reported as an absent one where it contradicts it, with
+`evidence.inherited_from` naming the style. The repair still writes to the
+table, never to the style.
+
 ### Repairing
 
 `repair <in> <out>` never modifies `<in>` and refuses `<out> == <in>` under
