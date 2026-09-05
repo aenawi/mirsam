@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate a PPTX against the published ECMA-376 schemas.
+"""Validate a corpus document against the published ECMA-376 schemas.
 
 `make-torture-fixture.py` asserts the structural invariants it can reach from
 the standard library. This asserts the rest: that every XML part validates
@@ -7,8 +7,8 @@ against the ECMA-376 transitional XSD for its namespace, and that the OPC
 container around them is complete.
 
 It exists because the M1 application check — "PowerPoint opens the file
-without offering to repair it" — cannot be run in CI, and a corpus deck that
-fails it makes the check unanswerable
+without offering to repair it", and its Word counterpart — cannot be run in
+CI, and a corpus document that fails it makes the check unanswerable
 ([#9](https://github.com/aenawi/mirsam/issues/9)). Schema validity is not the
 same claim as "PowerPoint is happy", but it is the strongest one a machine can
 make, and it is well calibrated against this corpus: the decks built on
@@ -19,12 +19,12 @@ The schemas are downloaded once from ecma-international.org and cached under
 `target/ooxml-schemas/`. Nothing is vendored into the repository.
 
 Usage:
-    uv run --with lxml scripts/validate-ooxml.py [deck.pptx ...]
+    uv run --with lxml scripts/validate-ooxml.py [document.pptx ...]
 
-With no arguments, every `.pptx` under `tests/fixtures/` is checked; any
-other deck is checked by naming it. `--self-test` checks the checker instead,
-over packages built in memory. Exits 0 when every package is clean, 1
-otherwise.
+With no arguments, every `.pptx` and `.docx` under `tests/fixtures/` is
+checked; any other package is checked by naming it. `--self-test` checks the
+checker instead, over packages built in memory. Exits 0 when every package is
+clean, 1 otherwise.
 """
 
 from __future__ import annotations
@@ -76,6 +76,31 @@ SCHEMA_FOR_NS = {
 }
 
 
+# `wml.xsd` imports the XML namespace with no `schemaLocation`, so nothing
+# tells a validator where `xml:space` is declared and the schema fails to
+# parse before it has looked at a document. The four attributes of that
+# namespace are fixed by the XML specification itself and this is the whole of
+# it, written beside the cache rather than vendored into the repository — the
+# same rule the ECMA schemas follow.
+XML_XSD = """<?xml version="1.0" encoding="UTF-8"?>
+<xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+            targetNamespace="http://www.w3.org/XML/1998/namespace"
+            xmlns:xml="http://www.w3.org/XML/1998/namespace">
+  <xsd:attribute name="lang" type="xsd:language"/>
+  <xsd:attribute name="space">
+    <xsd:simpleType>
+      <xsd:restriction base="xsd:NCName">
+        <xsd:enumeration value="default"/>
+        <xsd:enumeration value="preserve"/>
+      </xsd:restriction>
+    </xsd:simpleType>
+  </xsd:attribute>
+  <xsd:attribute name="base" type="xsd:anyURI"/>
+  <xsd:attribute name="id" type="xsd:ID"/>
+</xsd:schema>
+"""
+
+
 def schemas_dir() -> str:
     """The cached XSD directory, downloading the schema set on first use."""
     marker = os.path.join(CACHE, "pml.xsd")
@@ -87,6 +112,23 @@ def schemas_dir() -> str:
         outer = zipfile.ZipFile(io.BytesIO(response.read()))
     with zipfile.ZipFile(io.BytesIO(outer.read(INNER_ZIP))) as inner:
         inner.extractall(CACHE)
+
+    with open(os.path.join(CACHE, "xml.xsd"), "w", encoding="utf-8") as handle:
+        handle.write(XML_XSD)
+    unlocated = '<xsd:import namespace="http://www.w3.org/XML/1998/namespace"/>'
+    located = (
+        '<xsd:import namespace="http://www.w3.org/XML/1998/namespace"'
+        ' schemaLocation="xml.xsd"/>'
+    )
+    for name in os.listdir(CACHE):
+        if not name.endswith(".xsd"):
+            continue
+        path = os.path.join(CACHE, name)
+        with open(path, encoding="utf-8") as handle:
+            text = handle.read()
+        if unlocated in text:
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(text.replace(unlocated, located))
     return CACHE
 
 
@@ -291,7 +333,7 @@ def main(argv: list[str]) -> int:
         paths = sorted(
             os.path.join(fixtures, n)
             for n in os.listdir(fixtures)
-            if n.endswith(".pptx") and ".out." not in n
+            if n.endswith((".pptx", ".docx")) and ".out." not in n
         )
     if not paths:
         print("no packages to validate", file=sys.stderr)

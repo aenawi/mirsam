@@ -128,8 +128,11 @@ See [`adr/0002-rust-and-token-preserving-xml.md`](adr/0002-rust-and-token-preser
   changes when a file format changes. These are genuinely different clocks.
 - **O** — a new check is a `Rule` impl plus one line in the registry. A new
   format is a new crate. Neither modifies existing code.
-- **L** — every adapter satisfies one conformance suite, so the engine can hold
-  any `DocumentReader` without special-casing.
+- **L** — every adapter satisfies one conformance suite
+  (`crates/mirsam-ooxml/tests/conformance.rs`), so the engine can hold any
+  `DocumentReader` without special-casing. Each case states a situation once in
+  the shared model's vocabulary and runs it against every adapter; no case that
+  asserts what the tool reports names an element, an attribute or a format.
 - **I** — `DocumentReader` / `DocumentWriter` split, motivated by PDF.
 - **D** — the domain defines the traits; adapters depend on the domain; the CLI
   wires them. Dependencies point inward, always.
@@ -183,9 +186,10 @@ crates/
                    and sharing its theme reader, because a fontScheme is
                    DrawingML wherever it is stored
   mirsam-cli/      driving adapter — argument parsing and rendering only
-    tests/golden.rs  the golden corpus: every deck under tests/fixtures/
-                   against its committed report of what the binary finds,
-                   repairs and writes
+    tests/golden.rs  the golden corpus: every .pptx and .docx under
+                   tests/fixtures/ against its committed report of what the
+                   binary finds, repairs and writes — or, for a format it
+                   reads but cannot write, of the refusal it gives instead
 ```
 
 `mirsam-core` has four dependencies and no I/O. That constraint is the

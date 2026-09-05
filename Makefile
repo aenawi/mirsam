@@ -72,11 +72,12 @@ golden: ## Regenerate the golden corpus reports; review the diff before committi
 	@MIRSAM_UPDATE_GOLDEN=1 cargo test -p mirsam-cli --test golden --quiet
 	@git --no-pager diff --stat -- tests/fixtures
 
-fixtures: ## Regenerate the hand-built corpus decks, then their reports
+fixtures: ## Regenerate the hand-built corpus documents, then their reports
 	@python3 scripts/make-torture-fixture.py
+	@python3 scripts/make-word-fixture.py
 	@$(MAKE) --no-print-directory golden
 
-validate-fixtures: ## Validate every corpus deck against the ECMA-376 schemas (needs uv)
+validate-fixtures: ## Validate every corpus document against the ECMA-376 schemas (needs uv)
 	@command -v uv >/dev/null 2>&1 || { \
 		echo "uv not installed; alternatively: pip install lxml && python3 scripts/validate-ooxml.py"; \
 		exit 1; \

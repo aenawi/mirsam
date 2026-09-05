@@ -15,7 +15,7 @@
     }
   },
   "changed_parts": {},
-  "deck": "quarterly-report-correct.pptx",
+  "document": "quarterly-report-correct.pptx",
   "exit_codes": {
     "audit": 0,
     "audit --strict": 0,

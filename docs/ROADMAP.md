@@ -85,12 +85,19 @@ DOCX reuses the OOXML package layer; only the vocabulary differs
   genuinely read right to left. A table style can supply it, which made a
   container the first unit able to inherit its direction — so ADR 0007's
   agreement test now covers containers too; see [`PLAN.md`](PLAN.md) §3.4.
+- **Landed:** the shared conformance suite. One set of cases, stated in the
+  shared model's vocabulary and run against both adapters through
+  `DocumentReader`, with no case skipped and no adapter special-cased — and
+  no line of `mirsam-core` changed to make DOCX pass, which was the question
+  the suite existed to answer. Two Word documents joined the golden corpus.
+  See [`PLAN.md`](PLAN.md) §3.5.
 - The writer. Until it exists `repair` refuses a `.docx` as a readable format
-  without one, rather than as an unknown extension.
+  without one, rather than as an unknown extension. The corpus records that
+  refusal, so the day it lands shows up as a diff on a real document.
 - Numbering and fields.
 
-**Done when** the adapter passes the shared conformance suite unchanged —
-the real test of whether the core abstraction held.
+**Done when** the writer lands and `repair` stops refusing. The abstraction
+question — does one suite hold both adapters unchanged — is answered.
 
 ---
 
