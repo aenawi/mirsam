@@ -5,9 +5,13 @@ popularity. Each ships something usable on its own.
 
 Codenames come from `tagtastic`, theme `arabian_birds`.
 
+Version numbers below are the *planned* release for each milestone. Nothing
+is tagged yet: M0 through M5 are merged to `main` and built from source. The
+first tag is part of M7.
+
 ---
 
-## M0 — Foundation ✅ *shipped*
+## M0 — Foundation ✅ *landed on `main`*
 
 **v0.1.0 “Steppe Eagle”**
 
@@ -18,7 +22,7 @@ Proves the architecture end-to-end on one format before it is copied five times.
 
 ---
 
-## M1 — Repair, byte-preserving
+## M1 — Repair, byte-preserving ✅ *landed on `main`*
 
 **v0.2.0** · *the hardest correctness problem in the project*
 
@@ -37,7 +41,7 @@ include one.
 
 ---
 
-## M2 — Inheritance resolution
+## M2 — Inheritance resolution ✅ *landed on `main`*
 
 **v0.3.0** · *the accuracy milestone*
 
@@ -67,7 +71,7 @@ agrees with the text
 
 ---
 
-## M3 — Word
+## M3 — Word ✅ *landed on `main`*
 
 **v0.4.0**
 
@@ -110,7 +114,7 @@ token-rewrite scaffold.
 
 ---
 
-## M4 — Shaping and fonts
+## M4 — Shaping and fonts ✅ *landed on `main`*
 
 **v0.5.0** · *the capability nothing else has*
 
@@ -134,7 +138,7 @@ workflow currently pushes onto a human.
 
 ---
 
-## M5 — Web and spreadsheets
+## M5 — Web and spreadsheets ✅ *landed on `main`*
 
 **v0.6.0**
 

@@ -6,8 +6,11 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-Working towards byte-preserving `repair` for PPTX. See
-[`docs/PLAN.md`](docs/PLAN.md).
+Milestones M1 through M5 have landed since `v0.1.0`: byte-preserving `repair`,
+inheritance resolution, the DOCX and XLSX adapters with their writers, the HTML
+reader, and shaping and font-coverage checks behind `--fonts`. Next is M6, the
+read-only PDF adapter. See [`docs/PLAN.md`](docs/PLAN.md) and
+[`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ### Added
 
@@ -829,5 +832,9 @@ end-to-end on one format before it is generalised.
 - Inheritance resolution through layouts and masters is milestone M2; until it
   lands, an absent property is reported as a warning rather than an error.
 
-[Unreleased]: https://github.com/aenawi/mirsam/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/aenawi/mirsam/releases/tag/v0.1.0
+No `v*` tag has been pushed yet, so `0.1.0` below names the foundation
+described in `VERSION` rather than a downloadable release. Tagging and
+publishing are milestone M7; the compare links go in with the first tag.
+
+[Unreleased]: https://github.com/aenawi/mirsam/commits/main
+[0.1.0]: https://github.com/aenawi/mirsam/commits/main
