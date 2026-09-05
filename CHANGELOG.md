@@ -11,6 +11,32 @@ Working towards byte-preserving `repair` for PPTX. See
 
 ### Added
 
+- **Four rules for the four defects the web can write and the other formats
+  cannot.** `bidi-override` reports `<bdo>` and `unicode-bidi: bidi-override`,
+  which give the same instruction as an embedded U+202E and replace the
+  bidirectional algorithm rather than informing it — an error when the imposed
+  order is not the one the run reads in, with both renderings as evidence, and
+  a warning when it happens to be. `isolation-missing` is the `<bdi>` rule,
+  and it is proved rather than asserted: the paragraph is resolved twice, once
+  as it stands and once with the run isolated, and the finding is the
+  difference. `inset-physical` reports `margin-left` where
+  `margin-inline-start` was meant, which under Arabic puts the indent at the
+  end of the line. `order-reversed` reports a layout made to look right to left
+  by reversing its boxes instead of stating a direction.
+
+  They are rules in `mirsam-core` rather than in the HTML adapter, because a
+  rule that lives in a format adapter is one the next format re-implements or
+  quietly lacks. The shared model grew the vocabulary instead, and the formats
+  that cannot speak it say so: four new refusals in the conformance suite, and
+  a rule that is structurally silent on `.pptx` and `.docx` the way
+  `complex-font-missing` is structurally silent on HTML.
+- **`TextUnit::spans`, the first thing the model has said about a *part* of a
+  paragraph.** Whether a range is isolated from its neighbours, and whether its
+  order was imposed rather than resolved, are properties of a range, and
+  neither is recoverable from the characters — a run boundary is something only
+  the document knows. Byte offsets into the text a report shows, the same
+  coordinates `tatweel-padding` gives its offenders. Empty for both OOXML
+  adapters, and empty means *nothing was said* rather than *one plain run*.
 - **An HTML reader**, `mirsam-html`, and with it `mirsam audit page.html`.
   The web is the third format and the first that is not a package. It is also
   the first where the direction is usually *not in the document*: `dir="rtl"`

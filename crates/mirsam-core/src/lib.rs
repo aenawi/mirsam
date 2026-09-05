@@ -70,6 +70,6 @@ pub use ports::{DocumentReader, DocumentWriter, FontFile, FontSource};
 pub use rules::{Engine, RepairOptions, Rule};
 pub use shape::{Font, ShapedLetter, Shaping};
 pub use text::{
-    Alignment, Bullet, Direction, Location, Origin, Properties, Resolved, TextUnit, UnitId,
-    UnitKind,
+    Alignment, Bullet, Direction, Inset, Location, Origin, Properties, Resolved, Span, SpanBidi,
+    TextUnit, UnitId, UnitKind,
 };

@@ -1320,14 +1320,117 @@ carries one instance of each defect the adapter can see and
 both are in the golden corpus, and the first records the unread stylesheet and
 the exit code `repair` gives a readable format with no writer.
 
-### 5.2 HTML rules — `<bdi>`/`<bdo>`, logical properties, faked RTL `[ ]`
+### 5.2 HTML rules — `<bdi>`/`<bdo>`, logical properties, faked RTL `[x]`
 
-The rules that are HTML's own rather than the shared model's: `<bdo dir>`
+Four defects the web can write and the other two formats cannot: `<bdo dir>`
 overriding the algorithm where markup should have carried the direction,
 `<bdi>` absent around interpolated user text, physical `margin-left` where a
-logical `margin-inline-start` was meant, and DOM order reversed by hand to
-fake right-to-left layout — the web's answer to reversing a string, and the
-same defect invariant 5 forbids.
+logical `margin-inline-start` was meant, and layout order reversed by hand to
+fake right-to-left — the web's answer to reversing a string, and the same
+defect invariant 5 forbids.
+
+**They are rules in `mirsam-core`, not in `mirsam-html`, and that is the whole
+design question this item had to answer.** Every one of them was described
+above as "HTML's own", and putting them in the adapter would have followed that
+description straight past the architecture: a rule that lives in a format
+adapter is a rule the next format re-implements or quietly lacks, which is the
+five-divergent-rule-sets outcome ADR 0003 exists to prevent. So the vocabulary
+grew instead, and the formats that cannot speak it say so. `Alignment::Distributed`
+is the precedent — a value only PowerPoint can write, in the shared enum, with
+CSS returning `Inexpressible` — and four more refusals now sit beside it in the
+committed list.
+
+**The model gained one thing it genuinely lacked: a part of a paragraph.**
+`TextUnit::text` is a flat string because every rule up to M4 judged the
+paragraph whole. Two of these four cannot be: whether a range is isolated from
+its neighbours, and whether its order was imposed rather than resolved, are
+properties of a *range*, and neither is recoverable from the characters — a run
+boundary is something only the document knows. `TextUnit::spans` is that, as
+byte offsets into the text the report shows, the same coordinates
+`tatweel-padding` already gives its offenders. It is empty for both OOXML
+adapters, and empty means *nothing was said*, not *one plain run*: an adapter
+that states nothing leaves both rules silent rather than answering for it.
+
+**`bidi-override` and `bidi-control` are one defect in two spellings.**
+`<bdo dir="rtl">` and an embedded U+202E give the same instruction — lay these
+characters out right to left whatever they are — and both replace the algorithm
+instead of informing it, which is invariant 4 from the other end. Two tiers, on
+the flagship rule's test: the imposed order is compared with what the same run
+resolves to under the direction the override *names*, which is the repair a
+reviewer would make. They differ, and the finding is an error with both
+renderings as evidence. They agree — an override around Arabic with no digit,
+no Latin and no edge punctuation in it — and it is a warning at the fragile
+tier, because nothing has moved on the screen today and the algorithm is still
+switched off for whatever is typed there tomorrow.
+
+**`isolation-missing` is proved, not asserted, and the precondition is narrow
+on purpose.** The wide version of this question reports ordinary markup: a
+`<b>` in an Arabic sentence, a `<span>` around a percentage. So a run is only
+asked about when it carries a *strong* character of the opposite direction —
+the interpolated name `<bdi>` was added to the language for — and then the
+paragraph is resolved twice, once as it stands and once with U+2068…U+2069
+around the run, with the isolates stripped back out before the two are compared.
+The finding is the difference between those two renderings, and it is a warning
+rather than an error for a reason worth stating: nothing is mis-rendered. The
+algorithm did exactly what it is specified to do. What is wrong is that the
+order of text *outside* the run is a function of text *inside* it, so the page
+is laid out correctly for this owner's name and undefined for the next one.
+
+*The isolates are computed and never written.* Invariant 4 forbids a document
+holding a bidi control; asking what the algorithm would have produced had one
+been there is what turns "this looks risky" into a finding with two orders
+attached.
+
+**`inset-physical` is `alignment-incoherent` for the other property, and it
+reports an inherited value where that rule does not.** That difference looks at
+first like a breach of invariant 2, so it is argued rather than assumed. An
+*absent* alignment is a real state that a template fills in, which is why the
+alignment rules split into a written tier and an inherited one — the second may
+be a design nobody aimed at this text. An absent inset is not a state anything
+fills in: a box with no inset is simply not indented, and there is no default
+left inset for a paragraph to fall into. A physical left inset under Arabic
+therefore exists because somebody wrote it, and the only open question is
+where — which the evidence answers by naming the declaration. Only an
+*asymmetric* inset counts: equal on both sides is a page gutter, direction-neutral,
+and reporting one would be a finding on a layout.
+
+**`order-reversed` is the one whose provable form is narrower than its name.**
+"DOM order reversed by hand" — an author writing the boxes backwards and
+stating nothing — leaves no trace any tool can read; a container of Arabic in
+some order is a container of Arabic in some order, and claiming to know which
+order was intended would be exactly the assertion ADR 0004 forbids. What *is*
+readable is the declarative form, which is also the common one:
+`flex-direction: row-reverse` on a flex container, the boxes displayed backwards
+while the direction says nothing. Reported whichever direction is declared,
+because both cases are wrong and wrong differently — with no right-to-left
+direction the layout and the reading order disagree, and with one the two
+reversals cancel and the boxes come back out left to right. `display` is
+checked, because `flex-direction` on a block box is a declaration nobody
+applied.
+
+**Neither of the last two is `fixable`, and that is a claim about repairs
+rather than about severity.** Both repairs are edits to markup or to a
+stylesheet — delete a declaration, write the logical property instead of the
+physical one — not new values in the shared `Fix` vocabulary, and no adapter in
+this build can make them. A `Fix` variant nothing lowers would be the inferred
+capability `AGENTS.md` forbids.
+
+*One thing the adapter had to be rebuilt for.* Whitespace used to be collapsed
+at the end, over the finished string. It cannot be any more: a span recorded
+against the raw characters names a range of a string nobody sees once three
+spaces became one. Text is now collapsed as it is gathered, so every offset is
+in the coordinates the model uses — and the first version put a run's start one
+byte early, on the space a collapsing box had not yet written, which the
+adapter's own tests caught before the fixture did.
+
+*Acceptance:* met. Thirty-four conformance cases pass. Four new refusals join
+the committed list — a run that is a bidi boundary, an inset from a named edge
+in either spelling, and a reversed layout, none of which OOXML can state — and
+each of the four rules is asserted to fire on the format that can state its
+situation and to stay silent on the correctly marked version of the same page.
+`tests/fixtures/quarterly-page.html` carries one instance of each, beside the
+`<bdi>` line that proves the silence, and `quarterly-page-correct.html` is
+still reported clean.
 
 ### 5.3 XLSX `[ ]`
 

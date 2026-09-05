@@ -148,7 +148,53 @@ Three consequences worth knowing before you read a report:
 
 A unit id is `<file>#p<n>` / `#tbl<n>` / `#cols<n>`, the same shapes the OOXML
 adapters issue, and `location.part` is the file's own name. A `Columns`
-container is an element CSS lays out in two or more columns.
+container is an element CSS lays out in two or more columns — or a flex
+container that displays its boxes in the reverse of the order it stores them,
+which is boxes side by side by another property.
+
+### The four rules only the web can currently trigger
+
+They are ordinary rules in `mirsam-core`, registered like every other one, and
+they read vocabulary the shared model gained in M5: `TextUnit::spans`,
+`Properties::inset` and `Properties::reversed`. OOXML can state none of it, so
+the conformance suite carries four refusals rather than four skips, and these
+rules are structurally silent on `.pptx` and `.docx` in the way
+`complex-font-missing` is structurally silent on HTML. **Do not read that
+silence as coverage that is missing.**
+
+- **`bidi-override`** — `<bdo>`, or `unicode-bidi: bidi-override`, is the
+  markup form of an embedded U+202E, and `bidi-control` reports the character
+  version of the same defect. An **error** when the imposed order differs from
+  what that run resolves to under the direction the override itself names —
+  both renderings are in the evidence — and a **warning** when they agree,
+  which is the fragile tier: nothing has moved today, and the algorithm is
+  still off for the first digit or Latin word typed there tomorrow.
+- **`isolation-missing`** — the `<bdi>` rule. Reported only for a run carrying
+  a **strong** character of the direction opposite to the paragraph's, and only
+  when isolating that run changes the paragraph's resolved order — the two
+  orders are the evidence. A **warning**, and not because the tool is unsure:
+  nothing is mis-rendered, the algorithm did what it is specified to do. What
+  is wrong is that the order of text *outside* the run is decided by text
+  *inside* it, so the line is laid out correctly for today's content and
+  undefined for tomorrow's.
+- **`inset-physical`** — `margin-left` / `padding-left` where
+  `margin-inline-start` was meant, on right-to-left text. Only an *asymmetric*
+  inset: equal on both sides is a page gutter and is direction-neutral.
+  Reported **wherever it was stated**, unlike `alignment-incoherent`, and the
+  distinction is deliberate — nothing fills in an absent inset, so a left inset
+  under Arabic exists because somebody wrote it, and `evidence.inherited_from`
+  names the declaration.
+- **`order-reversed`** — `flex-direction: row-reverse` on a flex container:
+  right-to-left appearance produced by reversing the boxes instead of stating
+  the direction. Reported whichever direction is declared, because both are
+  wrong and wrong differently. **A hand-reordered source that states nothing is
+  invisible here, and that is a limit rather than an omission** — a container of
+  Arabic in some order carries no evidence of which order was intended, and
+  claiming otherwise would be asserting a defect rather than proving one.
+
+Neither `inset-physical` nor `order-reversed` is `fixable`: the repair is an
+edit to markup or to a stylesheet, not a value the shared `Fix` vocabulary can
+name, and no adapter in this build can make it.
 
 ### The two font checks, which are off by default
 

@@ -4,6 +4,27 @@
     "diagnostics": [
       {
         "evidence": {
+          "inherited_from": "quarterly-page.html bdo@",
+          "logical": "ارتفع الأداء بنسبة 25% في Q4 2026.",
+          "offenders": [
+            "bdo@ ×52 @0"
+          ],
+          "visual_declared": ".6202 4Q يف %52 ةبسنب ءادألا عفترا",
+          "visual_expected": ".Q4 2026 يف %25 ةبسنب ءادألا عفترا"
+        },
+        "fixable": false,
+        "location": {
+          "container": "p",
+          "paragraph": 10,
+          "part": "quarterly-page.html"
+        },
+        "message": "a run of this text has its order imposed rtl rather than declared, and the imposed order is not the one it reads in; declare the direction on the run instead of overriding the algorithm",
+        "rule": "bidi-override",
+        "severity": "error",
+        "unit": "quarterly-page.html#p10"
+      },
+      {
+        "evidence": {
           "inherited_from": null,
           "logical": "ارتفع الأداء بنسبة 25% في Q4 2026.",
           "offenders": [],
@@ -89,13 +110,13 @@
         "fixable": true,
         "location": {
           "container": "table 1 row 1 cell 1",
-          "paragraph": 10,
+          "paragraph": 16,
           "part": "quarterly-page.html"
         },
         "message": "no base direction of its own; inherits ltr, but this reads as rtl",
         "rule": "direction-unset",
         "severity": "warning",
-        "unit": "quarterly-page.html#p10"
+        "unit": "quarterly-page.html#p16"
       },
       {
         "evidence": {
@@ -108,13 +129,13 @@
         "fixable": true,
         "location": {
           "container": "table 1 row 1 cell 2",
-          "paragraph": 11,
+          "paragraph": 17,
           "part": "quarterly-page.html"
         },
         "message": "no base direction of its own; inherits ltr, but this reads as rtl",
         "rule": "direction-unset",
         "severity": "warning",
-        "unit": "quarterly-page.html#p11"
+        "unit": "quarterly-page.html#p17"
       },
       {
         "evidence": {
@@ -127,13 +148,13 @@
         "fixable": true,
         "location": {
           "container": "table 1 row 2 cell 1",
-          "paragraph": 12,
+          "paragraph": 18,
           "part": "quarterly-page.html"
         },
         "message": "no base direction of its own; inherits ltr, but this reads as rtl",
         "rule": "direction-unset",
         "severity": "warning",
-        "unit": "quarterly-page.html#p12"
+        "unit": "quarterly-page.html#p18"
       },
       {
         "evidence": {
@@ -146,13 +167,53 @@
         "fixable": true,
         "location": {
           "container": "table 1 row 2 cell 2",
-          "paragraph": 13,
+          "paragraph": 19,
           "part": "quarterly-page.html"
         },
         "message": "no base direction of its own; inherits ltr, but this reads as rtl",
         "rule": "direction-unset",
         "severity": "warning",
+        "unit": "quarterly-page.html#p19"
+      },
+      {
+        "evidence": {
+          "inherited_from": "quarterly-page.html .note{margin-left}",
+          "logical": "ارتفعت الإيرادات في كل الأسواق",
+          "offenders": [],
+          "visual_declared": null,
+          "visual_expected": null
+        },
+        "fixable": false,
+        "location": {
+          "container": "p.note",
+          "paragraph": 13,
+          "part": "quarterly-page.html"
+        },
+        "message": "right-to-left text is inset from the physical left edge; the indent lands at the end of the line rather than the start, and does not follow the text if the direction ever changes",
+        "rule": "inset-physical",
+        "severity": "warning",
         "unit": "quarterly-page.html#p13"
+      },
+      {
+        "evidence": {
+          "inherited_from": "quarterly-page.html span@",
+          "logical": "المالك المسؤول عن المشروع: John Smith - 5",
+          "offenders": [
+            "span@ ×10 @49"
+          ],
+          "visual_declared": "John Smith - 5 :عورشملا نع لوؤسملا كلاملا",
+          "visual_expected": "5 - John Smith :عورشملا نع لوؤسملا كلاملا"
+        },
+        "fixable": false,
+        "location": {
+          "container": "p",
+          "paragraph": 11,
+          "part": "quarterly-page.html"
+        },
+        "message": "a run of this text reads ltr inside rtl text and is not isolated from it; the order of the text around the run is decided by what is inside it, so the line is laid out correctly for this content and not for the next",
+        "rule": "isolation-missing",
+        "severity": "warning",
+        "unit": "quarterly-page.html#p11"
       },
       {
         "evidence": {
@@ -172,6 +233,25 @@
         "rule": "literal-bullet",
         "severity": "warning",
         "unit": "quarterly-page.html#p7"
+      },
+      {
+        "evidence": {
+          "inherited_from": "quarterly-page.html .row{flex-direction}",
+          "logical": "المؤشر\nالربع الرابع",
+          "offenders": [],
+          "visual_declared": null,
+          "visual_expected": null
+        },
+        "fixable": false,
+        "location": {
+          "container": null,
+          "paragraph": null,
+          "part": "quarterly-page.html"
+        },
+        "message": "text body is declared right to left and its boxes are reversed as well; the two cancel and the boxes come out left to right",
+        "rule": "order-reversed",
+        "severity": "warning",
+        "unit": "quarterly-page.html#cols1"
       },
       {
         "evidence": {
@@ -245,12 +325,12 @@
     },
     "strict": false,
     "summary": {
-      "arabic_units": 14,
-      "errors": 1,
-      "mixed_units": 3,
+      "arabic_units": 21,
+      "errors": 2,
+      "mixed_units": 6,
       "notes": 2,
-      "units_scanned": 15,
-      "warnings": 9
+      "units_scanned": 22,
+      "warnings": 12
     }
   },
   "changed_parts": null,

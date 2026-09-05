@@ -146,6 +146,121 @@ impl fmt::Display for Alignment {
     }
 }
 
+/// Which edge a leading inset — an indent, a margin, a padding — is measured
+/// from.
+///
+/// The same distinction [`Alignment`] already draws, and for the same reason.
+/// `Start` and `End` follow the direction of the text, so a paragraph indented
+/// from the start edge is indented on the right in Arabic and on the left in
+/// English. `Left` and `Right` do not follow anything: they are edges of the
+/// page, and an inset measured from one of them lands wherever it lands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "lowercase"))]
+pub enum Inset {
+    Start,
+    End,
+    Left,
+    Right,
+}
+
+impl Inset {
+    /// Whether this inset is coherent with an RTL base direction.
+    ///
+    /// The start edge of right-to-left text is the right one, so a `Left`
+    /// inset puts the indent at the *end* of the line — where a reader who
+    /// reads right to left arrives, rather than where they begin. `Right` is
+    /// the correct edge by accident and `Start`/`End` are correct by
+    /// construction; only `Left` is reported.
+    pub fn is_rtl_coherent(self) -> bool {
+        !matches!(self, Self::Left)
+    }
+}
+
+impl fmt::Display for Inset {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Start => "start",
+            Self::End => "end",
+            Self::Left => "left",
+            Self::Right => "right",
+        })
+    }
+}
+
+/// What a document says about how the bidirectional algorithm should treat one
+/// run of a unit's text.
+///
+/// The algorithm is the default and the right answer almost always: it resolves
+/// a run's order from the characters and the base direction, and a document
+/// that says nothing gets it. The other two variants are the document taking
+/// that decision away, in the two different ways a document can.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", serde(tag = "bidi", content = "direction"))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
+pub enum SpanBidi {
+    /// Nothing stated: the run is resolved together with everything around it,
+    /// which is what a plain `<span>`, a `<b>` or an OOXML run gets.
+    Plain,
+    /// An island. Nothing inside changes the order outside it and nothing
+    /// outside changes the order within — `<bdi>`, or `unicode-bidi: isolate`,
+    /// or the isolation a browser gives any element carrying `dir`.
+    Isolated,
+    /// The order is *imposed* rather than resolved: every character in the run
+    /// is laid out in this direction whatever the algorithm would have made of
+    /// it. `<bdo>`, `unicode-bidi: bidi-override`, and the markup equivalent
+    /// of an embedded U+202E RIGHT-TO-LEFT OVERRIDE.
+    Imposed(Direction),
+}
+
+/// One inline run of a unit's text that the document delimits.
+///
+/// A paragraph is not a flat string to the format that stored it: PowerPoint
+/// and Word build one out of runs, and a web page out of inline elements. The
+/// shared model keeps the text flat because every rule written so far judges
+/// the paragraph as a whole — but two things can only be said about a *part* of
+/// it. Whether the order of a part was imposed rather than resolved, and
+/// whether a part is isolated from its surroundings, are both properties of a
+/// range rather than of a paragraph, and neither can be inferred from the
+/// characters.
+///
+/// `offset` and `len` are byte offsets into [`TextUnit::text`] as the adapter
+/// produced it — the same coordinates `evidence.offenders` uses for a tatweel
+/// run, and for the same reason: a reviewer can find the run in the string
+/// without counting characters.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+pub struct Span {
+    /// Byte offset of the run's first character in the unit's text.
+    pub offset: usize,
+    /// Length of the run in bytes.
+    pub len: usize,
+    pub bidi: SpanBidi,
+    /// What delimited the run, for a finding's evidence: `page.html bdo@dir`.
+    pub origin: Origin,
+}
+
+impl Span {
+    pub fn new(offset: usize, len: usize, bidi: SpanBidi, origin: Origin) -> Self {
+        Self {
+            offset,
+            len,
+            bidi,
+            origin,
+        }
+    }
+
+    /// The run's own text, or `None` if the range does not fall on character
+    /// boundaries of `text`.
+    ///
+    /// A refusal rather than a panic: an adapter that miscounted must cost a
+    /// finding, never a crash on a user's document.
+    pub fn text<'a>(&self, text: &'a str) -> Option<&'a str> {
+        text.get(self.offset..self.offset.checked_add(self.len)?)
+    }
+}
+
 /// How a list marker is produced.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
@@ -165,12 +280,28 @@ pub enum Bullet {
 pub struct Properties {
     pub direction: Resolved<Direction>,
     pub alignment: Resolved<Alignment>,
+    /// The edge a leading inset is measured from, where the unit has one.
+    ///
+    /// Distinct from `alignment`, which decides where the line sits in the
+    /// box; this is where the box's own text starts within it. A format that
+    /// spells only one of the two — OOXML's indents are direction-relative and
+    /// have no physical spelling — leaves this `Unset`.
+    pub inset: Resolved<Inset>,
     /// BCP-47 language tag.
     pub language: Resolved<String>,
     /// Complex-script font slot (OOXML `cs`, CSS font stack for Arabic).
     pub complex_font: Resolved<String>,
     pub latin_font: Resolved<String>,
     pub bullet: Bullet,
+    /// Present when a container displays its boxes in the reverse of the order
+    /// the document stores them, naming what stated the reversal.
+    ///
+    /// A container's direction already decides which end a reader starts from,
+    /// and stating it is how the layout and the reading order stay the same
+    /// fact. A separate reversal is a second, silent answer to the same
+    /// question — the layout moves and nothing else does — which is why the
+    /// model records it rather than folding it into `direction`.
+    pub reversed: Option<Origin>,
 }
 
 impl Default for Properties {
@@ -178,10 +309,12 @@ impl Default for Properties {
         Self {
             direction: Resolved::Unset,
             alignment: Resolved::Unset,
+            inset: Resolved::Unset,
             language: Resolved::Unset,
             complex_font: Resolved::Unset,
             latin_font: Resolved::Unset,
             bullet: Bullet::None,
+            reversed: None,
         }
     }
 }
@@ -258,6 +391,14 @@ pub struct TextUnit {
     /// Logical-order Unicode. Never visually reordered, never pre-shaped.
     pub text: String,
     pub props: Properties,
+    /// The inline runs the document delimits within `text`, in document order.
+    ///
+    /// Empty for an adapter that has nothing to say about the parts of a
+    /// paragraph, which is not the same as a paragraph made of one plain run:
+    /// the rules that read this ask what the document *stated* about a range,
+    /// and an adapter that states nothing leaves them silent rather than
+    /// answering for it.
+    pub spans: Vec<Span>,
     pub location: Location,
 }
 
@@ -268,6 +409,7 @@ impl TextUnit {
             kind: UnitKind::Paragraph,
             text: text.into(),
             props: Properties::default(),
+            spans: Vec::new(),
             location: Location::default(),
         }
     }
@@ -279,6 +421,11 @@ impl TextUnit {
 
     pub fn with_props(mut self, props: Properties) -> Self {
         self.props = props;
+        self
+    }
+
+    pub fn with_spans(mut self, spans: Vec<Span>) -> Self {
+        self.spans = spans;
         self
     }
 

@@ -34,7 +34,8 @@
 //! [ADR 0001]: ../../../docs/adr/0001-hexagonal-architecture.md
 
 use mirsam_core::{
-    Alignment, Bullet, Direction, DocumentReader, Engine, Resolved, Severity, TextUnit, UnitKind,
+    Alignment, Bullet, Direction, DocumentReader, Engine, Inset, Resolved, Severity, SpanBidi,
+    TextUnit, UnitKind,
 };
 use mirsam_html::HtmlDocument;
 use mirsam_ooxml::{DocxDocument, Package, PptxDocument};
@@ -66,12 +67,41 @@ struct Paragraph {
     text: &'static str,
     direction: Option<Direction>,
     alignment: Option<Alignment>,
+    /// The edge the paragraph's leading inset is measured from.
+    inset: Option<Inset>,
     /// A complex-script language tag.
     language: Option<&'static str>,
     latin_font: Option<&'static str>,
     complex_font: Option<&'static str>,
     /// A list marker produced by the format's own list feature.
     bullet: bool,
+    /// A run within `text` that the document delimits, and what it says about
+    /// how the bidirectional algorithm should treat it.
+    run: Option<Run>,
+}
+
+/// One run within a paragraph, stated in the shared model's vocabulary.
+///
+/// The substring rather than an offset, because a case here states a situation
+/// and a byte count is an implementation of one. Each format finds the run in
+/// its own text and delimits it in its own way — or says it cannot.
+#[derive(Clone, Copy)]
+struct Run {
+    text: &'static str,
+    bidi: SpanBidi,
+}
+
+/// A container made to *look* right to left by displaying its boxes in the
+/// reverse of the order it stores them, rather than by declaring a direction.
+///
+/// Stated as its own situation rather than as a flag on a table, because the
+/// question it asks is whether a format can reverse a layout *without* its
+/// direction — and two of the three cannot reverse a layout at all.
+#[derive(Clone)]
+struct Reversed {
+    boxes: &'static [&'static str],
+    /// What the container declares, beside the reversal.
+    direction: Option<Direction>,
 }
 
 impl Paragraph {
@@ -110,6 +140,18 @@ impl Paragraph {
 
     fn alignment(mut self, alignment: Alignment) -> Self {
         self.alignment = Some(alignment);
+        self
+    }
+
+    fn inset(mut self, inset: Inset) -> Self {
+        self.inset = Some(inset);
+        self
+    }
+
+    /// Delimit `text` within the paragraph, saying what the document states
+    /// about it.
+    fn run(mut self, text: &'static str, bidi: SpanBidi) -> Self {
+        self.run = Some(Run { text, bidi });
         self
     }
 
@@ -205,6 +247,7 @@ impl Chain {
 struct Document {
     paragraphs: Vec<Paragraph>,
     tables: Vec<Table>,
+    reversed: Vec<Reversed>,
     chain: Chain,
 }
 
@@ -225,6 +268,11 @@ impl Document {
         self
     }
 
+    fn with_reversed(mut self, reversed: Reversed) -> Self {
+        self.reversed.push(reversed);
+        self
+    }
+
     fn under(mut self, chain: Chain) -> Self {
         self.chain = chain;
         self
@@ -240,6 +288,52 @@ impl Document {
 /// [`every_refusal_is_one_the_design_intended`] can hold every one of them
 /// against the list this project decided on.
 struct Inexpressible(&'static str);
+
+/// The three situations neither OOXML format can state, checked by both.
+///
+/// Written once because the reason is the same one twice: PresentationML and
+/// WordprocessingML both build a paragraph out of runs and both give a run a
+/// direction, and neither has anything to say about isolating one run from its
+/// neighbours, imposing an order on one, insetting a box from a physical edge,
+/// or displaying a container's boxes in any order but the one it stores them
+/// in. Every one of those is a property of the file formats rather than a gap
+/// in an adapter, which is what makes it a refusal rather than a skip.
+mod ooxml {
+    use super::{Document, Inexpressible, Paragraph};
+
+    pub fn run(p: &Paragraph) -> Result<(), Inexpressible> {
+        if p.run.is_some() {
+            return Err(Inexpressible(
+                "OOXML builds a paragraph out of runs but says nothing about how the \
+                 bidirectional algorithm should treat one: there is no isolate, and no \
+                 override. A run is text with properties, not a bidi boundary",
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn inset(p: &Paragraph) -> Result<(), Inexpressible> {
+        if p.inset.is_some() {
+            return Err(Inexpressible(
+                "OOXML's paragraph indents are direction-relative — a:pPr/@marL and \
+                 w:ind/@start are the start edge whatever they are called — so an inset \
+                 measured from a physical edge cannot be written",
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn reversed(doc: &Document) -> Result<(), Inexpressible> {
+        if !doc.reversed.is_empty() {
+            return Err(Inexpressible(
+                "neither format can display a container's boxes in any order but the one it \
+                 stores them in: a table or a multi-column body states a direction, and the \
+                 direction is the only thing that decides which end a reader starts from",
+            ));
+        }
+        Ok(())
+    }
+}
 
 /// A document of some format, written to disk.
 struct Written {
@@ -310,6 +404,8 @@ impl Pptx {
     }
 
     fn paragraph(p: &Paragraph) -> Result<String, Inexpressible> {
+        ooxml::run(p)?;
+        ooxml::inset(p)?;
         let mut properties = String::new();
         if let Some(direction) = p.direction {
             properties.push_str(&format!(
@@ -400,6 +496,7 @@ impl Pptx {
 
 impl Packaged for Pptx {
     fn parts(&self, doc: &Document) -> Result<Vec<(String, String)>, Inexpressible> {
+        ooxml::reversed(doc)?;
         let mut shapes = String::new();
         if !doc.paragraphs.is_empty() {
             let mut body = String::new();
@@ -528,6 +625,8 @@ impl Docx {
 
     /// The `w:pPr` and `w:rPr` bodies stating one paragraph's properties.
     fn formatting(p: &Paragraph) -> Result<(String, String), Inexpressible> {
+        ooxml::run(p)?;
+        ooxml::inset(p)?;
         let mut paragraph = String::new();
         if let Some(direction) = p.direction {
             paragraph.push_str(&format!(
@@ -612,6 +711,7 @@ impl Docx {
 
 impl Packaged for Docx {
     fn parts(&self, doc: &Document) -> Result<Vec<(String, String)>, Inexpressible> {
+        ooxml::reversed(doc)?;
         let mut body = String::new();
         for paragraph in &doc.paragraphs {
             body.push_str(&Self::paragraph(paragraph)?);
@@ -743,11 +843,87 @@ impl Html {
         if let Some(family) = Self::font_family(p)? {
             style.push_str(&format!("font-family:{family};"));
         }
+        if let Some(inset) = p.inset {
+            // The property CSS spells the edge with, which is the whole of what
+            // this situation is about: the physical pair does not follow the
+            // text and the logical pair does.
+            style.push_str(&format!(
+                "{}:2rem;",
+                match inset {
+                    Inset::Left => "margin-left",
+                    Inset::Right => "margin-right",
+                    Inset::Start => "margin-inline-start",
+                    Inset::End => "margin-inline-end",
+                }
+            ));
+        }
         if !style.is_empty() {
             attributes.push_str(&format!(r#" style="{style}""#));
         }
 
-        Ok(format!("<{tag}{attributes}>{}</{tag}>", escape(p.text)))
+        Ok(format!("<{tag}{attributes}>{}</{tag}>", Self::content(p)))
+    }
+
+    /// A paragraph's text, with the run it delimits wrapped in the element that
+    /// states what the document says about it.
+    ///
+    /// `<span>` says nothing, which is the un-isolated case; `<bdi>` isolates;
+    /// `<bdo>` imposes an order. All three are markup a browser reads out of
+    /// its own stylesheet, so none of them needs CSS here.
+    fn content(p: &Paragraph) -> String {
+        let Some(run) = p.run else {
+            return escape(p.text);
+        };
+        let Some(at) = p.text.find(run.text) else {
+            panic!("the run {:?} is not in {:?}", run.text, p.text);
+        };
+        let (open, close) = match run.bidi {
+            SpanBidi::Plain => ("<span>".to_string(), "</span>"),
+            SpanBidi::Isolated => ("<bdi>".to_string(), "</bdi>"),
+            SpanBidi::Imposed(direction) => (
+                format!(
+                    r#"<bdo dir="{}">"#,
+                    if direction == Direction::Rtl {
+                        "rtl"
+                    } else {
+                        "ltr"
+                    }
+                ),
+                "</bdo>",
+            ),
+        };
+        format!(
+            "{}{open}{}{close}{}",
+            escape(&p.text[..at]),
+            escape(run.text),
+            escape(&p.text[at + run.text.len()..])
+        )
+    }
+
+    /// A container whose boxes are displayed backwards without its direction
+    /// being what says so.
+    ///
+    /// A flex row reversed by `flex-direction`, which is the web's way of making
+    /// a layout look right to left while every other order in the document —
+    /// reading, selection, fallback — stays as it was.
+    fn reversed(r: &Reversed) -> String {
+        let mut style = "display:flex;flex-direction:row-reverse;".to_string();
+        if let Some(direction) = r.direction {
+            style.push_str(&format!(
+                "direction:{};",
+                if direction == Direction::Rtl {
+                    "rtl"
+                } else {
+                    "ltr"
+                }
+            ));
+        }
+        let boxes: String = r
+            .boxes
+            .iter()
+            .map(|text| format!("<div>{}</div>", escape(text)))
+            .collect();
+        format!(r#"<div style="{style}">{boxes}</div>"#)
     }
 
     fn paragraph(p: &Paragraph) -> Result<String, Inexpressible> {
@@ -827,6 +1003,9 @@ impl Vocabulary for Html {
         }
         for table in &doc.tables {
             body.push_str(&Self::table(table)?);
+        }
+        for reversed in &doc.reversed {
+            body.push_str(&Self::reversed(reversed));
         }
 
         // No `<title>`: it is text a reader sees, so the adapter reports it as
@@ -1597,6 +1776,105 @@ fn typed_tatweel_padding_a_heading_is_reported_in_every_format() {
     }
 }
 
+/// The four situations M5 §5.2 added, each stated once here.
+///
+/// All four run against one format, and that is the formats' answer rather than
+/// the adapter's: a run that is a bidi boundary, an inset from a named edge and
+/// a layout reversed without a direction are three things OOXML has no
+/// vocabulary for, and `every_refusal_is_one_the_design_intended` holds those
+/// refusals to the committed list. What these cases add is the other half —
+/// that the format which *can* state each one reports it, and reports the
+/// silence beside it.
+mod runs_insets_and_reversal {
+    use super::*;
+
+    /// Every format that can state the situation, and what it reported.
+    fn only_html(doc: &Document) -> Vec<&'static str> {
+        let readings = read(doc);
+        assert_eq!(
+            readings.iter().map(|r| r.format).collect::<Vec<_>>(),
+            ["html"],
+            "the one format with a vocabulary for this"
+        );
+        readings.into_iter().next().expect("one reading").rules()
+    }
+
+    #[test]
+    fn an_imposed_order_is_reported_and_a_declared_one_is_not() {
+        // The same direction, said two ways. Overriding lays the digits out
+        // backwards; declaring leaves the algorithm to them.
+        let imposed = Document::one(
+            Paragraph::correct_arabic()
+                .saying(MIXED)
+                .run("Q4 2026", SpanBidi::Imposed(Direction::Rtl)),
+        );
+        assert!(only_html(&imposed).contains(&"bidi-override"));
+
+        let declared = Document::one(
+            Paragraph::correct_arabic()
+                .saying(MIXED)
+                .run("Q4 2026", SpanBidi::Isolated),
+        );
+        assert!(!only_html(&declared).contains(&"bidi-override"));
+    }
+
+    #[test]
+    fn a_run_that_decides_its_surroundings_is_reported_unless_it_is_isolated() {
+        // A Latin name in an Arabic line with a neutral after it: the classic
+        // case `<bdi>` was added to the language for.
+        const INTERPOLATED: &str = "المالك: John Smith - 5";
+        let unisolated = Document::one(
+            Paragraph::correct_arabic()
+                .saying(INTERPOLATED)
+                .run("John Smith", SpanBidi::Plain),
+        );
+        assert!(only_html(&unisolated).contains(&"isolation-missing"));
+
+        let isolated = Document::one(
+            Paragraph::correct_arabic()
+                .saying(INTERPOLATED)
+                .run("John Smith", SpanBidi::Isolated),
+        );
+        assert!(!only_html(&isolated).contains(&"isolation-missing"));
+    }
+
+    #[test]
+    fn a_physical_inset_is_reported_and_the_direction_relative_one_is_not() {
+        let physical = Document::one(Paragraph::correct_arabic().inset(Inset::Left));
+        assert!(only_html(&physical).contains(&"inset-physical"));
+
+        let logical = Document::one(Paragraph::correct_arabic().inset(Inset::Start));
+        assert!(!only_html(&logical).contains(&"inset-physical"));
+    }
+
+    #[test]
+    fn a_layout_reversed_instead_of_directed_is_reported() {
+        const BOXES: &[&str] = &["المؤشر", "الربع الرابع"];
+        let faked = Document::default().with_reversed(Reversed {
+            boxes: BOXES,
+            direction: None,
+        });
+        assert!(only_html(&faked).contains(&"order-reversed"));
+
+        // And declaring the direction as well does not answer it: the two
+        // reversals cancel, so the boxes come back out the way they started.
+        let both = Document::default().with_reversed(Reversed {
+            boxes: BOXES,
+            direction: Some(Direction::Rtl),
+        });
+        assert!(only_html(&both).contains(&"order-reversed"));
+    }
+
+    #[test]
+    fn correctly_marked_arabic_stays_silent_with_all_four_registered() {
+        // The check that matters most: four rules were added to the engine
+        // every format's units pass through, and none of them may have made a
+        // clean document noisy.
+        let clean = Document::one(Paragraph::correct_arabic());
+        assert!(agree_on(&clean).is_empty());
+    }
+}
+
 #[test]
 fn arabic_justified_by_its_font_is_reported_by_nobody() {
     // The other half of §4.4's acceptance, and the reason the rule needed a
@@ -1664,6 +1942,13 @@ fn every_refusal_is_one_the_design_intended() {
     let relative = Document::one(Paragraph::of(ARABIC).alignment(Alignment::Start));
     let distributed = Document::one(Paragraph::of(ARABIC).alignment(Alignment::Distributed));
     let one_slot_filled = Document::one(Paragraph::of(ARABIC).latin_font("Calibri"));
+    let delimited_run = Document::one(Paragraph::of(MIXED).run("Q4", SpanBidi::Plain));
+    let physical_inset = Document::one(Paragraph::of(ARABIC).inset(Inset::Left));
+    let logical_inset = Document::one(Paragraph::of(ARABIC).inset(Inset::Start));
+    let boxes_reversed = Document::default().with_reversed(Reversed {
+        boxes: &["المؤشر", "الربع الرابع"],
+        direction: None,
+    });
 
     let refusing = |doc: &Document| {
         refusals(doc)
@@ -1693,6 +1978,26 @@ fn every_refusal_is_one_the_design_intended() {
         ["html"],
         "CSS has one font stack per element, so a filled Latin slot beside an \
          empty complex-script one is not a document the web can write"
+    );
+    assert_eq!(
+        refusing(&delimited_run),
+        ["pptx", "docx"],
+        "a run that is a bidi boundary is the web's alone: OOXML's runs carry \
+         properties and say nothing about isolation or override"
+    );
+    for inset in [&physical_inset, &logical_inset] {
+        assert_eq!(
+            refusing(inset),
+            ["pptx", "docx"],
+            "a paragraph inset from a named edge is the web's alone: OOXML's \
+             indents are direction-relative and have no physical spelling"
+        );
+    }
+    assert_eq!(
+        refusing(&boxes_reversed),
+        ["pptx", "docx"],
+        "displaying a container's boxes in the reverse of the stored order is \
+         the web's alone: the other two state a direction and nothing else"
     );
 
     // Everything else every format states.
