@@ -220,6 +220,7 @@ dependencies = [
  "anyhow",
  "clap",
  "mirsam-core",
+ "mirsam-fonts",
  "mirsam-ooxml",
  "serde_json",
  "zip",

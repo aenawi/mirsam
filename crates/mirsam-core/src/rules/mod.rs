@@ -6,13 +6,17 @@
 //! independently of one another.
 
 mod direction;
+mod font;
 mod typography;
 mod unicode;
 
 pub use typography::{DEFAULT_LOCALE, is_arabic_tag};
 
+use std::sync::Arc;
+
 use crate::diagnostic::{Diagnostic, Report, RuleId};
 use crate::fix::{Fix, Repair};
+use crate::ports::FontSource;
 use crate::script;
 use crate::text::{TextUnit, UnitKind};
 
@@ -91,7 +95,31 @@ impl Engine {
     /// What is *reported* does not depend on the options: the same defects
     /// come back whatever the caller intends to do about them. Only the
     /// proposed fixes vary, and with them `Diagnostic::fixable`.
+    ///
+    /// The two font rules are registered and check nothing, because no font
+    /// source was supplied. See [`with_fonts`](Self::with_fonts): they are
+    /// listed either way so that `mirsam rules` describes the whole rule set
+    /// rather than the part this call happened to arm.
     pub fn with_options(options: &RepairOptions) -> Self {
+        Self::build(options, None)
+    }
+
+    /// The same rule set with the font checks armed against `fonts`.
+    ///
+    /// `font-coverage` and `shaping-broken` are the only rules that ask a
+    /// question about the machine rather than about the document, which is
+    /// why the source is a separate argument and not a [`RepairOptions`]
+    /// field: it is not an authoring preference, and an audit that resolved
+    /// fonts without being asked would report differently on two machines
+    /// looking at one document.
+    ///
+    /// A caller that does not arm them **must say so in its report**
+    /// (standing rule 4). Silence from a check that never ran is not a pass.
+    pub fn with_fonts(options: &RepairOptions, fonts: Arc<dyn FontSource>) -> Self {
+        Self::build(options, Some(fonts))
+    }
+
+    fn build(options: &RepairOptions, fonts: Option<Arc<dyn FontSource>>) -> Self {
         Self {
             rules: vec![
                 Box::new(unicode::BidiControls),
@@ -112,6 +140,10 @@ impl Engine {
                 Box::new(typography::LiteralBullet {
                     convert: options.convert_bullets,
                 }),
+                Box::new(font::FontCoverage {
+                    fonts: fonts.clone(),
+                }),
+                Box::new(font::ShapingBroken { fonts }),
             ],
         }
     }

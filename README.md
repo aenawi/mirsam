@@ -65,6 +65,7 @@ prebuilt binaries for Linux, macOS and Windows, are milestone M7 — see
 mirsam audit deck.pptx                  # inspect; exit 1 if blocking
 mirsam audit deck.pptx --strict         # warnings block too
 mirsam audit deck.pptx --format json    # for agents and CI
+mirsam audit deck.pptx --fonts          # also check the fonts installed here
 mirsam repair deck.pptx fixed.pptx      # write a repaired copy, then audit it
 mirsam explain "<text>"                 # reproduce a defect without a document
 mirsam rules                            # every check, with its id
@@ -117,6 +118,27 @@ right-aligns it is not reported and not touched. `--lang` changes the tag
 written from `ar-SA`;
 `--force` replaces an existing output. Repairing a repaired file is a no-op
 that reproduces it byte for byte.
+
+### Checking the fonts
+
+`--fonts` adds two checks the rest of the tool cannot make from the file
+alone. Each paragraph's complex-script typeface is resolved against the fonts
+installed on this machine, and the Arabic is put through a real OpenType
+shaper: `font-coverage` reports the exact characters the font has no glyph for
+— they render as empty boxes — and `shaping-broken` reports a font that has
+every letter and no shaping tables, which renders Arabic as a row of
+disconnected letters. `--font-dir <DIR>` searches given directories instead of
+the platform's, which is how you make the answer reproducible.
+
+It is opt-in because it reads the machine rather than the document, and an
+audit that resolved fonts unasked would report differently on two computers
+looking at one file. Every report says which of the two audits it is —
+`fonts NOT RUN`, or `"fonts": {"checked": false}` — so their silence is never
+mistaken for a pass.
+
+Read the result one way only. A font that is *here* and cannot draw the text
+will not draw it anywhere; a font that is here and draws it perfectly proves
+nothing about anyone else's machine.
 
 ### With an AI agent
 

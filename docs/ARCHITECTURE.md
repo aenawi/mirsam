@@ -165,6 +165,12 @@ crates/
     fix.rs         format-agnostic repairs
     ports.rs       DocumentReader / DocumentWriter / FontSource
     rules/         the rule set
+      font.rs      the two rules that judge the font a paragraph resolves
+                   to — the only ones that ask about the machine rather
+                   than the document, which is why the FontSource is an
+                   argument to Engine::with_fonts and not a RepairOptions
+                   field, and why a caller that does not supply one has to
+                   report the checks as NOT RUN
   mirsam-ooxml/    adapter — PPTX and DOCX; XLSX will share the two modules
                    below that name no element: the package and the scaffold
     package.rs     ZIP access and the byte-preserving rewrite (raw entry copy)

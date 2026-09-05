@@ -1,10 +1,9 @@
 //! Resolving a typeface name to the bytes that answer for it.
 //!
-//! The directory searched is the shaping fixtures'. Three files, three
-//! families, and one difference each — which makes it a machine for asking
-//! whether the right bytes came back rather than merely some bytes: the font
-//! that shapes and the font that does not are indistinguishable except by
-//! shaping through them.
+//! The directory searched is the shaping fixtures'. Four families, one
+//! difference each — which makes it a machine for asking whether the right
+//! bytes came back rather than merely some bytes: the font that shapes and the
+//! font that does not are indistinguishable except by shaping through them.
 //!
 //! Nothing here indexes the machine it runs on. A suite that did would assert
 //! whatever the developer happened to have installed.
@@ -27,7 +26,12 @@ fn fixtures() -> SystemFonts {
 fn every_font_in_the_directory_is_indexed_by_the_name_it_gives_itself() {
     assert_eq!(
         fixtures().families().collect::<Vec<_>>(),
-        ["mirsam joining", "mirsam nonjoining", "mirsam partial"]
+        [
+            "mirsam joining",
+            "mirsam latin",
+            "mirsam nonjoining",
+            "mirsam partial"
+        ]
     );
 }
 

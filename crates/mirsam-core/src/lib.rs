@@ -25,6 +25,13 @@
 //! finding the file is a [`ports::FontSource`]'s business, and this crate
 //! still opens nothing.
 //!
+//! `font-coverage` and `shaping-broken` are what those two become as findings,
+//! and they are the only checks here that ask about the *machine* rather than
+//! the document. So [`Engine::with_options`] leaves them registered and unrun,
+//! [`Engine::with_fonts`] arms them against a source, and a caller that does
+//! not arm them must say so in its report: silence from a check that never ran
+//! is not a pass.
+//!
 //! ```
 //! use mirsam_core::{Engine, TextUnit, Direction, Resolved, Properties};
 //!

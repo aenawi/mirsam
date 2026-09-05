@@ -81,6 +81,32 @@ fn escape(text: &str) -> String {
         .collect()
 }
 
+/// Whether the two font checks ran, in the report itself.
+///
+/// Standing rule 4: a check that did not run is `NOT RUN`, never an implied
+/// pass. `font-coverage` and `shaping-broken` are the only rules that read the
+/// machine rather than the document, so they are opt-in — and a report that
+/// did not say which of the two audits it is would let their silence be
+/// mistaken for a clean result.
+fn fonts(checked: bool) -> serde_json::Value {
+    json!({ "checked": checked })
+}
+
+/// The same, for a human.
+fn fonts_line(checked: bool) {
+    println!(
+        "fonts {}",
+        if checked {
+            "checked against this machine's — a font that is here and cannot draw \
+             the text will not draw it anywhere; one that can proves nothing about \
+             the reader's machine"
+        } else {
+            "NOT RUN — pass --fonts to resolve each typeface here and report Arabic \
+             it cannot draw or cannot join"
+        }
+    );
+}
+
 /// The counts an agent branches on, in the same shape for every report.
 fn summary(report: &Report) -> serde_json::Value {
     json!({
@@ -132,13 +158,21 @@ fn verdict(report: &Report, strict: bool) {
     );
 }
 
-pub fn report(path: &Path, format: &str, report: &Report, strict: bool, as_json: bool) {
+pub fn report(
+    path: &Path,
+    format: &str,
+    report: &Report,
+    strict: bool,
+    fonts_checked: bool,
+    as_json: bool,
+) {
     if as_json {
         let payload = json!({
             "file": path.display().to_string(),
             "format": format,
             "strict": strict,
             "blocking": report.is_blocking(strict),
+            "fonts": fonts(fonts_checked),
             "summary": summary(report),
             "diagnostics": report.diagnostics,
         });
@@ -154,6 +188,7 @@ pub fn report(path: &Path, format: &str, report: &Report, strict: bool, as_json:
         "units {} | arabic {} | mixed {}",
         report.units_scanned, report.arabic_units, report.mixed_units
     );
+    fonts_line(fonts_checked);
     println!();
     findings(report);
     verdict(report, strict);
@@ -176,6 +211,9 @@ pub struct Repaired<'a> {
     /// The audit of the output, re-read from disk.
     pub after: &'a Report,
     pub strict: bool,
+    /// Whether the font checks ran over either audit. Reported for the same
+    /// reason `audit` reports it: their silence is not a pass.
+    pub fonts_checked: bool,
 }
 
 /// Where a unit is, in the words `audit` uses; its id if it is not known.
@@ -206,6 +244,7 @@ pub fn repair(r: &Repaired<'_>, as_json: bool) {
             "format": r.format,
             "strict": r.strict,
             "blocking": r.after.is_blocking(r.strict),
+            "fonts": fonts(r.fonts_checked),
             "options": r.options,
             "repairs": {
                 "applied": r.applied,
@@ -245,6 +284,7 @@ pub fn repair(r: &Repaired<'_>, as_json: bool) {
         yes_no(r.options.convert_bullets),
         yes_no(r.options.align),
     );
+    fonts_line(r.fonts_checked);
     println!();
 
     println!("applied {} repair(s)", r.applied.len());

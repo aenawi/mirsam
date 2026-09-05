@@ -8,14 +8,16 @@
 mod render;
 
 use anyhow::{Context, Result, bail};
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use mirsam_core::error::Error as CoreError;
 use mirsam_core::rules::{DEFAULT_LOCALE, is_arabic_tag};
-use mirsam_core::{DocumentReader, DocumentWriter, Engine, Repair, RepairOptions};
+use mirsam_core::{DocumentReader, DocumentWriter, Engine, FontSource, Repair, RepairOptions};
+use mirsam_fonts::SystemFonts;
 use mirsam_ooxml::{DocxDocument, PptxDocument};
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::sync::Arc;
 
 /// Exit codes, stable across releases so CI can branch on them.
 mod exit {
@@ -51,6 +53,8 @@ enum Command {
         /// Treat warnings as blocking.
         #[arg(long)]
         strict: bool,
+        #[command(flatten)]
+        fonts: FontFlags,
         #[arg(long, value_enum, default_value_t = Format::Text)]
         format: Format,
     },
@@ -89,6 +93,8 @@ enum Command {
         /// Treat warnings remaining after the repair as blocking.
         #[arg(long)]
         strict: bool,
+        #[command(flatten)]
+        fonts: FontFlags,
         #[arg(long, value_enum, default_value_t = Format::Text)]
         format: Format,
     },
@@ -111,6 +117,65 @@ enum Command {
 enum Format {
     Text,
     Json,
+}
+
+/// Whether to shape the document's Arabic through the fonts this machine has.
+///
+/// Off by default, and that is a position rather than caution. Every other
+/// check in this tool reads the document and would give the same answer on any
+/// computer; `font-coverage` and `shaping-broken` read the *machine*, and an
+/// audit whose result depended on which fonts happened to be installed on the
+/// runner would be one nobody could reproduce. So the caller asks, and the
+/// report says which of the two audits it is — a check that did not run is
+/// `NOT RUN`, never an implied pass.
+///
+/// Note which way the claim runs when they are on. A font that is *here* and
+/// cannot draw the text will not draw it anywhere, because a `cmap` and a
+/// `GSUB` travel with the font. A font that is here and draws it perfectly
+/// proves nothing about the reader's machine, and silence is not a promise
+/// that the document will render.
+#[derive(Args, Clone, Debug)]
+struct FontFlags {
+    /// Resolve each paragraph's complex-script typeface against the fonts
+    /// installed here, and report Arabic the resolved font cannot draw or
+    /// cannot join. Machine-dependent: see --font-dir.
+    #[arg(long = "fonts")]
+    enabled: bool,
+    /// Search these directories instead of the platform's font directories.
+    /// Implies --fonts, and is what makes the check reproducible: a fixed
+    /// directory gives a fixed answer on any machine.
+    #[arg(long = "font-dir", value_name = "DIR")]
+    dirs: Vec<PathBuf>,
+}
+
+impl FontFlags {
+    fn requested(&self) -> bool {
+        self.enabled || !self.dirs.is_empty()
+    }
+
+    /// The source to arm the font rules with, or `None` to leave them unrun.
+    ///
+    /// Built once per invocation and shared: `SystemFonts` indexes lazily and
+    /// keeps what it found, so a document of forty paragraphs walks the font
+    /// directories once rather than forty times.
+    fn source(&self) -> Option<Arc<dyn FontSource>> {
+        if !self.requested() {
+            return None;
+        }
+        Some(Arc::new(if self.dirs.is_empty() {
+            SystemFonts::new()
+        } else {
+            SystemFonts::in_dirs(self.dirs.clone())
+        }))
+    }
+}
+
+/// The engine, with the font rules armed only if the caller asked for them.
+fn engine(options: &RepairOptions, fonts: &FontFlags) -> Engine {
+    match fonts.source() {
+        Some(source) => Engine::with_fonts(options, source),
+        None => Engine::with_options(options),
+    }
 }
 
 /// `--lang` must be a tag the `language-missing` rule accepts, or the repair
@@ -265,6 +330,7 @@ fn run() -> Result<u8> {
         Command::Audit {
             file,
             strict,
+            fonts,
             format,
         } => {
             let mut document = open(&file)?;
@@ -272,13 +338,14 @@ fn run() -> Result<u8> {
                 .scan()
                 .with_context(|| format!("reading {}", file.display()))?;
 
-            let report = Engine::with_default_rules().audit(&units);
+            let report = engine(&RepairOptions::default(), &fonts).audit(&units);
             let blocking = report.is_blocking(strict);
             render::report(
                 &file,
                 document.format(),
                 &report,
                 strict,
+                fonts.requested(),
                 format == Format::Json,
             );
 
@@ -294,6 +361,7 @@ fn run() -> Result<u8> {
             align,
             force,
             strict,
+            fonts,
             format,
         } => {
             // Refuse before reading anything. The writer refuses the first case
@@ -316,7 +384,7 @@ fn run() -> Result<u8> {
                 convert_bullets,
                 align,
             };
-            let engine = Engine::with_options(&options);
+            let engine = engine(&options, &fonts);
 
             let mut document = open_for_repair(&input)?;
             let units = document
@@ -369,6 +437,7 @@ fn run() -> Result<u8> {
                     before: &before,
                     after: &after,
                     strict,
+                    fonts_checked: fonts.requested(),
                 },
                 format == Format::Json,
             );

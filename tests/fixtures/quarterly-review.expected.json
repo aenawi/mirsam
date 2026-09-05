@@ -227,6 +227,9 @@
       }
     ],
     "file": "quarterly-review.docx",
+    "fonts": {
+      "checked": false
+    },
     "format": "docx",
     "strict": false,
     "summary": {

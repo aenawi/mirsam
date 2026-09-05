@@ -3,6 +3,9 @@
     "blocking": false,
     "diagnostics": [],
     "file": "quarterly-review-correct.docx",
+    "fonts": {
+      "checked": false
+    },
     "format": "docx",
     "strict": false,
     "summary": {
