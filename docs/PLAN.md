@@ -370,7 +370,7 @@ default for text other containers draw rather than a container that draws
 strings of its own. Neither can be given text to show a reviewer, so neither
 is a unit.
 
-*Acceptance:* met for the machine half. `torture.pptx` already carried the
+*Acceptance:* met. `torture.pptx` already carried the
 broken shape: its report now shows `container-direction` on
 `chart1.xml#catax1` with the four cached quarter names as evidence, the
 repair creates a `c:txPr` carrying `rtl="1"` between `c:axPos` and
@@ -380,10 +380,14 @@ creation in each of the three containers, for editing a direction already
 there, for a `c:txPr` that has no `a:pPr`, for per-kind numbering, and for
 the namespace declaration.
 
-- [ ] **Application check, `NOT RUN`.** The issue's last criterion is a
+- [x] **Application check, run 2026-09-05.** The issue's last criterion is a
       person opening the repaired deck and seeing the labels laid out
-      right-to-left. That cannot be proven by a test, and it has not been
-      run. Schema validity is not the same claim.
+      right-to-left, which no test can prove — schema validity is not the
+      same claim. A repaired `torture.pptx` was opened in PowerPoint by the
+      maintainer: no repair prompt, no error, and the text laid out
+      right-to-left. The check is a human one and stays one; it is recorded
+      here rather than automated, and the next writer that creates a part
+      from nothing should be run the same way before its item is ticked.
 
 ---
 
