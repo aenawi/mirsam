@@ -19,8 +19,11 @@
 //! [`shape`] is where that "and a font" is cashed in: it shapes a run through
 //! a real OpenType shaper and reports what came back, so the tool can catch
 //! Arabic that is correct in every attribute and still renders as a row of
-//! disconnected letters. It takes font *bytes* — finding the file is an
-//! adapter's business, and this crate still opens nothing.
+//! disconnected letters. [`coverage`] asks the question underneath it — does
+//! the font have the letter at all? — because a font with no Arabic renders
+//! empty boxes that no shaping table would have saved. Both take font *bytes*:
+//! finding the file is a [`ports::FontSource`]'s business, and this crate
+//! still opens nothing.
 //!
 //! ```
 //! use mirsam_core::{Engine, TextUnit, Direction, Resolved, Properties};
@@ -37,7 +40,9 @@
 //! ```
 
 pub mod bidi;
+pub mod charname;
 pub mod controls;
+pub mod coverage;
 pub mod diagnostic;
 pub mod error;
 pub mod fix;
@@ -48,11 +53,12 @@ pub mod script;
 pub mod shape;
 pub mod text;
 
+pub use coverage::{Coverage, MissingChar};
 pub use diagnostic::{Diagnostic, Evidence, Report, RuleId, Severity};
 pub use error::{Error, Result};
 pub use fix::{Fix, Repair};
 pub use joining::JoiningForm;
-pub use ports::{DocumentReader, DocumentWriter};
+pub use ports::{DocumentReader, DocumentWriter, FontFile, FontSource};
 pub use rules::{Engine, RepairOptions, Rule};
 pub use shape::{Font, ShapedLetter, Shaping};
 pub use text::{

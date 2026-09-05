@@ -1,0 +1,13 @@
+[package]
+name = "mirsam-fonts"
+description = "Font-resolution adapter for mirsam: which file on this machine draws the typeface a document names."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+mirsam-core.workspace = true
+ttf-parser.workspace = true
