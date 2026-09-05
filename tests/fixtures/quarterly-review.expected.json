@@ -244,15 +244,390 @@
       "warnings": 5
     }
   },
-  "changed_parts": null,
+  "changed_parts": {
+    "word/document.xml": [
+      "+<w:pPr>",
+      "+<w:jc w:val=\"start\"/>",
+      "+</w:pPr>",
+      "+<w:rPr>",
+      "+<w:lang w:bidi=\"ar-SA\"/>",
+      "+</w:rPr>",
+      "-<w:bidi w:val=\"0\"/>",
+      "+<w:bidi w:val=\"1\"/>",
+      "+<w:jc w:val=\"start\"/>",
+      "+<w:bidi w:val=\"1\"/>",
+      "+<w:jc w:val=\"start\"/>",
+      "-<w:rFonts w:ascii=\"Calibri\" w:hAnsi=\"Calibri\"/>",
+      "+<w:rFonts w:ascii=\"Calibri\" w:hAnsi=\"Calibri\" w:cs=\"Dubai\"/>",
+      "-<w:rFonts w:ascii=\"Calibri\" w:hAnsi=\"Calibri\"/>",
+      "+<w:rFonts w:ascii=\"Calibri\" w:hAnsi=\"Calibri\" w:cs=\"Dubai\"/>",
+      "+<w:numPr>",
+      "+<w:ilvl w:val=\"0\"/>",
+      "+<w:numId w:val=\"1\"/>",
+      "+</w:numPr>",
+      "-<w:t xml:space=\"preserve\">• نمو في قطاع التجزئة",
+      "+<w:t xml:space=\"preserve\">نمو في قطاع التجزئة",
+      "-<w:t xml:space=\"preserve\">‫ارتفع الأداء بنسبة 25%‬",
+      "+<w:t xml:space=\"preserve\">ارتفع الأداء بنسبة 25%",
+      "-<w:t xml:space=\"preserve\">ﺍﻟﺘﻘﺮﻳﺮ ﺍﻟﻔﺼﻠﻲ",
+      "+<w:t xml:space=\"preserve\">التقرير الفصلي",
+      "+<w:bidiVisual w:val=\"1\"/>"
+    ]
+  },
   "document": "quarterly-review.docx",
   "exit_codes": {
     "audit": 1,
     "audit --strict": 1,
-    "repair": 2,
-    "repair --strict": 2
+    "repair": 0,
+    "repair --strict": 0
   },
   "repair": {
-    "refused": ".docx can be audited but not yet repaired; `mirsam audit` reads it, and the writer is scheduled in docs/ROADMAP.md"
+    "after": {
+      "diagnostics": [],
+      "summary": {
+        "arabic_units": 14,
+        "errors": 0,
+        "mixed_units": 3,
+        "notes": 0,
+        "units_scanned": 17,
+        "warnings": 0
+      }
+    },
+    "before": {
+      "diagnostics": [
+        {
+          "evidence": {
+            "inherited_from": null,
+            "logical": "‫ارتفع الأداء بنسبة 25%‬",
+            "offenders": [
+              "POP DIRECTIONAL FORMATTING",
+              "RIGHT-TO-LEFT EMBEDDING"
+            ],
+            "visual_declared": null,
+            "visual_expected": null
+          },
+          "fixable": true,
+          "location": {
+            "container": null,
+            "paragraph": 7,
+            "part": "word/document.xml"
+          },
+          "message": "2 explicit bidi control(s) embedded in text; set container direction instead",
+          "rule": "bidi-control",
+          "severity": "error",
+          "unit": "word/document.xml#p7"
+        },
+        {
+          "evidence": {
+            "inherited_from": null,
+            "logical": "ارتفع الأداء بنسبة 25% في Q4 2026.",
+            "offenders": [],
+            "visual_declared": "يف %25 ةبسنب ءادألا عفترا Q4 2026.",
+            "visual_expected": ".Q4 2026 يف %25 ةبسنب ءادألا عفترا"
+          },
+          "fixable": true,
+          "location": {
+            "container": null,
+            "paragraph": 3,
+            "part": "word/document.xml"
+          },
+          "message": "renders as ltr but reads as rtl; visual order differs from the logical text",
+          "rule": "direction-mismatch",
+          "severity": "error",
+          "unit": "word/document.xml#p3"
+        },
+        {
+          "evidence": {
+            "inherited_from": null,
+            "logical": "ﺍﻟﺘﻘﺮﻳﺮ ﺍﻟﻔﺼﻠﻲ",
+            "offenders": [
+              "U+FE8D",
+              "U+FE98",
+              "U+FEAE",
+              "U+FEBC",
+              "U+FED4",
+              "U+FED8",
+              "U+FEDF",
+              "U+FEE0",
+              "U+FEF2",
+              "U+FEF3"
+            ],
+            "visual_declared": null,
+            "visual_expected": null
+          },
+          "fixable": true,
+          "location": {
+            "container": null,
+            "paragraph": 8,
+            "part": "word/document.xml"
+          },
+          "message": "13 pre-shaped presentation form(s); text is not searchable or reflowable",
+          "rule": "presentation-forms",
+          "severity": "error",
+          "unit": "word/document.xml#p8"
+        },
+        {
+          "evidence": {
+            "inherited_from": null,
+            "logical": null,
+            "offenders": [],
+            "visual_declared": null,
+            "visual_expected": null
+          },
+          "fixable": true,
+          "location": {
+            "container": null,
+            "paragraph": 5,
+            "part": "word/document.xml"
+          },
+          "message": "Latin font specified without a complex-script font; Arabic will be substituted",
+          "rule": "complex-font-missing",
+          "severity": "warning",
+          "unit": "word/document.xml#p5"
+        },
+        {
+          "evidence": {
+            "inherited_from": null,
+            "logical": "المؤشر\nالربع الثالث\nالربع الرابع\nالإيرادات\n12.4\n15.5",
+            "offenders": [],
+            "visual_declared": null,
+            "visual_expected": null
+          },
+          "fixable": true,
+          "location": {
+            "container": null,
+            "paragraph": null,
+            "part": "word/document.xml"
+          },
+          "message": "table declares no direction; its cells read rtl, so the columns run the wrong way",
+          "rule": "container-direction",
+          "severity": "warning",
+          "unit": "word/document.xml#tbl1"
+        },
+        {
+          "evidence": {
+            "inherited_from": "word/styles.xml style[EnglishBody]/pPr@bidi",
+            "logical": null,
+            "offenders": [],
+            "visual_declared": null,
+            "visual_expected": null
+          },
+          "fixable": true,
+          "location": {
+            "container": null,
+            "paragraph": 4,
+            "part": "word/document.xml"
+          },
+          "message": "no base direction of its own; inherits ltr, but this reads as rtl",
+          "rule": "direction-unset",
+          "severity": "warning",
+          "unit": "word/document.xml#p4"
+        },
+        {
+          "evidence": {
+            "inherited_from": null,
+            "logical": null,
+            "offenders": [],
+            "visual_declared": null,
+            "visual_expected": null
+          },
+          "fixable": true,
+          "location": {
+            "container": null,
+            "paragraph": 2,
+            "part": "word/document.xml"
+          },
+          "message": "Arabic text tagged as none; expected an ar-* language tag",
+          "rule": "language-missing",
+          "severity": "warning",
+          "unit": "word/document.xml#p2"
+        },
+        {
+          "evidence": {
+            "inherited_from": null,
+            "logical": null,
+            "offenders": [],
+            "visual_declared": null,
+            "visual_expected": null
+          },
+          "fixable": true,
+          "location": {
+            "container": null,
+            "paragraph": 6,
+            "part": "word/document.xml"
+          },
+          "message": "paragraph begins with a typed '•'; use a native list instead",
+          "rule": "literal-bullet",
+          "severity": "warning",
+          "unit": "word/document.xml#p6"
+        },
+        {
+          "evidence": {
+            "inherited_from": null,
+            "logical": "التقرير الفصلي للربع الرابع",
+            "offenders": [],
+            "visual_declared": null,
+            "visual_expected": null
+          },
+          "fixable": true,
+          "location": {
+            "container": null,
+            "paragraph": 2,
+            "part": "word/document.xml"
+          },
+          "message": "no alignment declared; a left-to-right layout places this on the left edge",
+          "rule": "alignment-unset",
+          "severity": "note",
+          "unit": "word/document.xml#p2"
+        },
+        {
+          "evidence": {
+            "inherited_from": null,
+            "logical": "ارتفع الأداء بنسبة 25% في Q4 2026.",
+            "offenders": [],
+            "visual_declared": null,
+            "visual_expected": null
+          },
+          "fixable": true,
+          "location": {
+            "container": null,
+            "paragraph": 3,
+            "part": "word/document.xml"
+          },
+          "message": "no alignment declared; a left-to-right layout places this on the left edge",
+          "rule": "alignment-unset",
+          "severity": "note",
+          "unit": "word/document.xml#p3"
+        },
+        {
+          "evidence": {
+            "inherited_from": null,
+            "logical": "التقرير الفصلي للربع الرابع",
+            "offenders": [],
+            "visual_declared": null,
+            "visual_expected": null
+          },
+          "fixable": true,
+          "location": {
+            "container": null,
+            "paragraph": 4,
+            "part": "word/document.xml"
+          },
+          "message": "no alignment declared; a left-to-right layout places this on the left edge",
+          "rule": "alignment-unset",
+          "severity": "note",
+          "unit": "word/document.xml#p4"
+        }
+      ],
+      "summary": {
+        "arabic_units": 13,
+        "errors": 3,
+        "mixed_units": 3,
+        "notes": 3,
+        "units_scanned": 17,
+        "warnings": 5
+      }
+    },
+    "blocking": false,
+    "file": "quarterly-review.docx",
+    "fonts": {
+      "checked": false
+    },
+    "format": "docx",
+    "options": {
+      "align": true,
+      "complex_font": "Dubai",
+      "convert_bullets": true,
+      "language": "ar-SA",
+      "strip_tatweel": true
+    },
+    "output": "quarterly-review.repaired.docx",
+    "repairs": {
+      "applied": [
+        {
+          "fix": {
+            "kind": "set_alignment",
+            "value": "start"
+          },
+          "unit": "word/document.xml#p2"
+        },
+        {
+          "fix": {
+            "kind": "set_language",
+            "value": "ar-SA"
+          },
+          "unit": "word/document.xml#p2"
+        },
+        {
+          "fix": {
+            "kind": "set_direction",
+            "value": "rtl"
+          },
+          "unit": "word/document.xml#p3"
+        },
+        {
+          "fix": {
+            "kind": "set_alignment",
+            "value": "start"
+          },
+          "unit": "word/document.xml#p3"
+        },
+        {
+          "fix": {
+            "kind": "set_direction",
+            "value": "rtl"
+          },
+          "unit": "word/document.xml#p4"
+        },
+        {
+          "fix": {
+            "kind": "set_alignment",
+            "value": "start"
+          },
+          "unit": "word/document.xml#p4"
+        },
+        {
+          "fix": {
+            "kind": "set_complex_font",
+            "value": "Dubai"
+          },
+          "unit": "word/document.xml#p5"
+        },
+        {
+          "fix": {
+            "kind": "convert_literal_bullet",
+            "value": {
+              "marker": "•"
+            }
+          },
+          "unit": "word/document.xml#p6"
+        },
+        {
+          "fix": {
+            "kind": "remove_controls",
+            "value": [
+              0,
+              41
+            ]
+          },
+          "unit": "word/document.xml#p7"
+        },
+        {
+          "fix": {
+            "kind": "normalize_presentation_forms"
+          },
+          "unit": "word/document.xml#p8"
+        },
+        {
+          "fix": {
+            "kind": "set_direction",
+            "value": "rtl"
+          },
+          "unit": "word/document.xml#tbl1"
+        }
+      ],
+      "skipped": []
+    },
+    "strict": false
   }
 }

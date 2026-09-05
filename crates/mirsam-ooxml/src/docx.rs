@@ -71,29 +71,41 @@
 //! caller holding one part and no package — an unstated property stays
 //! `Unset` rather than being guessed at.
 //!
-//! ## Reading only, for now
+//! ## Writing
 //!
-//! [`DocumentWriter`] is deliberately not implemented. `DocumentReader` and
-//! `DocumentWriter` are separate ports precisely so an adapter can arrive one
-//! half at a time, and claiming a repair this crate cannot yet express in
-//! WordprocessingML would be the kind of inferred capability `AGENTS.md`
-//! forbids.
+//! [`DocumentWriter`] lands the repairs, and [`crate::word`] is where every
+//! element name they are written with lives — this module groups them by the
+//! part and the paragraph a unit id names and hands the rest over.
 //!
+//! Two of the shape it takes are worth reading before the code. It needs no
+//! map of inherited directions, unlike the PowerPoint adapter: `w:jc` is
+//! relative to the paragraph's own direction, so there is nothing to lower a
+//! `Start` against. And a typed bullet is converted by pointing the paragraph
+//! at a list the document already defines, so [`supports`] answers *no* for
+//! `ConvertLiteralBullet` on a document that defines none — a `w:numPr` naming
+//! a list that does not exist is a document Word offers to repair.
+//!
+//! [`supports`]: mirsam_core::ports::DocumentWriter::supports
 //! [`DocumentWriter`]: mirsam_core::ports::DocumentWriter
 //! [ECMA-376]: https://ecma-international.org/publications-and-standards/standards/ecma-376/
 //! [MS-OE376]: https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oe376/26ecf09a-0f0b-4574-9907-ebd1ddf3015f
 
 use crate::inherit::{ThemeFont, ThemeScript};
-use crate::package::Package;
+use crate::package::{Edits, Package};
+use crate::rels::RelationshipGraph;
 use crate::style::{StyleSheet, theme_reference};
 use crate::token::is_true;
+use crate::word;
 use mirsam_core::error::{Error, Result};
-use mirsam_core::ports::DocumentReader;
+use mirsam_core::ports::{DocumentReader, DocumentWriter};
 use mirsam_core::text::{
     Alignment, Bullet, Direction, Location, Properties, Resolved, TextUnit, UnitKind,
 };
+use mirsam_core::{Fix, Repair, UnitId};
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::{Reader, XmlVersion};
+use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 /// Alignment values WordprocessingML understands, as *Word* reads them.
@@ -155,6 +167,34 @@ fn unit_id(part: &str, index: usize) -> String {
 /// consumer that already echoes PowerPoint's ids needs nothing new for Word's.
 fn table_id(part: &str, index: usize) -> String {
     format!("{part}#tbl{index}")
+}
+
+/// What a unit id this adapter issued points at.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Target {
+    Paragraph(usize),
+    Table(usize),
+}
+
+/// Recover the part and target from an id this adapter issued.
+///
+/// `#` cannot occur in an OPC part name, so the last `#` is unambiguous, and
+/// `tbl` is tried before `p` because `p` is one letter. The same shapes the
+/// PowerPoint adapter issues parse the same way here; an id from any other
+/// adapter is refused rather than half-understood, because a repair that
+/// landed on "whatever paragraph 3 of this part is" would be a repair the
+/// report never asked for.
+fn parse_unit_id(id: &UnitId) -> Option<(&str, Target)> {
+    let (part, rest) = id.0.rsplit_once('#')?;
+    let ordinal = |digits: &str| digits.parse::<usize>().ok().filter(|n| *n > 0);
+
+    let target = if let Some(n) = rest.strip_prefix("tbl") {
+        Target::Table(ordinal(n)?)
+    } else {
+        Target::Paragraph(ordinal(rest.strip_prefix('p')?)?)
+    };
+
+    (!part.is_empty()).then_some((part, target))
 }
 
 /// Accumulates a table while the rows, cells and paragraphs inside it are
@@ -588,15 +628,27 @@ impl PartScan {
     }
 }
 
-/// A Word package opened for auditing.
+/// A Word package opened for auditing and repair.
 pub struct DocxDocument {
     package: Package,
+    /// Parts rewritten by [`DocumentWriter::apply`], awaiting
+    /// [`DocumentWriter::write`]. Everything else is copied raw.
+    edits: Edits,
+    /// The list each typed marker converts to, answered once per marker.
+    ///
+    /// [`DocumentWriter::supports`] takes `&self` and is asked the same
+    /// question for every literal bullet in the document; reading and parsing
+    /// `word/numbering.xml` once per finding would be a cost that grows with
+    /// the defect count for an answer that cannot change.
+    bullets: RefCell<BTreeMap<char, Option<String>>>,
 }
 
 impl DocxDocument {
     pub fn open(path: impl Into<PathBuf>) -> Result<Self> {
         Ok(Self {
             package: Package::open(path)?,
+            edits: Edits::new(),
+            bullets: RefCell::new(BTreeMap::new()),
         })
     }
 
@@ -632,6 +684,52 @@ impl DocxDocument {
     /// a field every `open` pays for is a cost no other command should carry.
     pub fn styles(&self) -> Result<StyleSheet> {
         StyleSheet::read(&self.package)
+    }
+
+    /// One part's XML, taking a staged edit over the package's own bytes so
+    /// that repairs applied in two rounds compose rather than the second round
+    /// discarding the first.
+    fn part_text(&self, part: &str) -> Result<String> {
+        match self.edits.get(part) {
+            Some(bytes) => {
+                String::from_utf8(bytes.clone()).map_err(|e| Error::Format(format!("{part}: {e}")))
+            }
+            None => self.package.read_text(part),
+        }
+    }
+
+    /// The `w:numId` a paragraph joins when a typed `marker` is converted, or
+    /// `None` when this document defines no bulleted list.
+    ///
+    /// The numbering part is reached by the relationship pointing at it rather
+    /// than by its conventional path, for the reason [`crate::style`] gives
+    /// about `styles.xml`: a package is free to store it anywhere, and a
+    /// writer that hard-codes `word/numbering.xml` refuses a repair it could
+    /// have made on a document that stores it elsewhere.
+    ///
+    /// An unreadable or malformed numbering part answers `None`. That is the
+    /// same answer as "there is no list here", and it is the right one: the
+    /// repair is reported as *not made* rather than attempted against a part
+    /// this adapter could not understand.
+    fn bullet_list(&self, marker: char) -> Option<String> {
+        if let Some(known) = self.bullets.borrow().get(&marker) {
+            return known.clone();
+        }
+        let found = self.numbering_part().and_then(|part| {
+            let xml = self.package.read_text(&part).ok()?;
+            word::bullet_list(&part, &xml, marker).ok().flatten()
+        });
+        self.bullets.borrow_mut().insert(marker, found.clone());
+        found
+    }
+
+    /// The part this document defines its lists in.
+    fn numbering_part(&self) -> Option<String> {
+        let graph = RelationshipGraph::read(&self.package).ok()?;
+        let document = graph.office_document()?.to_string();
+        graph
+            .first_part_of_kind(&document, "numbering")
+            .map(str::to_string)
     }
 
     /// Parse one `word/**/*.xml` part into text units.
@@ -724,10 +822,105 @@ impl DocumentReader for DocxDocument {
         let styles = self.styles()?;
         let mut units = Vec::new();
         for part in self.text_parts()? {
-            let xml = self.package.read_text(&part)?;
+            let xml = self.part_text(&part)?;
             units.extend(Self::scan_part(&part, &xml, Some(&styles))?);
         }
         Ok(units)
+    }
+}
+
+impl DocumentWriter for DocxDocument {
+    /// Whether WordprocessingML can express `fix`.
+    ///
+    /// Two refusals, and both are the format's rather than this adapter's.
+    ///
+    /// A **physical edge** is not something a Word paragraph can state:
+    /// `w:jc`'s values are evaluated against the paragraph's own `w:bidi`, so
+    /// there is no value meaning "the left of the page whatever the direction"
+    /// to write [`Alignment::Left`] as. This is the writing half of the
+    /// refusal the conformance suite states for reading, and it is why no
+    /// Word unit ever comes back carrying one.
+    ///
+    /// A **typed bullet** is converted by pointing the paragraph at a list,
+    /// and the list has to be one this document already defines. A repair
+    /// cannot supply it: [`crate::package`] replaces the entries a package
+    /// holds, and a numbering part that is not there needs a part, a
+    /// content-type override and a relationship, none of which is an edit to
+    /// the paragraph the finding named.
+    fn supports(&self, fix: &Fix) -> bool {
+        match fix {
+            Fix::SetAlignment(Alignment::Left | Alignment::Right) => false,
+            Fix::ConvertLiteralBullet { marker } => self.bullet_list(*marker).is_some(),
+            _ => true,
+        }
+    }
+
+    /// Stage repairs against the parts they name.
+    ///
+    /// Repairs are grouped by part and then by paragraph, so a part is read
+    /// and rewritten once however many paragraphs it carries. Nothing is
+    /// staged unless every part succeeds: a failure half-way through must not
+    /// leave a document that is partly repaired and reports otherwise.
+    ///
+    /// There is no inheritance pass here, and its absence is Word's doing.
+    /// The PowerPoint adapter has to re-run its scanner over each part to
+    /// learn the direction every paragraph takes from its container, because
+    /// `a:pPr/@algn` names physical edges and a `Start` cannot be written
+    /// without one. `w:jc` is already relative to the paragraph's own
+    /// direction, so the rewriter needs nothing the paragraph does not carry.
+    fn apply(&mut self, repairs: &[Repair]) -> Result<usize> {
+        let mut by_part: BTreeMap<String, word::PartPlan> = BTreeMap::new();
+        let mut bullets = word::Bullets::new();
+
+        for repair in repairs {
+            let Some((part, target)) = parse_unit_id(&repair.unit) else {
+                return Err(Error::Format(format!(
+                    "{}: not a unit this adapter produced",
+                    repair.unit
+                )));
+            };
+            // Resolved here rather than in the rewriter, which holds no
+            // package and so cannot see the numbering part. `supports` has
+            // already answered this question for every repair the caller
+            // staged; a `Fix` that reached `apply` anyway is refused rather
+            // than written as a `w:numPr` naming nothing.
+            if let Fix::ConvertLiteralBullet { marker } = &repair.fix {
+                let Some(num_id) = self.bullet_list(*marker) else {
+                    return Err(Error::Format(format!(
+                        "{part}: cannot {}; this document defines no bulleted list \
+                         for a paragraph to join",
+                        repair.fix
+                    )));
+                };
+                bullets.insert(*marker, num_id);
+            }
+
+            let plan = by_part.entry(part.to_string()).or_default();
+            match target {
+                Target::Paragraph(index) => plan.paragraphs.entry(index).or_default(),
+                Target::Table(index) => plan.tables.entry(index).or_default(),
+            }
+            .push(repair.fix.clone());
+        }
+
+        let mut staged = Edits::new();
+        let mut applied = 0usize;
+        for (part, plan) in &by_part {
+            // A part edited by an earlier call is edited again from its staged
+            // bytes, so repairs applied in two rounds compose.
+            let xml = self.part_text(part)?;
+            let rewritten = word::apply_plan(part, &xml, plan, &bullets)?;
+            applied += plan.len();
+            staged.insert(part.clone(), rewritten.into_bytes());
+        }
+
+        self.edits.extend(staged);
+        Ok(applied)
+    }
+
+    fn write(&mut self, dest: &Path) -> Result<()> {
+        self.package.rewrite(dest, &self.edits)?;
+        Ok(())
     }
 }
 
@@ -743,4 +936,46 @@ pub fn scan_xml(part: &str, xml: &str) -> Result<Vec<TextUnit>> {
 /// The same, resolving each paragraph against a stylesheet the caller holds.
 pub fn scan_xml_with(part: &str, xml: &str, styles: Option<&StyleSheet>) -> Result<Vec<TextUnit>> {
     DocxDocument::scan_part(part, xml, styles)
+}
+
+#[cfg(test)]
+mod unit_id_tests {
+    use super::*;
+
+    #[test]
+    fn a_unit_id_round_trips_through_its_own_parser() {
+        let part = "word/document.xml";
+        assert_eq!(
+            parse_unit_id(&UnitId(unit_id(part, 3))),
+            Some((part, Target::Paragraph(3)))
+        );
+        assert_eq!(
+            parse_unit_id(&UnitId(table_id(part, 2))),
+            Some((part, Target::Table(2)))
+        );
+    }
+
+    #[test]
+    fn an_id_this_adapter_did_not_issue_is_rejected() {
+        for foreign in [
+            "",
+            "document",
+            "#p1",
+            "word/document.xml#p0",
+            "x#px",
+            "x#p-1",
+            "x#tbl0",
+            "x#tblx",
+            "x#t1",
+            // The containers the PowerPoint adapter issues and this one does
+            // not: a Word paragraph is not laid out in columns, and a chart in
+            // a Word document is a part the DrawingML reader answers for.
+            "x#cols1",
+            "x#catax1",
+            "x#legend1",
+            "x#dlbls1",
+        ] {
+            assert_eq!(parse_unit_id(&UnitId(foreign.into())), None, "{foreign:?}");
+        }
+    }
 }

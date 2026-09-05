@@ -11,6 +11,40 @@ Working towards byte-preserving `repair` for PPTX. See
 
 ### Added
 
+- **The DOCX writer.** `mirsam repair report.docx fixed.docx` works, and
+  `repair` stops turning a Word document away as a readable format without a
+  writer. A repair writes `w:pPr/w:bidi`, `w:pPr/w:jc`, `w:rPr/w:lang@w:bidi`,
+  `w:rPr/w:rFonts@w:cs`, `w:pPr/w:numPr` and `w:tblPr/w:bidiVisual`, each
+  placed by rank against the schema sequence its parent is — WordprocessingML's
+  property elements are `xsd:sequence`, and a correct element in the wrong
+  position is a document Word offers to repair. `word.rs` is the third
+  vocabulary built on the same token-rewrite scaffold, and `token.rs` did not
+  have to learn a Word element name to carry it.
+
+  **The writer needs no inherited direction, unlike PowerPoint's.**
+  DrawingML's `algn` names physical edges, so lowering a `Start` there without
+  knowing the paragraph's direction reproduces the defect being repaired.
+  Word's `w:jc` is evaluated against the paragraph's own `w:bidi`, so `start`
+  is the start edge whichever way the paragraph runs — the inheritance pass is
+  absent from this adapter rather than skipped in it.
+
+  **Two repairs are refused, and both refusals are the format's.** Word has no
+  spelling for a *physical* edge, which is the refusal the conformance suite
+  already records for the reading side, so `SetAlignment(Left)` appears in
+  `repairs.skipped` rather than being lowered onto whichever relative edge
+  lands left today. And a typed bullet becomes a `w:numPr` pointing into the
+  numbering part, so `--convert-bullets` can only join a list the document
+  already defines — preferring one that draws the marker the author typed —
+  and is skipped otherwise. Filling `@w:cs` also clears `@w:cstheme` beside
+  it, because the theme reference is what Word renders and leaving it standing
+  would be a repair that changes what the file says and not what a reader
+  sees. See [`docs/PLAN.md`](docs/PLAN.md) §3.6.
+
+  The two corpus Word documents recorded the refusal this replaces, so the
+  change arrives as a repair report and a part-level diff on
+  `quarterly-review.docx` — whose `after` audit is now empty — rather than as
+  a test somebody remembered to update.
+
 - **The XLSX adapter, and the second format `repair` can write.** `mirsam
   audit book.xlsx` reads a workbook and `mirsam repair book.xlsx fixed.xlsx`
   writes one. A cell is a paragraph and the worksheet around it is the

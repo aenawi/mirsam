@@ -6,13 +6,22 @@
 //! splices attribute values in their raw bytes, inserts children at a position
 //! a caller-supplied schema sequence decides, and reads and rewrites run text.
 //! Which elements and attributes those are is the *vocabulary*, and the
-//! vocabulary lives with its format — [`crate::rewrite`] holds DrawingML's.
+//! vocabulary lives with its format — [`crate::rewrite`] holds DrawingML's,
+//! [`crate::word`] WordprocessingML's and [`crate::sheet`] SpreadsheetML's.
 //!
 //! Nothing here names an element. `a:t` and `w:t` are both "the element whose
 //! content is run text", and a caller says which it means; `a:pPr` and `w:pPr`
 //! are both "a child that goes in schema position", and a caller supplies the
 //! sequence. That is the whole of the separation, and it is why a second
 //! adapter reuses this file rather than copying it.
+//!
+//! *Which* elements a scan should step over is a vocabulary question too, so
+//! the `_outside` functions take the names from the caller. DrawingML never
+//! needs them — an `a:p` cannot contain another. WordprocessingML does:
+//! [`crate::word`] passes `w:txbxContent`, because a text box nests whole
+//! paragraphs that are units in their own right, and `mc:Fallback`, because
+//! [`crate::docx`] does not read one and a rewriter that counted it would
+//! number the paragraphs differently from the report it is applying.
 //!
 //! Two rules follow from the byte-preservation guarantee, and they shape all
 //! the code here.
@@ -54,10 +63,14 @@ pub fn is_true(value: &str) -> bool {
 
 // ------------------------------------------------------------ raw attributes
 
-/// One attribute's name and the byte range of its value inside a tag's content.
+/// One attribute's name and the byte ranges it occupies inside a tag's content.
 struct RawAttribute {
     name: String,
+    /// The value alone, inside its quotes: what [`set_attribute`] splices.
     value: std::ops::Range<usize>,
+    /// The whole attribute, from the first byte of its name to its closing
+    /// quote: what [`remove_attribute`] cuts out.
+    span: std::ops::Range<usize>,
 }
 
 /// Scan a start tag's raw content into attribute names and value ranges.
@@ -112,11 +125,15 @@ fn scan_attributes(content: &str) -> Vec<RawAttribute> {
         while i < content.len() && content[i] != quote {
             i += 1;
         }
+        let value = value_start..i;
+        i += 1; // past the closing quote
         out.push(RawAttribute {
             name,
-            value: value_start..i,
+            value,
+            // Clamped: an unterminated value leaves `i` past the end, and a
+            // malformed tag must not make a caller's slice panic.
+            span: name_start..i.min(content.len()),
         });
-        i += 1; // past the closing quote
     }
 
     out
@@ -165,6 +182,36 @@ pub fn set_attribute(tag: &BytesStart, name: &str, value: &str) -> BytesStart<'s
     };
 
     BytesStart::from_content(replaced, tag.name().0.len())
+}
+
+/// Delete an attribute and the whitespace that separated it, leaving every
+/// other byte of the tag untouched. A tag that does not carry it is returned
+/// as it was.
+///
+/// The counterpart to [`set_attribute`], and needed for the same reason: some
+/// repairs are only true if a second attribute stops contradicting the one
+/// being written. WordprocessingML's `w:rFonts` is the case in point — Word
+/// renders `@w:cstheme` and keeps `@w:cs` beside it as a cached answer, so
+/// writing the typeface into `@w:cs` and leaving a theme reference standing
+/// would change what the file *says* and not what a reader *sees*.
+pub fn remove_attribute(tag: &BytesStart, name: &str) -> BytesStart<'static> {
+    let content: &str = tag;
+    let Some(found) = scan_attributes(content)
+        .into_iter()
+        .find(|a| a.name == name)
+    else {
+        return tag.clone().into_owned();
+    };
+
+    // Take the whitespace before the attribute with it, so removing the only
+    // attribute leaves `<w:rFonts>` rather than `<w:rFonts >`.
+    let start = content[..found.span.start]
+        .bytes()
+        .rposition(|b| !b.is_ascii_whitespace())
+        .map_or(0, |i| i + 1);
+    let kept = format!("{}{}", &content[..start], &content[found.span.end..]);
+
+    BytesStart::from_content(kept, tag.name().0.len())
 }
 
 // --------------------------------------------------------------- event stream
@@ -269,13 +316,52 @@ pub fn element_ranges(
     events: &[Event<'static>],
     name: &str,
 ) -> Vec<(usize, std::ops::Range<usize>)> {
+    element_ranges_outside(events, name, &[])
+}
+
+/// [`element_ranges`], skipping the whole of any element named in `excluded`.
+///
+/// A rewriter must number the elements it edits exactly as the scanner that
+/// produced the report numbered them, and a scanner that does not read some
+/// region of the part does not count what is in it. DrawingML has never
+/// needed this; WordprocessingML does, because its reader steps over an
+/// `mc:Fallback` — the fallback and the `mc:Choice` beside it spell out the
+/// same paragraphs, and counting both would put a repair on the wrong one.
+///
+/// The container's own start tag, at index 0 of a slice, is not a candidate
+/// for exclusion: a caller passing a paragraph and excluding paragraphs means
+/// the ones nested inside it.
+pub fn element_ranges_outside(
+    events: &[Event<'static>],
+    name: &str,
+    excluded: &[&str],
+) -> Vec<(usize, std::ops::Range<usize>)> {
+    element_starts_outside(events, name, excluded)
+        .into_iter()
+        .enumerate()
+        .map(|(n, i)| (n + 1, element_range(events, i)))
+        .collect()
+}
+
+/// The index of every element named `name`, in document order, skipping the
+/// whole of any element named in `excluded`. See [`element_ranges_outside`].
+pub fn element_starts_outside(
+    events: &[Event<'static>],
+    name: &str,
+    excluded: &[&str],
+) -> Vec<usize> {
     let mut out = Vec::new();
-    let mut index = 0usize;
-    for i in 0..events.len() {
-        if name_of(&events[i]).as_deref() == Some(name) {
-            index += 1;
-            out.push((index, element_range(events, i)));
+    let mut i = 0usize;
+    while i < events.len() {
+        match name_of(&events[i]).as_deref() {
+            Some(found) if i > 0 && excluded.contains(&found) => {
+                i = element_range(events, i).end;
+                continue;
+            }
+            Some(found) if found == name => out.push(i),
+            _ => {}
         }
+        i += 1;
     }
     out
 }
@@ -406,20 +492,31 @@ pub fn text_content_ranges(
     events: &[Event<'static>],
     text_element: &str,
 ) -> Vec<std::ops::Range<usize>> {
-    let mut out = Vec::new();
-    let mut start = None;
-    for (i, event) in events.iter().enumerate() {
-        match event {
-            Event::Start(e) if e.name().0 == text_element => start = Some(i + 1),
-            Event::End(e) if e.name().0 == text_element => {
-                if let Some(from) = start.take() {
-                    out.push(from..i);
-                }
-            }
-            _ => {}
-        }
-    }
-    out
+    text_content_ranges_outside(events, text_element, &[])
+}
+
+/// [`text_content_ranges`], skipping the whole of any element named in
+/// `excluded` — a caller's way of saying which runs are *this* unit's own.
+///
+/// DrawingML has no use for it, because an `a:p` cannot contain another one. A
+/// WordprocessingML paragraph can: a text box is a `w:txbxContent` inside a
+/// run, and the paragraphs in it are units in their own right, with their own
+/// text and their own repairs. An offset the domain computed for the outer
+/// paragraph indexes the outer paragraph's runs alone, so a repair that
+/// reached the inner ones would delete from a string nobody scanned.
+pub fn text_content_ranges_outside(
+    events: &[Event<'static>],
+    text_element: &str,
+    excluded: &[&str],
+) -> Vec<std::ops::Range<usize>> {
+    element_starts_outside(events, text_element, excluded)
+        .into_iter()
+        // A self-closing `<w:t/>` holds no content and so has no range; the
+        // element range of one is a single event, and `end - 1` would be the
+        // start tag itself.
+        .filter(|&i| matches!(events[i], Event::Start(_)))
+        .map(|i| i + 1..element_range(events, i).end - 1)
+        .collect()
 }
 
 /// Resolve a run of content events to logical-order text.
@@ -486,9 +583,20 @@ pub fn replace_content(
 /// untouched — character references and all.
 pub fn map_runs(events: &mut Vec<Event<'static>>, text_element: &str, f: impl Fn(&str) -> String) {
     let ranges = text_content_ranges(events, text_element);
-    let before = read_runs(events, &ranges);
+    map_runs_in(events, &ranges, f);
+}
+
+/// [`map_runs`], over a caller-chosen set of content ranges — the ones
+/// [`text_content_ranges_outside`] answered with, where some of the element's
+/// runs belong to a unit inside it rather than to the unit being repaired.
+pub fn map_runs_in(
+    events: &mut Vec<Event<'static>>,
+    ranges: &[std::ops::Range<usize>],
+    f: impl Fn(&str) -> String,
+) {
+    let before = read_runs(events, ranges);
     let after: Vec<String> = before.iter().map(|text| f(text)).collect();
-    replace_content(events, &ranges, &before, &after);
+    replace_content(events, ranges, &before, &after);
 }
 
 /// Remove the characters at the given offsets into the element's text.
@@ -498,7 +606,17 @@ pub fn map_runs(events: &mut Vec<Event<'static>>, text_element: &str, f: impl Fn
 /// to front so that removing one does not move the next.
 pub fn remove_at_offsets(events: &mut Vec<Event<'static>>, text_element: &str, offsets: &[usize]) {
     let ranges = text_content_ranges(events, text_element);
-    let before = read_runs(events, &ranges);
+    remove_at_offsets_in(events, &ranges, offsets);
+}
+
+/// [`remove_at_offsets`], over a caller-chosen set of content ranges. See
+/// [`map_runs_in`] for when a caller has to choose them.
+pub fn remove_at_offsets_in(
+    events: &mut Vec<Event<'static>>,
+    ranges: &[std::ops::Range<usize>],
+    offsets: &[usize],
+) {
+    let before = read_runs(events, ranges);
     let mut runs = before.clone();
 
     let mut sorted: Vec<usize> = offsets.to_vec();
@@ -520,13 +638,23 @@ pub fn remove_at_offsets(events: &mut Vec<Event<'static>>, text_element: &str, o
         }
     }
 
-    replace_content(events, &ranges, &before, &runs);
+    replace_content(events, ranges, &before, &runs);
 }
 
 /// Strip a leading marker character, and the whitespace after it, from the
 /// start of the element's first run.
 pub fn strip_leading_marker(events: &mut Vec<Event<'static>>, text_element: &str, marker: char) {
     let ranges = text_content_ranges(events, text_element);
+    strip_leading_marker_in(events, &ranges, marker);
+}
+
+/// [`strip_leading_marker`], over a caller-chosen set of content ranges. See
+/// [`map_runs_in`] for when a caller has to choose them.
+pub fn strip_leading_marker_in(
+    events: &mut Vec<Event<'static>>,
+    ranges: &[std::ops::Range<usize>],
+    marker: char,
+) {
     let Some(first) = ranges.first().cloned() else {
         return;
     };
