@@ -151,6 +151,10 @@ crates/
     bidi.rs        UAX#9 resolution, dominant vs auto direction
     script.rs      Arabic script detection, presentation forms
     controls.rs    explicit bidi controls (never ZWJ/ZWNJ)
+    joining.rs     Joining_Type and the contextual form each letter is
+                   required to take — the expectation, from the text alone
+    shape.rs       what a font actually does with it: rustybuzz over caller-
+                   supplied bytes, reported letter by letter and never judged
     diagnostic.rs  Severity, Diagnostic, Evidence, Report
     fix.rs         format-agnostic repairs
     ports.rs       DocumentReader / DocumentWriter
@@ -192,5 +196,12 @@ crates/
                    reads but cannot write, of the refusal it gives instead
 ```
 
-`mirsam-core` has four dependencies and no I/O. That constraint is the
+`mirsam-core` has five dependencies and no I/O. That constraint is the
 architecture; if it ever needs to open a file, something has gone wrong.
+
+The fifth is `rustybuzz`, and it is worth saying why it does not breach that.
+Shaping is the domain: "does this Arabic join" is the question the whole tool
+exists to answer, and it is answered by an algorithm over text and a font, not
+by a renderer and not by a filesystem. `shape::Font::parse` takes bytes.
+*Which* typeface a paragraph resolves to, and where that file lives on which
+machine, are questions about the world, and they stay in an adapter.

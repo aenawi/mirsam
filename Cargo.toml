@@ -18,6 +18,7 @@ mirsam-core = { path = "crates/mirsam-core", version = "0.1.0" }
 mirsam-ooxml = { path = "crates/mirsam-ooxml", version = "0.1.0" }
 unicode-bidi = "0.3.18"
 unicode-normalization = "0.1.25"
+rustybuzz = "0.20"
 quick-xml = "0.42"
 zip = { version = "8.6", default-features = false, features = ["deflate"] }
 serde = { version = "1", features = ["derive"] }
