@@ -137,8 +137,16 @@ workflow currently pushes onto a human.
   did not read rather than letting an absent value look decided. See
   [`PLAN.md`](PLAN.md) §5.1 and
   [ADR 0009](adr/0009-a-source-the-adapter-could-not-read-is-part-of-the-report.md).
-- HTML rules of its own: `<bdi>`/`<bdo>` misuse, physical properties where
-  logical ones were meant, DOM order reversed to fake RTL.
+- **Landed:** four rules for the defects only the web can write.
+  `bidi-override` for `<bdo>`, which is an embedded U+202E in markup;
+  `isolation-missing` for the `<bdi>` that should have been around an
+  interpolated name, proved by resolving the paragraph with and without the
+  run isolated; `inset-physical` for `margin-left` where
+  `margin-inline-start` was meant; and `order-reversed` for a layout made to
+  look right to left by reversing its boxes rather than declaring a direction.
+  They live in `mirsam-core` and the other two formats return `Inexpressible`,
+  which is four new refusals rather than four skips. See
+  [`PLAN.md`](PLAN.md) §5.2.
 - XLSX: sheet direction, cell alignment, formula and identifier preservation.
 
 ---

@@ -18,7 +18,7 @@ use crate::text::{Alignment, Direction, Origin, Resolved, TextUnit, UnitKind};
 /// strength of a template default. A contradicting inherited value is
 /// `direction-unset`'s finding, at the severity an absent one carries
 /// (ADR 0007 §3).
-fn judged_direction(unit: &TextUnit) -> Direction {
+pub(super) fn judged_direction(unit: &TextUnit) -> Direction {
     match unit.props.direction {
         Resolved::Explicit(direction) => direction,
         _ => bidi::auto_direction(&unit.text),
@@ -264,6 +264,83 @@ impl Rule for AlignmentIncoherent {
     }
 }
 
+/// A physical left inset on right-to-left text.
+///
+/// The sibling of `alignment-incoherent`, and the same argument. An indent, a
+/// margin or a padding measured from the *start* edge is on the right in Arabic
+/// and on the left in English, and follows the text wherever it is re-used. One
+/// measured from the physical left edge does not follow anything: under
+/// right-to-left text it lands at the end of the line, so the paragraph is
+/// indented on the side the reader finishes at and flush against the side they
+/// begin from.
+///
+/// A warning, matching `alignment-incoherent`, and for the same reason: the
+/// text renders and reads, and what is wrong is the shape of the block around
+/// it. Only the left edge is reported — the right one is correct today, and
+/// `Start`/`End` are correct by construction.
+///
+/// **Reported wherever it was stated**, which is where this rule parts company
+/// with `alignment-incoherent`, and the difference is worth stating because it
+/// looks at first like a breach of invariant 2. An *absent* alignment is a real
+/// state that a template fills in, so an inherited one may be a design nobody
+/// aimed at this text and the rules split into a written tier and an inherited
+/// one. An absent inset is not a state anything fills in: a box with no inset
+/// is simply not indented, and there is no default left inset for a paragraph
+/// to fall into. So a left inset on right-to-left text exists because somebody
+/// wrote it, and the only open question is where — which the evidence answers
+/// by naming the declaration.
+///
+/// Not `fixable`. The repair is to write the direction-relative property
+/// instead of the physical one, which is an edit to the document's markup or
+/// stylesheet rather than to a value in the shared vocabulary, and no adapter
+/// in this build can make it. Claiming otherwise would be the inferred
+/// capability `AGENTS.md` forbids.
+pub struct InsetPhysical;
+
+impl Rule for InsetPhysical {
+    fn id(&self) -> RuleId {
+        RuleId("inset-physical")
+    }
+
+    fn description(&self) -> &'static str {
+        "Right-to-left text is inset from the physical left edge instead of the start edge"
+    }
+
+    fn check(&self, unit: &TextUnit) -> Vec<Diagnostic> {
+        if !script::has_arabic(&unit.text) || bidi::dominant_direction(&unit.text) != Direction::Rtl
+        {
+            return Vec::new();
+        }
+        if unit
+            .props
+            .inset
+            .effective()
+            .is_none_or(|inset| inset.is_rtl_coherent())
+        {
+            return Vec::new();
+        }
+
+        vec![
+            Diagnostic::new(
+                self.id(),
+                Severity::Warning,
+                &unit.id,
+                &unit.location,
+                "right-to-left text is inset from the physical left edge; the indent lands at \
+                 the end of the line rather than the start, and does not follow the text if the \
+                 direction ever changes",
+            )
+            .with_evidence(Evidence {
+                logical: Some(unit.text.clone()),
+                // Which declaration inset it, when it was not the unit itself
+                // that said so (invariant 6).
+                inherited_from: unit.props.inset.origin().map(Origin::to_string),
+                ..Default::default()
+            }),
+        ]
+    }
+}
+
 /// Right-to-left text with no alignment of its own, and none inherited that
 /// reads correctly.
 ///
@@ -459,6 +536,229 @@ impl Rule for ContainerDirection {
 
     fn fix(&self, unit: &TextUnit) -> Option<Fix> {
         Some(Fix::SetDirection(bidi::dominant_direction(&unit.text)))
+    }
+}
+
+/// A container laid out backwards instead of laid out right to left.
+///
+/// The web's version of reversing a string, and the same defect invariant 5
+/// forbids one level up: rather than declaring that the container runs right to
+/// left, the document leaves the direction alone and reverses the order the
+/// boxes are *displayed* in. The screenshot comes out right. Nothing else does
+/// — the reading order a screen reader announces, the order a selection copies,
+/// the order the boxes fall back into when the reversal is not applied, and the
+/// direction every neutral between them resolves against are all still the ones
+/// the document states, which is the wrong way round.
+///
+/// Reported whichever direction is declared, because both cases are wrong and
+/// they are wrong differently. With no right-to-left direction the layout and
+/// the reading order disagree, which is the fake. With one, the reversal *undoes*
+/// it and the boxes come back out left to right — two answers to one question,
+/// cancelling.
+///
+/// Not `fixable`, for `inset-physical`'s reason: the repair is to delete the
+/// reversal and state the direction, and deleting a declaration is not something
+/// the shared repair vocabulary can name.
+pub struct OrderReversed;
+
+impl Rule for OrderReversed {
+    fn id(&self) -> RuleId {
+        RuleId("order-reversed")
+    }
+
+    fn description(&self) -> &'static str {
+        "A container's boxes are displayed in reverse of the order it stores them"
+    }
+
+    fn applies_to(&self, kind: UnitKind) -> bool {
+        kind != UnitKind::Paragraph
+    }
+
+    fn check(&self, unit: &TextUnit) -> Vec<Diagnostic> {
+        let Some(origin) = &unit.props.reversed else {
+            return Vec::new();
+        };
+        if !script::has_arabic(&unit.text) || bidi::dominant_direction(&unit.text) != Direction::Rtl
+        {
+            return Vec::new();
+        }
+        let (subject, _, _) = wording(unit.kind);
+
+        let message = if unit.props.direction.effective() == Some(&Direction::Rtl) {
+            format!(
+                "{subject} is declared right to left and its boxes are reversed as well; the two \
+                 cancel and the boxes come out left to right"
+            )
+        } else {
+            format!(
+                "{subject} reads right to left and is made to look it by reversing the boxes \
+                 rather than by declaring the direction; the layout is right and the reading \
+                 order, the selection order and every neutral between the boxes are not"
+            )
+        };
+
+        vec![
+            Diagnostic::new(
+                self.id(),
+                Severity::Warning,
+                &unit.id,
+                &unit.location,
+                message,
+            )
+            .with_evidence(Evidence {
+                logical: Some(unit.text.clone()),
+                // What reversed it, so the claim can be checked against the
+                // document rather than taken on trust (invariant 6).
+                inherited_from: Some(origin.to_string()),
+                ..Default::default()
+            }),
+        ]
+    }
+}
+
+#[cfg(test)]
+mod inset_tests {
+    use super::*;
+    use crate::text::{Inset, Properties};
+
+    const ARABIC: &str = "ارتفع الأداء في الربع الرابع";
+    const ENGLISH: &str = "Performance rose in the fourth quarter";
+
+    fn inset(text: &str, inset: Resolved<Inset>) -> TextUnit {
+        TextUnit::new("page.html#p1", text).with_props(Properties {
+            inset,
+            ..Default::default()
+        })
+    }
+
+    #[test]
+    fn a_physical_left_inset_on_arabic_is_a_warning() {
+        let found = InsetPhysical.check(&inset(ARABIC, Resolved::Explicit(Inset::Left)));
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].severity, Severity::Warning);
+        // The repair is an edit to the stylesheet, not a value this vocabulary
+        // can name, so nothing here claims to make it.
+        assert!(!found[0].fixable);
+        assert_eq!(
+            InsetPhysical.fix(&inset(ARABIC, Resolved::Explicit(Inset::Left))),
+            None
+        );
+    }
+
+    #[test]
+    fn the_edges_that_read_correctly_are_left_alone() {
+        for edge in [Inset::Start, Inset::End, Inset::Right] {
+            assert!(
+                InsetPhysical
+                    .check(&inset(ARABIC, Resolved::Explicit(edge)))
+                    .is_empty(),
+                "{edge} was reported"
+            );
+        }
+    }
+
+    #[test]
+    fn an_inset_stated_elsewhere_is_reported_and_says_where() {
+        // The stylesheet is where this is written in practice, and a rule that
+        // asked for it to be on the element would be silent on every real page.
+        // Nothing fills in an absent inset, so wherever it was written,
+        // somebody wrote it.
+        let found = InsetPhysical.check(&inset(ARABIC, inherited(Inset::Left)));
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].severity, Severity::Warning);
+        assert!(
+            found[0].evidence.inherited_from.is_some(),
+            "a finding a reviewer cannot locate is not finished"
+        );
+    }
+
+    #[test]
+    fn a_box_with_no_inset_is_a_box_that_is_not_indented() {
+        assert!(
+            InsetPhysical
+                .check(&inset(ARABIC, Resolved::Unset))
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn a_left_inset_on_left_to_right_text_is_where_it_belongs() {
+        assert!(
+            InsetPhysical
+                .check(&inset(ENGLISH, Resolved::Explicit(Inset::Left)))
+                .is_empty()
+        );
+    }
+}
+
+#[cfg(test)]
+mod order_reversed_tests {
+    use super::*;
+    use crate::text::{Origin, Properties};
+
+    const ARABIC: &str = "المؤشر\nالربع الثالث\nالربع الرابع";
+    const ENGLISH: &str = "Metric\nThird quarter\nFourth quarter";
+
+    fn reversed(text: &str, direction: Resolved<Direction>, reversed: bool) -> TextUnit {
+        TextUnit::new("page.html#cols1", text)
+            .with_kind(UnitKind::Columns)
+            .with_props(Properties {
+                direction,
+                reversed: reversed.then(|| Origin::new("page.html", "div.row@flex-direction")),
+                ..Default::default()
+            })
+    }
+
+    #[test]
+    fn boxes_reversed_instead_of_a_direction_declared_is_reported() {
+        let found = OrderReversed.check(&reversed(ARABIC, Resolved::Unset, true));
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].severity, Severity::Warning);
+        assert!(
+            found[0].message.contains("reversing the boxes"),
+            "{found:#?}"
+        );
+        assert_eq!(
+            found[0].evidence.inherited_from.as_deref(),
+            Some("page.html div.row@flex-direction"),
+            "a finding a reviewer cannot locate is not finished"
+        );
+    }
+
+    #[test]
+    fn a_direction_and_a_reversal_together_cancel_and_are_reported_as_that() {
+        let found =
+            OrderReversed.check(&reversed(ARABIC, Resolved::Explicit(Direction::Rtl), true));
+        assert_eq!(found.len(), 1);
+        assert!(found[0].message.contains("cancel"), "{found:#?}");
+    }
+
+    #[test]
+    fn a_container_that_reverses_nothing_is_silent() {
+        for direction in [Resolved::Unset, Resolved::Explicit(Direction::Rtl)] {
+            assert!(
+                OrderReversed
+                    .check(&reversed(ARABIC, direction, false))
+                    .is_empty()
+            );
+        }
+    }
+
+    #[test]
+    fn a_left_to_right_container_laid_out_backwards_is_not_this_tools_business() {
+        assert!(
+            OrderReversed
+                .check(&reversed(ENGLISH, Resolved::Unset, true))
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn a_paragraph_is_never_handed_to_it() {
+        assert!(!OrderReversed.applies_to(UnitKind::Paragraph));
+        for kind in [UnitKind::Table, UnitKind::Columns, UnitKind::ChartText] {
+            assert!(OrderReversed.applies_to(kind), "{kind:?}");
+        }
     }
 }
 

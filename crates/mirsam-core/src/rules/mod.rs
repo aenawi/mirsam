@@ -7,6 +7,7 @@
 
 mod direction;
 mod font;
+mod isolation;
 mod typography;
 mod unicode;
 
@@ -133,13 +134,17 @@ impl Engine {
                 Box::new(unicode::TatweelPadding {
                     strip: options.strip_tatweel,
                 }),
+                Box::new(isolation::BidiOverride),
+                Box::new(isolation::IsolationMissing),
                 Box::new(direction::DirectionMismatch),
                 Box::new(direction::DirectionUnset),
                 Box::new(direction::AlignmentIncoherent),
                 Box::new(direction::AlignmentUnset {
                     align: options.align,
                 }),
+                Box::new(direction::InsetPhysical),
                 Box::new(direction::ContainerDirection),
+                Box::new(direction::OrderReversed),
                 Box::new(typography::LanguageMissing {
                     locale: options.language.clone(),
                 }),

@@ -20,6 +20,8 @@
 body { font-family: Dubai, sans-serif; }
 .rtl { direction: rtl; text-align: right; }
 .stray { text-align: left; }
+.note { margin-left: 2rem; }
+.row { display: flex; flex-direction: row-reverse; }
 </style>
 </head>
 <body class="rtl">
@@ -52,6 +54,29 @@ body { font-family: Dubai, sans-serif; }
 
 <!-- tatweel-padding: a heading stretched with typed U+0640. -->
 <h2>الملخـــص</h2>
+
+<!-- bidi-override: the order of the run is imposed rather than declared, and
+     the digits and the Latin come out backwards under it. The markup form of
+     an embedded U+202E. -->
+<p><bdo dir="rtl">ارتفع الأداء بنسبة 25% في Q4 2026.</bdo></p>
+
+<!-- isolation-missing: the name decides where the trailing number lands, so
+     the line is laid out correctly for this owner and not for the next. -->
+<p>المالك المسؤول عن المشروع: <span>John Smith</span> - 5</p>
+
+<!-- The same line with the name isolated, which is what <bdi> is for: silent. -->
+<p>المالك المسؤول عن المشروع: <bdi>John Smith</bdi> - 5</p>
+
+<!-- inset-physical: indented from the left edge, which under right-to-left
+     text is the end of the line rather than the start. -->
+<p class="note">ارتفعت الإيرادات في كل الأسواق</p>
+
+<!-- order-reversed: the boxes are reversed by hand on a page that already
+     runs right to left, so the two reversals cancel and the row comes out
+     left to right. The other half of the same defect — a row reversed on a
+     page that declares nothing, which looks right and reads backwards — is in
+     the rule's own tests and in the conformance suite. -->
+<div class="row"><div>المؤشر</div><div>الربع الرابع</div></div>
 
 <!-- container-direction: the cells read right to left and the table lays them
      out left to right, so the first column lands on the wrong side. -->

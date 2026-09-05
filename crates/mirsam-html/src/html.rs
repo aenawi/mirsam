@@ -1,9 +1,16 @@
 //! HTML adapter — the reader.
 //!
 //! HTML lowered onto the same [`TextUnit`] the PowerPoint and Word adapters
-//! produce. Nothing new is asked of `mirsam-core`: that is the claim M5 tests,
-//! the same way M3 tested it with Word, and a core change needed to make the
-//! web fit would mean the abstraction was wrong (PLAN §5.1).
+//! produce. Nothing about the *shape* of that model changed to fit the web —
+//! a page is paragraphs and containers, exactly as a deck is — which is the
+//! claim M5 set out to test, the same way M3 tested it with Word (PLAN §5.1).
+//!
+//! The model did gain vocabulary in §5.2, and the distinction is worth keeping:
+//! [`TextUnit::spans`], [`Properties::inset`] and [`Properties::reversed`] are
+//! three things the web can *say* that OOXML cannot, not three things the web
+//! needed the abstraction bent for. They are read by rules in `mirsam-core`
+//! like every other property, and the other two adapters leave them empty, so
+//! the conformance suite carries refusals rather than skips.
 //!
 //! ## Where an HTML paragraph comes from
 //!
@@ -84,12 +91,13 @@
 //! [`DocumentWriter`]: mirsam_core::ports::DocumentWriter
 //! [`Resolved::Unset`]: mirsam_core::text::Resolved::Unset
 
-use crate::css::{CascadeOrigin, Computed, Declaration, Element, Stylesheet, cascade};
+use crate::css::{CascadeOrigin, Computed, Declaration, Element, Match, Stylesheet, cascade};
 use crate::dom::{Document, Handle, Node};
 use mirsam_core::error::{Error, Result};
 use mirsam_core::ports::DocumentReader;
 use mirsam_core::text::{
-    Alignment, Bullet, Direction, Location, Origin, Properties, Resolved, TextUnit, UnitKind,
+    Alignment, Bullet, Direction, Inset, Location, Origin, Properties, Resolved, Span, SpanBidi,
+    TextUnit, UnitKind,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -419,6 +427,14 @@ struct Inherited {
     alignment: Carried<Alignment>,
     language: Carried<String>,
     font: Carried<String>,
+    /// The edge this element's own leading inset is measured from.
+    ///
+    /// Not carried down, unlike everything above it: a margin is not an
+    /// inherited CSS property, and a page whose wrapper is indented has not
+    /// indented every paragraph inside it. [`Walk::state`] clears this on the
+    /// way in for exactly that reason, and a rule that saw it inherited would
+    /// report a page gutter as a paragraph's indent.
+    inset: Carried<Inset>,
     /// The list marker an `<li>` would get, which `list-style-type` on an
     /// ancestor list decides.
     list_marker_suppressed: bool,
@@ -435,6 +451,8 @@ impl Inherited {
             alignment: self.alignment.descended(here),
             language: self.language.descended(here),
             font: self.font.descended(here),
+            // See the field: an inset belongs to the box that states it.
+            inset: Carried::default(),
             list_marker_suppressed: self.list_marker_suppressed,
             preformatted: self.preformatted,
         }
@@ -482,7 +500,7 @@ impl Walk {
         }
 
         self.chain.push(node.clone());
-        let computed = self.computed(node);
+        let computed = self.computed_of(&self.chain);
         let here = self.here(node, &name);
         let inherited = self.state(node, &name, inherited, &computed, &here);
 
@@ -528,30 +546,37 @@ impl Walk {
             let cursor = self.tables_open.pop();
             self.emit_table(node, cursor, &inherited);
         }
-        if let Some(count) = column_count(&computed)
-            && count >= 2
-        {
-            self.emit_columns(node, &inherited);
+        // One unit either way. An element can lay its text out in columns and
+        // reverse them as well, and that is one box arranging its contents,
+        // not two.
+        let reversed = self.reversal(&computed, node, &name);
+        if reversed.is_some() || column_count(&computed).is_some_and(|count| count >= 2) {
+            self.emit_columns(node, &inherited, reversed);
         }
 
         self.chain.pop();
     }
 
-    /// The declarations that apply to `node`, cascade already resolved.
-    fn computed(&self, node: &Handle) -> Computed {
-        let root = node.is("html");
-        let subjects: Vec<Subject<'_>> = self
-            .chain
+    /// The declarations that apply to the element at the end of `chain`.
+    ///
+    /// Takes the chain rather than reading `self.chain`, because the walk is
+    /// not the only thing that asks: gathering a box's text descends into the
+    /// inline elements inside it, and each of those has a cascade of its own
+    /// that decides whether it isolates or overrides what it holds.
+    fn computed_of(&self, chain: &[Handle]) -> Computed {
+        let Some(node) = chain.last() else {
+            return Computed::default();
+        };
+        let subjects: Vec<Subject<'_>> = chain
             .iter()
             .map(|handle| Subject {
                 node: handle,
                 root: handle.is("html"),
             })
             .collect();
-        let chain: Vec<&dyn Element> = subjects.iter().map(|s| s as &dyn Element).collect();
-        let _ = root;
+        let elements: Vec<&dyn Element> = subjects.iter().map(|s| s as &dyn Element).collect();
         cascade(
-            &chain,
+            &elements,
             &self.sheets,
             presentational(node),
             &node.attribute("style").unwrap_or_default(),
@@ -612,6 +637,9 @@ impl Walk {
         {
             state.font = stated(family, matched.origin, &matched.to_string(), here);
         }
+        if let Some((inset, matched)) = inset(computed) {
+            state.inset = stated(inset, matched.origin, &matched.to_string(), here);
+        }
         if let Some(tag) = node
             .attribute("lang")
             .or_else(|| node.attribute("xml:lang"))
@@ -632,8 +660,104 @@ impl Walk {
         state
     }
 
+    /// A box's own inline text, and the runs the markup delimits within it.
+    ///
+    /// The second half is what `bidi-override` and `isolation-missing` read.
+    /// Neither can be answered from the characters — whether a range is
+    /// isolated, and whether its order was imposed, are things only the
+    /// document says — so every inline element inside the box is recorded with
+    /// what its own cascade makes of it.
+    fn inline_text(&self, node: &Handle, state: &Inherited) -> (String, Vec<Span>) {
+        let mut text = Text::new(state.preformatted);
+        let mut chain = self.chain.clone();
+        self.collect_runs(node, &mut chain, &mut text);
+        text.finish()
+    }
+
+    fn collect_runs(&self, node: &Handle, chain: &mut Vec<Handle>, out: &mut Text) {
+        for child in node.children().iter() {
+            if let Some(text) = child.text() {
+                out.push(&text);
+                continue;
+            }
+            let Some(name) = child.local_name() else {
+                continue;
+            };
+            let name = name.to_string();
+            if NOT_PROSE.contains(&name.as_str()) || is_block(child) {
+                continue;
+            }
+            if name == "br" {
+                out.push(" ");
+                continue;
+            }
+
+            chain.push(child.clone());
+            let start = out.start_of_next();
+            let treatment = self.treatment(chain, child, &name);
+            self.collect_runs(child, chain, out);
+            chain.pop();
+
+            // An element that laid out no characters delimits no run. `<img>`,
+            // an empty `<span>` and one holding nothing but whitespace are
+            // markup rather than text, and a zero-length range is one no
+            // finding could point at.
+            if let Some(len) = out.len().checked_sub(start).filter(|len| *len > 0) {
+                let (bidi, origin) = treatment;
+                out.spans.push(Span::new(start, len, bidi, origin));
+            }
+        }
+    }
+
+    /// What one inline element says about how its content should be ordered.
+    ///
+    /// `<bdo>` and `<bdi>` are `unicode-bidi` declarations in the user agent's
+    /// stylesheet, as is the isolation a browser gives *any* element carrying
+    /// `dir`, so all three arrive through the cascade rather than as special
+    /// cases here — and an author's own `unicode-bidi` beats them, which is
+    /// what a reader would get.
+    fn treatment(&self, chain: &[Handle], node: &Handle, name: &str) -> (SpanBidi, Origin) {
+        let computed = self.computed_of(chain);
+        let element = Origin::new(self.part.clone(), format!("{}@", describe(node, name)));
+
+        let Some(matched) = computed.get("unicode-bidi") else {
+            return (SpanBidi::Plain, element);
+        };
+        let bidi = match matched
+            .declaration
+            .value
+            .trim()
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            // The order is imposed. Which direction it is imposed in is the
+            // element's own `direction`, which `dir` supplies for a `<bdo>`.
+            "bidi-override" | "isolate-override" => SpanBidi::Imposed(
+                computed
+                    .value("direction")
+                    .and_then(|value| parse_direction(&value))
+                    .unwrap_or(Direction::Ltr),
+            ),
+            // `plaintext` isolates too: it resolves the run on its own first
+            // strong character, which is a decision taken inside the run and
+            // sealed off from everything outside it.
+            "isolate" | "plaintext" => SpanBidi::Isolated,
+            // `embed` states a direction without isolating, and `normal` states
+            // nothing. Neither seals the run off from its surroundings, which
+            // is the only question `isolation-missing` asks.
+            _ => SpanBidi::Plain,
+        };
+        // A declaration the author wrote is cited where they wrote it; the
+        // user agent's rules have no selector worth naming, so the element is.
+        let origin = match matched.origin {
+            CascadeOrigin::Author => Origin::new(self.part.clone(), matched.to_string()),
+            CascadeOrigin::Inline | CascadeOrigin::UserAgent => element,
+        };
+        (bidi, origin)
+    }
+
     fn emit_paragraph(&mut self, node: &Handle, name: &str, state: &Inherited) {
-        let text = inline_text(node, state.preformatted);
+        let (text, spans) = self.inline_text(node, state);
         if text.is_empty() {
             return;
         }
@@ -643,13 +767,16 @@ impl Walk {
             .with_props(Properties {
                 direction: state.direction.resolved(),
                 alignment: state.alignment.resolved(),
+                inset: state.inset.resolved(),
                 language: state.language.resolved(),
                 // One CSS font stack answers for every script on the element;
                 // see the module documentation.
                 complex_font: font.clone(),
                 latin_font: font,
                 bullet: self.bullet(name, state),
+                reversed: None,
             })
+            .with_spans(spans)
             .with_location(Location {
                 part: self.part.clone(),
                 paragraph: Some(self.paragraphs),
@@ -679,7 +806,7 @@ impl Walk {
         );
     }
 
-    fn emit_columns(&mut self, node: &Handle, state: &Inherited) {
+    fn emit_columns(&mut self, node: &Handle, state: &Inherited, reversed: Option<Origin>) {
         let text = container_text(node, state.preformatted);
         if text.is_empty() {
             return;
@@ -690,6 +817,7 @@ impl Walk {
                 .with_kind(UnitKind::Columns)
                 .with_props(Properties {
                     direction: state.direction.resolved(),
+                    reversed,
                     ..Default::default()
                 })
                 .with_location(Location {
@@ -698,6 +826,39 @@ impl Walk {
                     container: None,
                 }),
         );
+    }
+
+    /// What reverses the order this element displays its boxes in, if anything
+    /// does.
+    ///
+    /// `flex-direction: row-reverse` on a flex container is the web's way of
+    /// making a row look right-to-left without saying that it is, which is the
+    /// same defect as reversing a string one level up. The `display` is checked
+    /// because `flex-direction` on a box that is not a flex container does
+    /// nothing at all, and a finding on a declaration nobody applied would be
+    /// exactly the failure `crate::css` was written to avoid.
+    fn reversal(&self, computed: &Computed, node: &Handle, name: &str) -> Option<Origin> {
+        let display = computed.value("display")?;
+        if !matches!(display.trim(), "flex" | "inline-flex") {
+            return None;
+        }
+        let matched = computed
+            .get("flex-direction")
+            .or_else(|| computed.get("flex-flow"))?;
+        if !matched
+            .declaration
+            .value
+            .split([' ', '\t'])
+            .any(|token| matches!(token.trim(), "row-reverse" | "column-reverse"))
+        {
+            return None;
+        }
+        Some(match matched.origin {
+            CascadeOrigin::Author => Origin::new(self.part.clone(), matched.to_string()),
+            CascadeOrigin::Inline | CascadeOrigin::UserAgent => {
+                Origin::new(self.part.clone(), format!("{}@", describe(node, name)))
+            }
+        })
     }
 
     /// Whether this paragraph carries a list marker the format produced.
@@ -750,8 +911,31 @@ fn stated<T>(value: T, origin: CascadeOrigin, cited: &str, here: &Origin) -> Car
 /// `dir` and `align` are attributes a browser implements as rules in its own
 /// stylesheet; modelling them as such is what lets an author's `direction`
 /// beat them, which is what a reader will see.
+///
+/// The same is true of the three elements and one attribute that decide
+/// isolation. The HTML standard's rendering section states them as CSS —
+/// `bdo { unicode-bidi: isolate-override }`, `bdi { unicode-bidi: isolate }`,
+/// `[dir] { unicode-bidi: isolate }` — and putting them anywhere else would
+/// make an author's own `unicode-bidi` lose to markup it beats in a browser.
 fn presentational(node: &Handle) -> Vec<Declaration> {
     let mut declarations = Vec::new();
+    let declare = |property: &str, value: &str| Declaration {
+        property: property.to_string(),
+        value: value.to_string(),
+        important: false,
+    };
+
+    match node.local_name().map(|name| name.to_string()).as_deref() {
+        Some("bdo") => declarations.push(declare("unicode-bidi", "isolate-override")),
+        Some("bdi") => declarations.push(declare("unicode-bidi", "isolate")),
+        // Any element that names a direction is isolated from its
+        // surroundings — the browser's rule, and the reason `<span dir="ltr">`
+        // is already the repair `isolation-missing` asks for.
+        _ if node.attribute("dir").is_some() => {
+            declarations.push(declare("unicode-bidi", "isolate"));
+        }
+        _ => {}
+    }
 
     if let Some(dir) = node.attribute("dir") {
         // `auto` states nothing: see the module documentation.
@@ -798,11 +982,99 @@ fn describe(node: &Handle, name: &str) -> String {
 
 // ------------------------------------------------------------------- text
 
+/// A box's text as it is gathered, collapsing whitespace the way CSS does so
+/// that a run's offsets are offsets into the string a finding will report.
+///
+/// The collapsing used to happen at the end, over the finished string. It
+/// cannot any more: an inline element's text has to be located *within* the
+/// paragraph, and a span recorded against the raw characters would name a range
+/// of a string nobody ever sees once three spaces became one. Collapsing as the
+/// text is gathered keeps every offset in the coordinates the model uses.
+struct Text {
+    out: String,
+    spans: Vec<Span>,
+    preformatted: bool,
+    /// Whitespace seen since the last character, waiting to become the single
+    /// space CSS collapses it to — and never emitted at the start of a box,
+    /// which is how the leading whitespace is trimmed without moving anything.
+    pending_space: bool,
+}
+
+impl Text {
+    fn new(preformatted: bool) -> Self {
+        Self {
+            out: String::new(),
+            spans: Vec::new(),
+            preformatted,
+            pending_space: false,
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.out.len()
+    }
+
+    /// Where the next character this box lays out will land.
+    ///
+    /// Not simply the length. A space waiting to be collapsed in is written by
+    /// whoever writes the character *after* it, so an element that begins right
+    /// after one would be recorded as starting at a space it did not produce —
+    /// and a finding would point one character to the left of the run it is
+    /// about.
+    fn start_of_next(&self) -> usize {
+        self.out.len() + usize::from(self.pending_space)
+    }
+
+    fn push(&mut self, text: &str) {
+        if self.preformatted {
+            self.out.push_str(text);
+            return;
+        }
+        for c in text.chars() {
+            if c.is_whitespace() {
+                self.pending_space = !self.out.is_empty();
+                continue;
+            }
+            if self.pending_space {
+                self.out.push(' ');
+                self.pending_space = false;
+            }
+            self.out.push(c);
+        }
+    }
+
+    /// The finished text, and the runs within it.
+    ///
+    /// A `<pre>` is the one case where the string still has to be trimmed after
+    /// the fact, so the spans are moved with it rather than left pointing at
+    /// characters that are gone.
+    fn finish(mut self) -> (String, Vec<Span>) {
+        if !self.preformatted {
+            return (self.out, self.spans);
+        }
+        let start = self.out.len() - self.out.trim_start_matches('\n').len();
+        // `max`, because a box holding nothing but newlines is trimmed away
+        // from both ends and the two offsets cross. An empty box is an empty
+        // box; it is not a panic on somebody's document.
+        let end = self.out.trim_end_matches('\n').len().max(start);
+        self.spans.retain_mut(|span| {
+            let (from, to) = (span.offset.max(start), (span.offset + span.len).min(end));
+            if from >= to {
+                return false;
+            }
+            span.offset = from - start;
+            span.len = to - from;
+            true
+        });
+        (self.out[start..end].to_string(), self.spans)
+    }
+}
+
 /// The text of an element's own inline content, stopping at the next block.
 fn inline_text(node: &Handle, preformatted: bool) -> String {
-    let mut out = String::new();
-    collect(node, &mut out);
-    finish(out, preformatted)
+    let mut text = Text::new(preformatted);
+    collect(node, &mut text);
+    text.finish().0
 }
 
 /// The text a container lays out: every block box inside it, one per line.
@@ -833,12 +1105,16 @@ fn container_text(node: &Handle, preformatted: bool) -> String {
     lines.join("\n")
 }
 
-/// Gather one box's own inline characters, as written. Whitespace is left
-/// alone here; [`finish`] is where a box decides whether to collapse it.
-fn collect(node: &Handle, out: &mut String) {
+/// Gather one box's own inline characters, without asking what any of the
+/// elements inside it declare.
+///
+/// What a container lays out is text and nothing more, so this is the version
+/// the containers use. [`Walk::inline_text`] is the one that also records the
+/// runs, and needs the cascade to do it.
+fn collect(node: &Handle, out: &mut Text) {
     for child in node.children().iter() {
         if let Some(text) = child.text() {
-            out.push_str(&text);
+            out.push(&text);
             continue;
         }
         let Some(name) = child.local_name() else {
@@ -850,18 +1126,10 @@ fn collect(node: &Handle, out: &mut String) {
         }
         // `<br>` ends a line; the text either side of it is not one word.
         if &**name == "br" {
-            out.push(' ');
+            out.push(" ");
         }
         collect(child, out);
     }
-}
-
-/// Collapse whitespace the way CSS does, unless the box preserves it.
-fn finish(text: String, preformatted: bool) -> String {
-    if preformatted {
-        return text.trim_matches('\n').to_string();
-    }
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 // --------------------------------------------------------------- values
@@ -904,6 +1172,60 @@ fn first_family(value: &str) -> Option<String> {
         .trim_matches(['"', '\''])
         .trim();
     (!family.is_empty()).then(|| family.to_string())
+}
+
+/// Which edge this element's leading inset is measured from, and the
+/// declaration that decided it.
+///
+/// Only an *asymmetric* inset is one. A box inset by the same amount on both
+/// sides is a gutter, and a gutter is direction-neutral: it looks the same
+/// whichever way the text runs, and reporting one would be a finding on a page
+/// margin. What this is looking for is the box pushed in from one side only —
+/// an indent — because that is the one an author meant to put at the start of
+/// the line and a physical property puts on the left.
+///
+/// The physical pair is checked first: where a box states both, the physical
+/// one is the defect and the logical one is not.
+fn inset(computed: &Computed) -> Option<(Inset, &Match)> {
+    let left = edge(computed, ["margin-left", "padding-left"]);
+    let right = edge(computed, ["margin-right", "padding-right"]);
+    match (left, right) {
+        (Some(matched), None) => return Some((Inset::Left, matched)),
+        (None, Some(matched)) => return Some((Inset::Right, matched)),
+        _ => {}
+    }
+    match (
+        edge(computed, ["margin-inline-start", "padding-inline-start"]),
+        edge(computed, ["margin-inline-end", "padding-inline-end"]),
+    ) {
+        (Some(matched), None) => Some((Inset::Start, matched)),
+        (None, Some(matched)) => Some((Inset::End, matched)),
+        _ => None,
+    }
+}
+
+/// The declaration that insets the box from one edge, if either property does.
+fn edge<'a>(computed: &'a Computed, properties: [&str; 2]) -> Option<&'a Match> {
+    properties.into_iter().find_map(|property| {
+        computed
+            .get(property)
+            .filter(|matched| insets(&matched.declaration.value))
+    })
+}
+
+/// Whether a value moves the box's edge at all.
+///
+/// `0`, `0px` and `auto` do not, and neither does anything this cannot read —
+/// a `calc()`, a custom property, a value in units nobody parsed. Every one of
+/// those omissions can only cost a finding, which is the test the whole of
+/// [`crate::css`] was held to.
+fn insets(value: &str) -> bool {
+    let value = value.trim().to_ascii_lowercase();
+    let number: String = value
+        .chars()
+        .take_while(|c| c.is_ascii_digit() || matches!(c, '.' | '-' | '+'))
+        .collect();
+    number.parse::<f64>().is_ok_and(|length| length != 0.0)
 }
 
 /// How many columns the element lays its text out in, if it says.
