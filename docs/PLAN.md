@@ -1625,6 +1625,123 @@ express — listed in `repairs.skipped`, never claimed.
 
 PDF implements `DocumentReader` **only**.
 
+It is the first format that does not store text. A PDF stores glyphs with
+positions, and the string an extractor recovers is a *reconstruction* — so the
+real work here is deciding what the adapter is entitled to claim. Every other
+adapter lowers a document that already states its own direction; this one has
+to say, per unit and honestly, what the file does not know about itself.
+
+*Two of the rules this milestone needs already exist.* `presentation-forms`
+and `font-coverage` are statements about text and a font, and a PDF has both —
+they should fire here without a line of `mirsam-core` changing. If either needs
+one, the abstraction was wrong and §3.5's instruction applies: fix the
+abstraction, not the rule.
+
+### 6.1 The object layer `[ ]`
+
+`mirsam-pdf`: cross-reference table *and* cross-reference stream, object
+streams, `FlateDecode`, the page tree, the trailer. The package layer of a
+format that is not a package.
+
+- [ ] **Decide the parser: own it or take one. This wants an ADR, not a
+      `Cargo.toml` line.** The constraints are pure Rust, no C, no network, a
+      permissive licence, and no rasteriser — mirsam needs the object graph and
+      the content streams, and most of what a PDF library carries is the
+      rendering half this project has said it will never do. The precedent cuts
+      both ways: `dom.rs` and `css.rs` were written here rather than taken, but
+      they are hundreds of lines against a specification measured in thousands.
+- [ ] Refuse an encrypted document with a message that names the encryption,
+      rather than extracting nothing and reporting a clean file.
+- [ ] Fixture corpus: one PDF per generator family, since the defects this
+      milestone hunts are generator signatures rather than author mistakes.
+
+*A file the adapter could not open is not a file with no defects.* Whatever
+6.1 cannot read has to reach the report as itself.
+
+### 6.2 Text extraction and its order `[~]`
+
+`BT`/`ET`, `Tj`/`TJ`/`'`/`"`, `Tf`/`Tm`/`Td`/`TD`/`T*`, and the `ToUnicode`
+CMap that turns glyph codes back into codepoints.
+
+- [ ] Show ordering: group runs into lines by text-matrix position, not by
+      their order in the content stream — a generator may emit right-to-left
+      text in any sequence it likes.
+- [ ] A font with no `ToUnicode` and no standard encoding yields glyph codes
+      nobody can map to characters. That is `sources.unread`, **ADR 0009
+      reaching a third format** — and the first where the unread source is the
+      text itself rather than something beside it.
+- [ ] A page whose Arabic is an image is a page this tool cannot judge. Name
+      it; do not pass it.
+
+**A `TextUnit` from a PDF has no `Explicit` direction and never will.** There
+is no `rtl` attribute to find: the direction is in the glyph positions, which
+is a rendering the file already committed to. So the adapter reports what the
+page *does*, and `direction-unset` — the rule that asks who decided — is
+structurally silent, the way `alignment-incoherent` is silent on DOCX and
+`complex-font-missing` on HTML. Record it as a refusal, not a skip.
+
+### 6.3 `text-reversed` — the defect a PDF is uniquely able to have `[~]`
+
+A generator that cannot shape Arabic writes the string backwards so that a
+left-to-right renderer draws it right. The text looks correct on the page and
+is destroyed: search, copy and reflow all fail.
+
+**It can be proved rather than guessed, and without a dictionary.** A
+presentation-form codepoint encodes its own contextual position — `U+FEE3` is
+*initial* meem, `U+FEF2` is *final* yeh. `joining::forms()` already computes
+the position each letter of a string *should* have from its neighbours. Run
+both over the same run: in a logically-ordered string the encoded positions and
+the computed ones agree, and in a reversed one the initials and finals have
+traded places. That is a mechanical comparison producing an offender list, and
+it is [ADR 0004](adr/0004-prove-defects-dont-assert-them.md) applied to the
+hardest case in the project rather than waived for it.
+
+- [ ] `text-reversed`, error severity, evidence carrying both position
+      sequences and the run reversed back.
+- [ ] Not `fixable()`. The repair is to rebuild the PDF from its source
+      document, which is the milestone's whole premise.
+- [ ] A run in logical order that merely *uses* presentation forms stays with
+      `presentation-forms`. The two findings are different sentences about the
+      same run and both may fire.
+
+### 6.4 Embedded font coverage `[~]`
+
+`FontFile2` and `FontFile3` are an sfnt program inside the document, which
+`mirsam-fonts::sfnt` already parses and `coverage()` already judges.
+
+- [ ] Read the embedded program; report Arabic codepoints the subset dropped.
+- [ ] **Not behind `--fonts`.** §4.2 gated the font checks because they read
+      *the machine*, and the answer therefore depended on who ran the tool. An
+      embedded font is part of the document: the same file gives the same
+      answer everywhere, so gating it would be an opt-out for a check that
+      carries none of the cost the flag exists to declare.
+- [ ] A font that is referenced by name and not embedded is the opposite case
+      — the answer depends on the reader's machine — and belongs in
+      `sources.unread` unless `--fonts` is passed to go looking for it.
+- [ ] `FontSource` answers by family name. An embedded font is bytes from the
+      document, so either the port learns to answer from bytes or the adapter
+      hands `coverage()` a `Font` directly. **Prefer the second** until a
+      second format needs the first.
+
+### 6.5 No writer, and the conformance suite `[~]`
+
+- [ ] `PdfDocument` implements `DocumentReader` and not `DocumentWriter`, so
+      `mirsam repair deck.pdf out.pdf` fails to compile its way into existence.
+      The exit code is the one HTML already records for a readable format with
+      no writer, and `quarterly-page.html` already fixes its meaning.
+- [ ] Join the conformance suite. Most cases will come back `Inexpressible`,
+      because the suite writes a document to state a case and PDF has no
+      spelling for a direction anybody chose. *That is the result, not a
+      failure to participate* — the suite's job is to record what each format
+      cannot say, and a read-only format that can state almost none of the
+      cases is worth having said so once, in the committed refusal list.
+
+*Acceptance:* an Arabic PDF built by a generator that reverses its strings is
+reported with the reversal proved and the offending run printed back in logical
+order; a correctly built one is clean; a scanned one reports that it read no
+text rather than that it found no defects; and `repair` on any of them refuses
+in the way the type system, not a runtime check, requires.
+
 ---
 
 ## M7 — Distribution `[ ]`
