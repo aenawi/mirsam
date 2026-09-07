@@ -4,6 +4,7 @@ members = [
     "crates/mirsam-core",
     "crates/mirsam-ooxml",
     "crates/mirsam-html",
+    "crates/mirsam-pdf",
     "crates/mirsam-conformance",
     "crates/mirsam-fonts",
     "crates/mirsam-cli",
@@ -24,6 +25,7 @@ categories = ["command-line-utilities", "text-processing", "internationalization
 mirsam-core = { path = "crates/mirsam-core", version = "0.1.0" }
 mirsam-ooxml = { path = "crates/mirsam-ooxml", version = "0.1.0" }
 mirsam-html = { path = "crates/mirsam-html", version = "0.1.0" }
+mirsam-pdf = { path = "crates/mirsam-pdf", version = "0.1.0" }
 mirsam-fonts = { path = "crates/mirsam-fonts", version = "0.1.0" }
 unicode-bidi = "0.3.18"
 unicode-normalization = "0.1.25"
@@ -36,6 +38,10 @@ quick-xml = "0.42"
 # than taking `markup5ever_rcdom`, which names itself unsupported.
 html5ever = "0.39"
 zip = { version = "8.6", default-features = false, features = ["deflate"] }
+# FlateDecode. Held to the backend `zip` already pulls in: two inflate
+# implementations in one binary would be two answers to "what do these bytes
+# decompress to".
+flate2 = { version = "1.1", default-features = false, features = ["zlib-rs"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"

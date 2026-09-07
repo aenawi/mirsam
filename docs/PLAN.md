@@ -1621,7 +1621,7 @@ express — listed in `repairs.skipped`, never claimed.
 
 ---
 
-## M6 — PDF `[ ]`
+## M6 — PDF `[~]`
 
 PDF implements `DocumentReader` **only**.
 
@@ -1637,26 +1637,103 @@ they should fire here without a line of `mirsam-core` changing. If either needs
 one, the abstraction was wrong and §3.5's instruction applies: fix the
 abstraction, not the rule.
 
-### 6.1 The object layer `[ ]`
+### 6.1 The object layer `[x]`
 
 `mirsam-pdf`: cross-reference table *and* cross-reference stream, object
 streams, `FlateDecode`, the page tree, the trailer. The package layer of a
 format that is not a package.
 
-- [ ] **Decide the parser: own it or take one. This wants an ADR, not a
+- [x] **Decide the parser: own it or take one. This wants an ADR, not a
       `Cargo.toml` line.** The constraints are pure Rust, no C, no network, a
       permissive licence, and no rasteriser — mirsam needs the object graph and
       the content streams, and most of what a PDF library carries is the
       rendering half this project has said it will never do. The precedent cuts
       both ways: `dom.rs` and `css.rs` were written here rather than taken, but
       they are hundreds of lines against a specification measured in thousands.
-- [ ] Refuse an encrypted document with a message that names the encryption,
+- [x] Refuse an encrypted document with a message that names the encryption,
       rather than extracting nothing and reporting a clean file.
-- [ ] Fixture corpus: one PDF per generator family, since the defects this
+- [x] Fixture corpus: one PDF per generator family, since the defects this
       milestone hunts are generator signatures rather than author mistakes.
 
 *A file the adapter could not open is not a file with no defects.* Whatever
 6.1 cannot read has to reach the report as itself.
+
+**The decision was to own the object layer and take the decompressor**, and
+[ADR 0010](adr/0010-write-the-pdf-object-layer-take-the-decompressor.md) is the
+record. What settled it was not the size of the specification but which half of
+it mirsam asks for: the object graph and the content streams are §7.2 to §7.8,
+and everything from §8 on is the rendering this project has said it will never
+do. The second cost decided it — a library's object model becomes the adapter's
+vocabulary, and with it every answer to *is a dangling reference null, is a
+wrong `/Length` readable, is a stale `startxref` fatal*. Those are precisely the
+honesty decisions §6.2 turns on, and inheriting them unexamined would have been
+inheriting the wrong ones silently. `flate2` is taken for `FlateDecode`, held to
+the `zlib-rs` backend `zip` already resolves, so no dependency entered the tree.
+
+**Every read of the file is checked against the file rather than believed.** A
+`/Length` may be an indirect reference — the value is in an object the
+cross-reference table has not been parsed yet to find — and plenty of writers
+get the direct form wrong by a byte or two. So it is a hint, verified: taken
+when `endstream` is where it says, and the data runs to the next `endstream`
+otherwise. One rule covers indirect, absent and simply wrong, and no caller had
+to be handed a resolver that cannot exist yet.
+
+**Newest wins, and it is the walk that enforces it.** An incremental update
+appends a section and chains `/Prev` at the old one, so every insertion is
+first-wins and an object an update redefined is found in the section that
+redefined it. A free entry in a newer section therefore *hides* an object an
+older one still names, which is what a deletion is. The trailers merge the same
+way, which is why a `/Root` a signature moved is the one used. A hybrid file
+(§7.5.8.4) carries a classic table *and* an `/XRefStm`, and the stream is read
+first because the classic table beside it deliberately understates what the file
+holds — a reader that took the classic table as the whole truth would draw a
+blank page and report nothing wrong with it.
+
+**A stale `startxref` is recovered from, not refused.** Offsets go stale: a file
+concatenated by a script, truncated by a transfer or edited by hand has one
+pointing at nothing in particular, and every viewer opens it anyway by scanning
+for `obj`. So does this. *A document reported unreadable while a reader opens it
+is the wrong half of standing rule 4*, and `Reconstruction` is how the fact is
+said out loud rather than hidden: the cross-reference table and the page tree
+each report when they had to be rebuilt.
+
+**The refusals are the design.** An encrypted document is refused at
+`Pdf::open` with the algorithm read out of the `/Encrypt` dictionary, which
+§7.6.1 keeps in the clear precisely so a reader can say what it is up against —
+`AES-256 (/Standard security handler, V5 R6)`, and a handler this tool does not
+know is named rather than guessed at. Nothing decrypts, including the very
+common permissions-only wrapper with an empty user password: a tool that opened
+those would be one nobody could run on a file they were given. And the four
+image codecs are *named*, never decoded, because a stream behind `DCTDecode` is
+not text this crate failed to read — it is text that is not in the file.
+
+**`unread` is native here rather than bolted on.** ADR 0009 gave the port a way
+to say what it could not read, and this is the format that needs it: an object
+at an offset that is not there, an object stream behind a filter this crate does
+not implement, a page drawn as a scan. Each is recorded where it happens and
+named as the document names it — `5 0 R — /DCTDecode, a filter this tool does
+not decode` — and `Pdf::note_unread` is open so that §6.2's own unread sources,
+a font with no `ToUnicode` map among them, reach one list rather than two.
+
+*Acceptance:* met. Seventy tests over eight fixtures, one per generator
+family, written byte by byte by `scripts/make-pdf-fixture.py` — because a
+fixture built by the library under test proves only that the library agrees with
+itself. A classic table with uncompressed content; a cross-reference stream with
+its catalog, page tree, page and font inside an object stream; a hybrid file
+whose `ToUnicode` map only the `/XRefStm` names; an incremental update that
+supersedes the page's content; a file whose `startxref` points past its own end
+and which reads identically to the one it was damaged from; an AES-256 document
+refused by name; a distiller's `ASCII85Decode`/`FlateDecode` chain beside
+`ASCIIHexDecode`, `RunLengthDecode` and `LZWDecode`; and a scanned page whose
+image comes back named in `unread` rather than as a page with nothing wrong with
+it. And every prefix and every single-byte corruption of all eight comes back
+as a document or as an error and never as a panic, which is what the bounds on
+nesting depth, reference-chain length, `/Prev` chain length and page-tree depth
+are there for: this tool is run on files people were sent.
+
+No `DocumentReader` yet and no entry in the CLI's readable list: text
+extraction is 6.2, and a `.pdf` the binary accepted before it could read one
+would be a claim this milestone has not earned.
 
 ### 6.2 Text extraction and its order `[~]`
 
