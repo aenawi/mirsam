@@ -1,0 +1,16 @@
+[package]
+name = "mirsam-pdf"
+description = "PDF object layer for mirsam: cross-reference tables and streams, object streams, stream filters and the page tree. Reads; never writes."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+mirsam-core.workspace = true
+# The one thing not written here. See docs/adr/0010. Pinned to the backend the
+# workspace already resolves through `zip`, so the binary carries one inflate
+# implementation rather than two.
+flate2 = { workspace = true }

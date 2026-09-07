@@ -76,7 +76,11 @@ fixtures: ## Regenerate the hand-built corpus documents, then their reports
 	@python3 scripts/make-torture-fixture.py
 	@python3 scripts/make-word-fixture.py
 	@python3 scripts/make-excel-fixture.py
+	@$(MAKE) --no-print-directory pdfs
 	@$(MAKE) --no-print-directory golden
+
+pdfs: ## Regenerate the PDF fixture corpus (one file per generator family)
+	@python3 scripts/make-pdf-fixture.py
 
 fonts: ## Regenerate the hand-built fonts the shaping tests run against
 	@python3 scripts/make-shaping-fixture.py
@@ -113,5 +117,5 @@ install: ## Install mirsam into ~/.cargo/bin
 	@cargo install --path crates/mirsam-cli
 
 .PHONY: help build test fmt fmt-check lint doc clean version check-version \
-        codename release-name msrv audit-deps golden fixtures fonts names \
+        codename release-name msrv audit-deps golden fixtures pdfs fonts names \
         validate-fixtures corpus verify pre-push hooks-install install

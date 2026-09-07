@@ -8,11 +8,55 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Milestones M1 through M5 have landed since `v0.1.0`: byte-preserving `repair`,
 inheritance resolution, the DOCX and XLSX adapters with their writers, the HTML
-reader, and shaping and font-coverage checks behind `--fonts`. Next is M6, the
-read-only PDF adapter. See [`docs/PLAN.md`](docs/PLAN.md) and
+reader, and shaping and font-coverage checks behind `--fonts`. M6, the
+read-only PDF adapter, is under way: its object layer has landed and text
+extraction is next. See [`docs/PLAN.md`](docs/PLAN.md) and
 [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ### Added
+
+- **`mirsam-pdf`, the PDF object layer.** The package layer of a format that is
+  not a package: both spellings of the cross-reference table, `/Prev` chains,
+  hybrid-reference files, object streams, the general-purpose stream filters,
+  the page tree with the four attributes it inherits, and content streams
+  decoded and joined. Nothing is wired into the CLI yet — `mirsam audit`
+  still turns a `.pdf` away — because text extraction is PLAN §6.2, and a
+  binary that accepted a `.pdf` before it could read one would be making a
+  claim this milestone has not earned.
+
+  **The parser is written here and the decompressor is taken**, which PLAN
+  §6.1 asked for as an ADR rather than a `Cargo.toml` line. What settled it was
+  which half of ISO 32000-1 mirsam asks for: the object graph and the content
+  streams are §7.2 to §7.8, and everything from §8 on is the rendering this
+  project has said it will never do. The deciding cost was the second one — a
+  library's object model becomes the adapter's vocabulary, and with it every
+  answer to *is a dangling reference null, is a wrong `/Length` readable, is a
+  stale `startxref` fatal*, which are exactly the honesty decisions §6.2 turns
+  on. `flate2` is taken for `FlateDecode`, pinned to the `zlib-rs` backend
+  `zip` already resolves, so no dependency entered the tree. See
+  [ADR 0010](docs/adr/0010-write-the-pdf-object-layer-take-the-decompressor.md).
+
+  **An encrypted document is refused by name.** `AES-256 (/Standard security
+  handler, V5 R6)`, read out of the `/Encrypt` dictionary that §7.6.1 keeps in
+  the clear — including the permissions-only wrapper with an empty user
+  password, because a tool that opened those is one nobody could run on a file
+  they were given. The alternative was extracting nothing and reporting a clean
+  file, which is the failure the whole milestone is arranged against.
+
+  **What could not be read is named, and so is what had to be rebuilt.** The
+  four image codecs are named rather than decoded — a stream behind `DCTDecode`
+  is not text this crate failed to read, it is text that is not in the file —
+  and a scanned page therefore reaches `unread` as `5 0 R — /DCTDecode, a
+  filter this tool does not decode`. That is ADR 0009 reaching the format that
+  needs it most. Separately, a file whose `startxref` has gone stale is
+  recovered from by scanning for `obj`, the way every viewer opens it, and says
+  so: a document reported unreadable while a reader opens it is the wrong half
+  of standing rule 4.
+
+  Eight fixtures, one per generator family, are written byte by byte by
+  `scripts/make-pdf-fixture.py` and regenerate with `make pdfs` — a fixture
+  built by the library under test proves only that the library agrees with
+  itself.
 
 - **The DOCX writer.** `mirsam repair report.docx fixed.docx` works, and
   `repair` stops turning a Word document away as a readable format without a

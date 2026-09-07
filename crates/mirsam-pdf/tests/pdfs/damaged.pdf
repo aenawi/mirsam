@@ -1,0 +1,79 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 595 842] >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<<  /Length 88 >>
+stream
+BT
+/F1 18 Tf
+72 760 Td
+(Annual report) Tj
+0 -28 Td
+<4142434445464748494A4B4C4D4E> Tj
+ET
+
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /ToUnicode 6 0 R >>
+endobj
+6 0 obj
+<<  /Length 412 >>
+stream
+/CIDInit /ProcSet findresource begin
+12 dict begin
+begincmap
+/CMapName /Mirsam-Fixture def
+/CMapType 2 def
+1 begincodespacerange
+<00> <FF>
+endcodespacerange
+14 beginbfchar
+<41> <0627>
+<42> <0644>
+<43> <062A>
+<44> <0642>
+<45> <0631>
+<46> <064A>
+<47> <0631>
+<48> <0020>
+<49> <0627>
+<4A> <0644>
+<4B> <0633>
+<4C> <0646>
+<4D> <0648>
+<4E> <064A>
+endbfchar
+endcmap
+CMapName currentdict /CMap defineresource pop
+end
+end
+
+endstream
+endobj
+7 0 obj
+<< /Title <FEFF06270644062A06420631064A0631002006270644063306460648064A> /Producer (mirsam fixtures) >>
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000145 00000 n 
+0000000247 00000 n 
+0000000386 00000 n 
+0000000473 00000 n 
+0000000937 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R /Info 7 0 R >>
+startxref
+5388
+%%EOF

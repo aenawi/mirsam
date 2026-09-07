@@ -240,6 +240,43 @@ crates/
                    origin a browser gives it, and dir="auto" is Unset because
                    "the renderer picks" is what auto asks for. DocumentReader
                    only
+  mirsam-pdf/      adapter — the object layer of a format that is not a
+                   package, and the first this project reads without being
+                   able to write it. No DocumentWriter here or planned: a
+                   broken Arabic PDF is rebuilt from its source. See
+                   docs/adr/0010 for why the parser is written rather than
+                   taken, and what is taken instead
+    object.rs      PDF's eight types and two composites. A name is bytes,
+                   because it is the one place a file stores a key and a
+                   lossy decode would merge two entries the document kept
+                   apart
+    lexer.rs       bytes to objects, and the malformations every reader
+                   tolerates: a wrong /Length, an unescaped `#`, `--5`. A
+                   stream's length is verified against `endstream` rather
+                   than believed, which covers indirect, absent and simply
+                   wrong with one rule
+    filter.rs      the general-purpose filters — Flate, LZW, the two ASCII
+                   encodings, run-length, and the PNG and TIFF predictors a
+                   cross-reference stream needs. The four image codecs are
+                   *named* and never decoded: a stream behind DCTDecode is
+                   not text this crate failed to read, it is text that is
+                   not in the file
+    xref.rs        both spellings of the cross-reference, the /Prev chain
+                   newest-first, and the hybrid file where the stream
+                   outranks the classic table beside it. Plus the scan that
+                   rebuilds a table whose offsets have gone stale, because a
+                   document reported unreadable while a viewer opens it is
+                   the wrong half of standing rule 4
+    encrypt.rs     what the /Encrypt dictionary says, said precisely, so the
+                   refusal names the algorithm. Nothing decrypts
+    document.rs    the graph: objects loaded once, object streams expanded,
+                   references resolved with a bound, and the list of what
+                   could not be read — which is ADR 0009's port, reaching the
+                   format that needs it most
+    page.rs        the page tree and the four attributes §7.7.3.4 inherits
+                   down it. /Resources is the one that matters: a text layer
+                   reading it from the leaf alone finds no fonts on the very
+                   common document that states them once at the root
   mirsam-conformance/  no library code at all: the crate exists so one suite
                    can depend on every adapter at once. Living inside
                    mirsam-ooxml, it would have made that crate depend on its

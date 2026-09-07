@@ -460,6 +460,19 @@ all of them against the published ECMA-376 schemas. A document the application
 offers to repair cannot answer "does it open the repaired file without a
 prompt", which is the M1 application check.
 
+**The PDF fixtures are not corpus documents, and are generated too.** The eight
+under `crates/mirsam-pdf/tests/pdfs/` come from `scripts/make-pdf-fixture.py`
+and regenerate with `make pdfs` — one file per *generator family*, because what
+PDF work hunts is a generator signature rather than an author mistake: a classic
+cross-reference table, a cross-reference stream with object streams, a hybrid
+file, an incremental update, a stale `startxref`, an AES-256 document, a
+distiller's ASCII filter chain, and a page that is a scan. They live beside the
+crate rather than in `tests/fixtures/` on purpose: the golden corpus is what the
+*binary* does to a document, and `mirsam audit` does not read a `.pdf` yet. When
+a `DocumentReader` lands, two of them join the corpus and the exit code `repair`
+gives a readable format with no writer is recorded on a real PDF, the way
+`quarterly-page.html` records it now.
+
 **The two HTML corpus documents are the exception, and edited by hand.** A
 page *is* its own source: there is no package to build, so `make fixtures` has
 nothing to generate and `scripts/validate-ooxml.py` has nothing to validate.
